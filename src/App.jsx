@@ -31,11 +31,11 @@ const brand = {
 
 function buildCSS(t) {
   return `
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;1,400&family=Figtree:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;1,400&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
-body{background:${t.bg};color:${t.t1};font-family:'Figtree',sans-serif;font-size:14px;line-height:1.55;transition:background .25s,color .25s;}
-input,textarea,select,button{font-family:'Figtree',sans-serif;}
+body{background:${t.bg};color:${t.t1};font-family:'Space Grotesk',sans-serif;font-size:14px;line-height:1.46;transition:background .25s,color .25s;}
+input,textarea,select,button{font-family:'Space Grotesk',sans-serif;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:${t.s1};}
 ::-webkit-scrollbar-thumb{background:${t.b2};border-radius:2px;}
@@ -65,6 +65,7 @@ input,textarea,select,button{font-family:'Figtree',sans-serif;}
 .sb-head{
   display:flex;align-items:center;gap:10px;padding:18px 14px 16px;
   border-bottom:1px solid ${t.b1};min-height:62px;overflow:hidden;white-space:nowrap;
+  position:relative;
 }
 .sb-mark{
   width:30px;height:30px;border-radius:8px;flex-shrink:0;
@@ -76,6 +77,9 @@ input,textarea,select,button{font-family:'Figtree',sans-serif;}
 .sb-title{font-family:'Fraunces',serif;font-weight:700;font-size:16px;color:${t.t1};transition:opacity .2s;}
 .sb-title span{background:linear-gradient(90deg,${brand.rc},${brand.do});-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .sidebar.col .sb-title,.sidebar.col .sb-section-lbl,.sidebar.col .nav-lbl,.sidebar.col .nav-badge,.sidebar.col .sb-user-info,.sidebar.col .sb-logout{opacity:0;pointer-events:none;}
+.sidebar.col .sb-title{width:0;overflow:hidden;}
+.sidebar.col .sb-head{justify-content:center;padding-right:34px;}
+.sidebar.col .sb-toggle{position:absolute;right:8px;top:18px;opacity:1;pointer-events:auto;}
 .sb-toggle{
   margin-left:auto;flex-shrink:0;background:none;border:1px solid ${t.b2};border-radius:6px;
   color:${t.t3};cursor:pointer;padding:4px 7px;font-size:12px;transition:all .15s;
@@ -125,6 +129,14 @@ input,textarea,select,button{font-family:'Figtree',sans-serif;}
   display:flex;align-items:center;justify-content:space-between;
   padding:0 28px;position:sticky;top:0;z-index:100;
 }
+.topbar::before{
+  content:'';position:absolute;left:18px;top:50%;transform:translateY(-50%);
+  width:26px;height:26px;border-radius:50%;pointer-events:none;opacity:.24;
+  background:
+    linear-gradient(90deg,transparent 48%,${t.b2} 48%,${t.b2} 52%,transparent 52%),
+    linear-gradient(0deg,transparent 48%,${t.b2} 48%,${t.b2} 52%,transparent 52%),
+    conic-gradient(from 0deg, transparent 0 10%, ${brand.blueA} 10% 15%, transparent 15% 35%, ${brand.rcA} 35% 40%, transparent 40% 60%, ${brand.doA} 60% 65%, transparent 65% 85%, ${brand.esgA} 85% 90%, transparent 90% 100%);
+}
 .breadcrumb{font-size:13px;color:${t.t3};}
 .breadcrumb strong{color:${t.t1};font-weight:600;}
 .tb-right{display:flex;align-items:center;gap:10px;}
@@ -147,6 +159,11 @@ input,textarea,select,button{font-family:'Figtree',sans-serif;}
 
 /* PAGE */
 .page{padding:32px 36px;max-width:1220px;}
+.page::after{
+  content:'';position:fixed;right:-140px;bottom:-140px;width:420px;height:420px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,${brand.blueA} 0%,transparent 62%);
+  opacity:.45;
+}
 .ph{margin-bottom:26px;}
 .ph-eye{font-family:'JetBrains Mono',monospace;font-size:10px;color:${t.t3};letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;}
 .ph-title{font-family:'Fraunces',serif;font-size:30px;color:${t.t1};letter-spacing:-.5px;margin-bottom:5px;}
@@ -402,6 +419,12 @@ input,textarea,select,button{font-family:'Figtree',sans-serif;}
 .mono{font-family:'JetBrains Mono',monospace;}
 .muted{color:${t.t3};}
 .mb0{margin-bottom:0;}
+
+/* LOGIN */
+.login-wrap{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  position:relative;padding:24px;
+}
 `;
 }
 
@@ -1375,6 +1398,52 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
     const d=new Date(); const nf={name:`Archivo_${d.getHours()}${d.getMinutes()}.xlsx`,type:"excel",date:`${d.getDate()} Mar 2025`,module:"RC",ai_score:70,status:"applied"};
     setClients(p=>p.map(c=>c.id===selId?{...c,files:[nf,...c.files]}:c));
   }
+  function addClient(){
+    const nextId=Math.max(...clients.map(c=>c.id),0)+1;
+    const base=clients[0];
+    const newClient={
+      ...JSON.parse(JSON.stringify(base)),
+      id:nextId,
+      name:`Nuevo Cliente ${nextId}`,
+      logo:"🧭",
+      industry:"Por definir",
+      contact:"Por definir",
+      email:`cliente${nextId}@empresa.cl`,
+      published:false,
+      period:"Q1 2025",
+      ircs:null,rc:null,do:null,esg:null,
+      rc_subs:{ percepcion:null, compromisos:null, dialogo:null, conflictividad:null },
+      do_subs:{ cultura:null, engagement:null, liderazgo:null },
+      esg_subs:{ ambiental:null, social:null, gobernanza:null },
+      trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[],
+      internal_notes:"",
+      profile:{sector:"Por definir",size:"Por definir",region:"Por definir",since:"2026"},
+    };
+    setClients(p=>[...p,newClient]);
+    setSelId(nextId);
+  }
+  function deleteClient(id){
+    if(clients.length<=1)return;
+    const next=clients.filter(c=>c.id!==id);
+    setClients(next);
+    if(selId===id)setSelId(next[0].id);
+  }
+  function resetClientData(id){
+    const base=INIT_CLIENTS.find(c=>c.id===id);
+    setClients(p=>p.map(c=>{
+      if(c.id!==id)return c;
+      if(base)return JSON.parse(JSON.stringify(base));
+      return {
+        ...c,
+        ircs:null,rc:null,do:null,esg:null,
+        rc_subs:{ percepcion:null, compromisos:null, dialogo:null, conflictividad:null },
+        do_subs:{ cultura:null, engagement:null, liderazgo:null },
+        esg_subs:{ ambiental:null, social:null, gobernanza:null },
+        trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[],
+        internal_notes:"",
+      };
+    }));
+  }
 
   const tabs=[["overview","Resumen"],["upload","Carga IA"],["heatmap","Mapa Riesgo"],["weights","Pesos"],["admin","Admin"],["messages","Mensajes"],["files","Historial"]];
 
@@ -1402,6 +1471,11 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
               {!c.published&&<span style={{fontSize:10,opacity:.6}}>BORRADOR</span>}
             </div>
           ))}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+          <button className="btn btn-g btn-sm" onClick={addClient}>+ Agregar cliente</button>
+          <button className="btn btn-d btn-sm" onClick={()=>deleteClient(selId)} disabled={clients.length<=1}>🗑 Eliminar cliente activo</button>
+          <button className="btn btn-s btn-sm" onClick={()=>resetClientData(selId)}>↺ Limpiar datos cargados</button>
         </div>
       </div>
       {/* Publish banner */}
@@ -1529,7 +1603,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
                 </div>
               </div>
             ))}
-            <button className="btn btn-g btn-sm" style={{marginTop:8}}>+ Agregar cliente</button>
+            <div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Tip: usa “+ Agregar cliente”, “Eliminar cliente activo” y “Limpiar datos cargados” desde el selector superior.</div>
           </div>
           <div className="card">
             <div className="ctitle">Usuarios y accesos</div>
@@ -1582,6 +1656,7 @@ function Login({onLogin,t}){
       <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,rgba(249,115,22,.05),transparent 65%)`,top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}/>
       <div style={{position:"relative",background:t.s1,border:`1px solid ${t.b2}`,borderRadius:20,padding:44,width:400,boxShadow:t.shadowLg,animation:"fadeUp .4s ease both"}}>
         <div style={{fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:26,color:t.t1,marginBottom:3}}>
+          <span style={{marginRight:8,opacity:.85}}>🧭</span>
           THO <span style={{background:`linear-gradient(90deg,${brand.rc},${brand.do})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Compass</span>
         </div>
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:3,textTransform:"uppercase",marginBottom:32}}>Plataforma de Reputación Corporativa</div>
@@ -1604,7 +1679,7 @@ function Login({onLogin,t}){
         <div style={{marginBottom:20}}><label style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:7}}>Contraseña</label>
           <input type="password" style={{width:"100%",background:t.s2,border:`1px solid ${t.b2}`,borderRadius:8,padding:"10px 13px",color:t.t1,fontSize:13,outline:"none"}} placeholder="••••••••"/>
         </div>
-        <button onClick={()=>onLogin(role)} style={{width:"100%",padding:13,background:`linear-gradient(135deg,${brand.rc},${brand.do})`,border:"none",borderRadius:8,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Figtree',sans-serif"}}>
+        <button onClick={()=>onLogin(role)} style={{width:"100%",padding:13,background:`linear-gradient(135deg,${brand.rc},${brand.do})`,border:"none",borderRadius:8,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Space Grotesk',sans-serif"}}>
           Ingresar a THO Compass
         </button>
         <div style={{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,marginTop:14}}>Prototipo v3 · Datos simulados</div>
