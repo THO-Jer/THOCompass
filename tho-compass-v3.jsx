@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, createContext, useContext } from "react";
+import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
