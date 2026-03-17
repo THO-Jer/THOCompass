@@ -955,7 +955,7 @@ function ModuleDO({client}){
           <div className="div"/>
           <div className="ctitle-sm">Dimensiones Gallup Q12 (adaptado)</div>
           {[["Claridad de expectativas",85],["Recursos disponibles",72],["Reconocimiento",68],["Relación con jefatura",79],["Desarrollo profesional",74],["Misión y propósito",82]].map(([l,v])=>(
-            <Prog key={l} label={l} val={v} color="#e879f9"}/>
+            <Prog key={l} label={l} val={v} color="#e879f9"/>
           ))}
         </div>
       )}
@@ -1003,7 +1003,7 @@ function ModuleESG({client}){
               <div style={{marginTop:18}}>
                 <Prog label="Ambiental" val={client.esg_subs?.ambiental} color="#4ade80"/>
                 <Prog label="Social" val={client.esg_subs?.social} color={brand.blue}/>
-                <Prog label="Gobernanza" val={client.esg_subs?.gobernanza} color="#a78bfa}"/>
+                <Prog label="Gobernanza" val={client.esg_subs?.gobernanza} color="#a78bfa"/>
               </div>
             </div>
             <div className="card">
@@ -1045,7 +1045,7 @@ function ModuleESG({client}){
         <div className="card fu">
           <div className="ctitle">Pilar Gobernanza</div>
           {[["Prevención de delitos (Ley 21.595)",74],["Ética empresarial",76],["Transparencia y reporte",70],["Políticas internas",72],["Gestión de riesgos",68]].map(([l,v])=>(
-            <Prog key={l} label={l} val={v} color="#a78bfa}"/>
+            <Prog key={l} label={l} val={v} color="#a78bfa"/>
           ))}
         </div>
       )}
@@ -1262,7 +1262,7 @@ function ClientDashboard({client,onMsg}){
                   <div className="mod-sub">{m.scoreLabel}</div>
                   {key==="rc"&&active&&<><Prog label="Percepción" val={client.rc_subs.percepcion} color={m.color}/><Prog label="Compromisos" val={client.rc_subs.compromisos} color={m.color}/><Prog label="Diálogo" val={client.rc_subs.dialogo} color={m.color}/></>}
                   {key==="do"&&active&&<><Prog label="Cultura" val={client.do_subs.cultura} color={m.color}/><Prog label="Engagement" val={client.do_subs.engagement} color="#e879f9"/><Prog label="Liderazgo" val={client.do_subs.liderazgo} color={brand.blue}/></>}
-                  {key==="esg"&&active&&<><Prog label="Ambiental" val={client.esg_subs.ambiental} color="#4ade80"/><Prog label="Social" val={client.esg_subs.social} color={brand.blue}/><Prog label="Gobernanza" val={client.esg_subs.gobernanza} color="#a78bfa}/></>}
+                  {key==="esg"&&active&&<><Prog label="Ambiental" val={client.esg_subs.ambiental} color="#4ade80"/><Prog label="Social" val={client.esg_subs.social} color={brand.blue}/><Prog label="Gobernanza" val={client.esg_subs.gobernanza} color="#a78bfa"/></>}
                 </div>
               );
             })}
