@@ -22,6 +22,50 @@ create table if not exists public.user_profiles (
 );
 
 -- ============================================================
+-- 1.b AUTH BOOTSTRAP
+-- Crea automáticamente la fila en public.user_profiles cuando
+-- un usuario entra por primera vez vía Google/Azure OAuth.
+-- Todos nacen como client/pending por seguridad; luego la
+-- consultora decide si sigue como cliente, si se aprueba, o si
+-- se promociona a consultant/super_consultant.
+-- ============================================================
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.user_profiles (
+    id,
+    email,
+    full_name,
+    role,
+    approval_status
+  )
+  values (
+    new.id,
+    new.email,
+    coalesce(
+      new.raw_user_meta_data->>'full_name',
+      new.raw_user_meta_data->>'name',
+      split_part(new.email, '@', 1)
+    ),
+    'client',
+    'pending'
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ============================================================
 -- 2. REPORTING PERIODS
 -- ============================================================
 create table if not exists public.reporting_periods (
@@ -482,8 +526,13 @@ create index if not exists idx_period_year_quarter on public.reporting_periods (
 -- 2. Habilitar SOLO Google y Microsoft Azure en Authentication → Providers
 -- 3. Crear tu usuario en Authentication y luego promoverlo.
 --    Usuario inicial esperado: jeremias@tho.cl
---    update public.user_profiles
---    set role='super_consultant', approval_status='approved'
---    where email='jeremias@tho.cl';
+--    insert into public.user_profiles (id, email, full_name, role, approval_status)
+--    select au.id, au.email,
+--           coalesce(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', split_part(au.email, '@', 1)),
+--           'super_consultant', 'approved'
+--    from auth.users au
+--    where au.email = 'jeremias@tho.cl'
+--    on conflict (id) do update
+--      set role = 'super_consultant', approval_status = 'approved', updated_at = now();
 -- 4. Usar rutas de storage como: {client_id}/{module_key}/{timestamp}_{original_name}
 --    para que las storage policies por carpeta funcionen correctamente.

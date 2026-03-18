@@ -79,3 +79,35 @@ La app redirige a Supabase con `redirectTo = https://TU-DOMINIO-REAL.vercel.app/
 - OAuth ya está preparado en la UI con fallback demo si Supabase no está configurado localmente.
 - La carga de archivos ya considera bucket por módulo y conserva el nombre original dentro del path de storage.
 - El schema incluye períodos estructurados (`reporting_periods`), historial, agenda, alertas, recomendaciones y storage policies por bucket/carpeta.
+
+
+## Cómo aplicar cambios al schema en Supabase
+
+No necesitas “borrar todo” ni reemplazar manualmente el contenido anterior de la base. Lo correcto es:
+
+1. Abrir **Supabase → SQL Editor → New query**.
+2. Pegar la versión nueva de `supabase/schema.sql`.
+3. Ejecutarla completa.
+
+El archivo está escrito mayormente con `create table if not exists`, `create or replace function`, `drop trigger if exists` e `insert ... on conflict`, así que está pensado para re-ejecutarse sin romper la base en cada iteración.
+
+## Cómo diferenciar solicitudes de consultores vs clientes
+
+La recomendación por ahora es manejarlo desde dos capas:
+
+1. **`user_profiles.role` + `approval_status`**
+   - Todo usuario nuevo entra por trigger como `client` + `pending`.
+   - Si una persona realmente será consultora, la promueves manualmente a `consultant` o `super_consultant`.
+   - Esto te permite usar el centro de control como puerta de aprobación.
+
+2. **`client_user_access`**
+   - Incluso si un usuario está aprobado como `client`, no ve nada por defecto.
+   - Solo ve organizaciones donde exista una fila aprobada en `client_user_access`.
+   - Así distingues entre “usuario autenticado” y “usuario autorizado para un cliente concreto”.
+
+En otras palabras:
+
+- **Solicitud de consultor**: la resuelves cambiando `role` a `consultant` (o `super_consultant`) y `approval_status` a `approved`.
+- **Solicitud de cliente**: mantienes `role='client'`, apruebas `approval_status`, y luego le otorgas acceso a una o más organizaciones vía `client_user_access`.
+
+Más adelante, si quieres un inbox más explícito, podemos agregar una tabla `access_requests`, pero con el modelo actual ya puedes manejarlo desde el control de accesos.
