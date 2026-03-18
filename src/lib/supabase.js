@@ -24,3 +24,11 @@ export const STORAGE_BUCKETS = {
 export function moduleKeyToBucket(moduleKey) {
   return STORAGE_BUCKETS[moduleKey?.toLowerCase()] || STORAGE_BUCKETS.rc;
 }
+
+
+export function getOAuthRedirectUrl() {
+  const explicitAppUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, "");
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const base = explicitAppUrl || origin;
+  return base ? `${base}/auth/callback` : undefined;
+}

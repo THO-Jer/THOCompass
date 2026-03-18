@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
-import { supabase, isSupabaseConfigured, moduleKeyToBucket } from "./lib/supabase";
+import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl } from "./lib/supabase";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
 const ThemeCtx = createContext();
@@ -1632,8 +1632,12 @@ export default function App(){
     if (!supabase) { setAuthReady(false); return; }
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
-      setSession(formatAuthSession(data.session?.user) || null);
+      const next = formatAuthSession(data.session?.user) || null;
+      setSession(next);
       setAuthReady(true);
+      if (next && typeof window !== "undefined" && window.location.pathname === "/auth/callback") {
+        window.history.replaceState({}, "", "/");
+      }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(formatAuthSession(nextSession?.user) || null);
@@ -1650,12 +1654,12 @@ export default function App(){
     const { error } = await supabase.auth.signInWithOAuth({
       provider: providerName,
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: getOAuthRedirectUrl(),
         queryParams: providerName === 'google' ? { access_type: 'offline', prompt: 'consent' } : undefined,
       },
     });
     if (error) setAuthMsg(`No se pudo iniciar sesión con ${providerName}: ${error.message}`);
-    else setAuthMsg(`Redirigiendo a ${providerName}. El rol esperado para esta solicitud es ${role}. Luego podrás aprobar el acceso desde Compass.`);
+    else setAuthMsg(`Redirigiendo a ${providerName}. Callback configurado: ${getOAuthRedirectUrl()}. El rol esperado para esta solicitud es ${role}.`);
   }
 
   function login(role){setSession({role, approvalStatus:'demo'});if(role==="client")setShowTour(true);}
