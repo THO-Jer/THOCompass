@@ -511,9 +511,32 @@ const INIT_CLIENTS = [
 
 const MOCK_CONSULTANT_EMAILS = ["admin@tho.cl", "equipo@tho.cl"];
 
+function isConsultantRole(role) {
+  return role === "consultant" || role === "super_consultant";
+}
+
+function getRoleLabel(role) {
+  if (role === "super_consultant") return "super consultora";
+  if (role === "consultant") return "consultora";
+  if (role === "client") return "cliente";
+  return "sin rol";
+}
+
+function getUserDisplayName(user) {
+  const metadataName = user?.user_metadata?.full_name
+    || user?.user_metadata?.name
+    || user?.user_metadata?.preferred_username
+    || user?.app_metadata?.full_name
+    || user?.app_metadata?.name;
+
+  if (metadataName) return metadataName;
+  if (user?.email) return user.email.split("@")[0];
+  return "Usuario";
+}
+
 function inferRoleFromUser(user) {
   const explicitRole = user?.app_metadata?.role || user?.user_metadata?.role;
-  if (explicitRole === "consultant" || explicitRole === "client") return explicitRole;
+  if (explicitRole === "consultant" || explicitRole === "super_consultant" || explicitRole === "client") return explicitRole;
   const email = user?.email?.toLowerCase() || "";
   if (MOCK_CONSULTANT_EMAILS.includes(email) || email.endsWith("@tho.cl")) return "consultant";
   return "client";
@@ -524,6 +547,7 @@ function formatAuthSession(user) {
   return {
     id: user.id,
     email: user.email,
+    displayName: getUserDisplayName(user),
     role: inferRoleFromUser(user),
     approvalStatus: user?.app_metadata?.approval_status || "pending",
     provider: user?.app_metadata?.provider || user?.user_metadata?.provider || null,
@@ -1136,6 +1160,8 @@ function ModuleESG({client}){
 
 // ─── PROFILE PAGE ─────────────────────────────────────────────────────────────
 function ProfilePage({session,isConsultant,client}){
+  const profileName = isConsultant ? (session?.displayName || "THO Consultora") : client.name;
+  const profileEmail = isConsultant ? (session?.email || "Sin email") : client.email;
   const [saved,setSaved]=useState(false);
   return(
     <div className="page fu">
@@ -1149,12 +1175,12 @@ function ProfilePage({session,isConsultant,client}){
           <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
             <div className="profile-avatar-lg">{isConsultant?"T":client.logo}</div>
             <div>
-              <div style={{fontSize:16,fontFamily:"'Fraunces',serif",color:"var(--t1)",marginBottom:2}}>{isConsultant?"THO Consultora":client.name}</div>
-              <div className="mono muted" style={{fontSize:11}}>{isConsultant?"equipo@tho.cl":client.email}</div>
+              <div style={{fontSize:16,fontFamily:"'Fraunces',serif",color:"var(--t1)",marginBottom:2}}>{profileName}</div>
+              <div className="mono muted" style={{fontSize:11}}>{profileEmail}</div>
             </div>
           </div>
-          <div className="fg"><label className="fl">Nombre</label><input className="fi" defaultValue={isConsultant?"THO Consultora":client.name}/></div>
-          <div className="fg"><label className="fl">Email de contacto</label><input className="fi" type="email" defaultValue={isConsultant?"equipo@tho.cl":client.email}/></div>
+          <div className="fg"><label className="fl">Nombre</label><input className="fi" defaultValue={profileName}/></div>
+          <div className="fg"><label className="fl">Email de contacto</label><input className="fi" type="email" defaultValue={profileEmail}/></div>
           {!isConsultant&&(
             <>
               <div className="fg"><label className="fl">Sector</label><input className="fi" defaultValue={client.profile.sector}/></div>
@@ -1440,7 +1466,7 @@ function ClientDashboard({client,onMsg}){
 }
 
 // ─── CONSULTANT PANEL ─────────────────────────────────────────────────────────
-function ConsultantPanel({clients,setClients,selId,setSelId}){
+function ConsultantPanel({clients,setClients,selId,setSelId,session}){
   const [tab,setTab]=useState("overview");
   const [weights,setWeights]=useState(null);
   const [saved,setSaved]=useState(false);
@@ -1564,7 +1590,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
 
       {tab==="weights"&&weights&&<div className="card fu"><div className="ctitle">Configuración de pesos IRCS — {client.name}</div><div style={{fontSize:13,color:"var(--t2)",marginBottom:22}}>Si hay sólo 1 módulo activo, su peso queda en 100%. IRCS integrado requiere 2+ módulos.</div>{Object.entries(MOD).map(([key,m])=><div key={key} style={{marginBottom:22,opacity:client.modules[key]?1:.4}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>{m.label}{!client.modules[key]&&" (no activo)"}</div><div className="sldr-wrap"><input type="range" min={0} max={100} value={weights[key]} className="sldr" disabled={!client.modules[key]} onChange={e=>setWeights(p=>({...p,[key]:parseInt(e.target.value)}))}/><div className="sldr-val" style={{color:m.color}}>{weights[key]}%</div></div></div>)}<button className="btn btn-p btn-sm" onClick={()=>{setClients(p=>p.map(c=>c.id===selId?{...c,weights}:c));setSaved(true);setTimeout(()=>setSaved(false),2000);}}>{saved?"✓ Guardado":"Aplicar pesos"}</button>{Object.values(client.modules).filter(Boolean).length<2&&<div className="alert al-a" style={{marginTop:12}}>IRCS global no se muestra con menos de 2 módulos activos.</div>}</div>}
 
-      {tab==="admin"&&<div className="fu"><div className="card" style={{marginBottom:16}}><div className="ctitle">Gestión de módulos por cliente</div>{clients.map(c=><div key={c.id} className="client-admin-row"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div><div style={{fontSize:14,fontFamily:"'Fraunces',serif",color:"var(--t1)"}}>{c.logo} {c.name}</div><div style={{fontSize:11,color:"var(--t3)",fontFamily:"'JetBrains Mono',monospace"}}>{c.industry} · {c.period}</div></div><span className={`badge ${c.published?"bg":"ba"}`}>{c.published?"Publicado":"Borrador"}</span></div><div style={{display:"flex",gap:20}}>{Object.entries(MOD).map(([key,m])=><div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><label className="tgl"><input type="checkbox" checked={c.modules[key]} onChange={()=>{setSelId(c.id);toggleMod(key);}}/><div className="tgl-sl"/></label><span style={{fontSize:11,color:c.modules[key]?m.color:"var(--t4)"}}>{m.short}</span></div>)}</div></div>)}</div><div className="card"><div className="ctitle">Usuarios y accesos</div><div className="alert al-b">Esta lista es por cliente. Cliente activo: {client.name}.</div><table className="tbl"><thead><tr><th>Email</th><th>Empresa</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>{[["admin@tho.cl","THO Consultora","Admin","Activo"],...(client.authorized_users||[]).map(e=>[e,client.name,"Cliente","Activo"])].map(([e,emp,r,s],i)=><tr key={i}><td style={{color:"var(--t1)"}}>{e}</td><td>{emp}</td><td><span className={`badge ${r==="Admin"?"bb":"bg"}`}>{r}</span></td><td><span className="badge bg">{s}</span></td><td>{r!=="Admin"&&<button className="btn btn-d btn-sm" onClick={()=>setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:(c.authorized_users||[]).filter(m=>m!==e)}:c))}>Quitar</button>}</td></tr>)}</tbody></table><div style={{display:"flex",gap:8,marginTop:12}}><input className="fi" placeholder="nuevo.mail@empresa.cl" value={newUserMail} onChange={e=>setNewUserMail(e.target.value)}/><button className="btn btn-g btn-sm" onClick={()=>{if(!newUserMail.includes('@'))return;setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:[...(c.authorized_users||[]),newUserMail]}:c));setNewUserMail("");}}>+ Invitar usuario</button></div></div></div>}
+      {tab==="admin"&&<div className="fu"><div className="card" style={{marginBottom:16}}><div className="ctitle">Gestión de módulos por cliente</div>{clients.map(c=><div key={c.id} className="client-admin-row"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div><div style={{fontSize:14,fontFamily:"'Fraunces',serif",color:"var(--t1)"}}>{c.logo} {c.name}</div><div style={{fontSize:11,color:"var(--t3)",fontFamily:"'JetBrains Mono',monospace"}}>{c.industry} · {c.period}</div></div><span className={`badge ${c.published?"bg":"ba"}`}>{c.published?"Publicado":"Borrador"}</span></div><div style={{display:"flex",gap:20}}>{Object.entries(MOD).map(([key,m])=><div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><label className="tgl"><input type="checkbox" checked={c.modules[key]} onChange={()=>{setSelId(c.id);toggleMod(key);}}/><div className="tgl-sl"/></label><span style={{fontSize:11,color:c.modules[key]?m.color:"var(--t4)"}}>{m.short}</span></div>)}</div></div>)}</div><div className="card"><div className="ctitle">Usuarios y accesos</div><div className="alert al-b">Esta lista es por cliente. Cliente activo: {client.name}.</div><table className="tbl"><thead><tr><th>Email</th><th>Empresa</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>{[[session?.email || "Sin email","THO Consultora",session?.role === "super_consultant" ? "Super Admin" : "Consultora",session?.approvalStatus || "Activo"],...(client.authorized_users||[]).map(e=>[e,client.name,"Cliente","Activo"])].map(([e,emp,r,s],i)=><tr key={i}><td style={{color:"var(--t1)"}}>{e}</td><td>{emp}</td><td><span className={`badge ${r.includes("Admin")?"bb":"bg"}`}>{r}</span></td><td><span className="badge bg">{s}</span></td><td>{emp!=="THO Consultora"&&<button className="btn btn-d btn-sm" onClick={()=>setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:(c.authorized_users||[]).filter(m=>m!==e)}:c))}>Quitar</button>}</td></tr>)}</tbody></table><div style={{display:"flex",gap:8,marginTop:12}}><input className="fi" placeholder="nuevo.mail@empresa.cl" value={newUserMail} onChange={e=>setNewUserMail(e.target.value)}/><button className="btn btn-g btn-sm" onClick={()=>{if(!newUserMail.includes('@'))return;setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:[...(c.authorized_users||[]),newUserMail]}:c));setNewUserMail("");}}>+ Invitar usuario</button></div></div></div>}
 
       {tab==="messages"&&<div className="card fu"><div className="ctitle">Mensajes de {client.name}</div><Messages messages={client.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div>}
       {tab==="files"&&<div className="card fu"><div className="sec-hdr"><div className="ctitle mb0">Historial de archivos</div><span className="badge bb">{client.files.length} archivos</span></div>{client.files.map((f,i)=><div key={i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div></div>)}</div>}
@@ -1629,7 +1655,7 @@ export default function App(){
   const t=darkMode?darkTokens:lightTokens;
   const css=buildCSS(t);
 
-  const isC=session?.role==="consultant";
+  const isC=isConsultantRole(session?.role);
   const clientData=clients[0];
   const selClient=clients.find(c=>c.id===selClientId);
   const hasClients=clients.length>0;
@@ -1715,11 +1741,11 @@ export default function App(){
     if(isC&&!hasClients&&page!=="control")return <div className="page fu"><div className="card"><div className="ctitle">No hay clientes todavía</div><button className="btn btn-g btn-sm" onClick={()=>setPage("control")}>Ir al centro de control</button></div></div>;
     if(isC){
       if(page==="home")return<ConsultantHome clients={clients}/>;
-      if(page==="control")return<ConsultantPanel clients={clients} setClients={setClients} selId={selClientId} setSelId={setSelClientId}/>;
+      if(page==="control")return<ConsultantPanel clients={clients} setClients={setClients} selId={selClientId} setSelId={setSelClientId} session={session}/>;
       if(page==="rc"&&selClient)return<ModuleRC client={selClient} isConsultant={true} onUpdateStakeholders={stakeholders=>setClients(p=>p.map(c=>c.id===selClientId?{...c,stakeholders}:c))}/>;
       if(page==="do")return<ModuleDO client={selClient}/>;
       if(page==="esg")return<ModuleESG client={selClient}/>;
-      if(page==="profile")return<ProfilePage isConsultant={true} client={selClient}/>;
+      if(page==="profile")return<ProfilePage session={session} isConsultant={true} client={selClient}/>;
       if(page==="messages"&&selClient)return <div className="page fu"><div className="ph"><div className="ph-eye">Notificaciones</div><div className="ph-title">Mensajes de clientes</div></div><div className="card"><Messages messages={selClient.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div></div>;
     } else {
       if(!clientData)return <div className="page fu"><div className="card">No hay datos de cliente disponibles.</div></div>;
@@ -1727,7 +1753,7 @@ export default function App(){
       if(page==="rc"&&clientData.modules.rc)return<ModuleRC client={clientData} isConsultant={false}/>;
       if(page==="do"&&clientData.modules.do)return<ModuleDO client={clientData}/>;
       if(page==="esg"&&clientData.modules.esg)return<ModuleESG client={clientData}/>;
-      if(page==="profile")return<ProfilePage isConsultant={false} client={clientData}/>;
+      if(page==="profile")return<ProfilePage session={session} isConsultant={false} client={clientData}/>;
       if(page==="messages")return(
         <div className="page fu">
           <div className="ph"><div className="ph-eye">Comunicación</div><div className="ph-title">Mensajes</div></div>
@@ -1782,8 +1808,8 @@ export default function App(){
             <div className="sb-user">
               <div className={`sb-avatar ${isC?"av-c":"av-cl"}`}>{isC?"TH":(clientData?.logo||"—")}</div>
               <div className="sb-user-info">
-                <div className="sb-uname">{isC?"THO Team":(clientData?.name||"Sin cliente")}</div>
-                <div className="sb-urole">{isC?"consultora":"cliente"}</div>
+                <div className="sb-uname">{isC?(session?.displayName || session?.email || "THO Team"):(clientData?.name||"Sin cliente")}</div>
+                <div className="sb-urole">{isC?`${getRoleLabel(session?.role)} · ${session?.email || "sin email"}`:"cliente"}</div>
               </div>
             </div>
             <button className="sb-logout" onClick={logout}>Cerrar sesión</button>
