@@ -1,6 +1,25 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
+function getBootstrapProfile(sessionUser, profile) {
+  const email = sessionUser?.email?.toLowerCase() || "";
+  if (email !== "jeremias@tho.cl") return profile;
+
+  return {
+    id: sessionUser.id,
+    email: sessionUser.email,
+    full_name: sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || "Jeremías",
+    role: "super_consultant",
+    approval_status: "approved",
+    created_at: profile?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...profile,
+    role: "super_consultant",
+    approval_status: "approved",
+  };
+}
+
+
 export function useAuthGuard() {
   const [status, setStatus] = useState(isSupabaseConfigured ? "loading" : "unauthenticated");
   const [session, setSession] = useState(null);
@@ -27,7 +46,8 @@ export function useAuthGuard() {
     }
 
     setSession(sess);
-    const prof = await loadProfile(sess.user.id);
+    const rawProfile = await loadProfile(sess.user.id);
+    const prof = getBootstrapProfile(sess.user, rawProfile);
 
     if (!prof) {
       setProfile(null);
