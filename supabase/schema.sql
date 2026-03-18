@@ -315,6 +315,43 @@ $$;
 -- ============================================================
 -- POLICIES
 -- ============================================================
+
+-- ============================================================
+-- DROP POLICIES IF THEY ALREADY EXIST (safe re-run)
+-- ============================================================
+drop policy if exists "consultants manage all profiles" on public.user_profiles;
+drop policy if exists "users read own profile" on public.user_profiles;
+drop policy if exists "consultants read reporting periods" on public.reporting_periods;
+drop policy if exists "clients read reporting periods" on public.reporting_periods;
+drop policy if exists "consultants manage clients" on public.clients;
+drop policy if exists "approved clients read assigned client" on public.clients;
+drop policy if exists "consultants manage access" on public.client_user_access;
+drop policy if exists "users read own access" on public.client_user_access;
+drop policy if exists "consultants manage modules" on public.client_modules;
+drop policy if exists "clients read own modules" on public.client_modules;
+drop policy if exists "consultants manage scores" on public.client_scores;
+drop policy if exists "clients read own scores" on public.client_scores;
+drop policy if exists "consultants manage score history" on public.client_score_history;
+drop policy if exists "clients read own score history" on public.client_score_history;
+drop policy if exists "consultants manage alerts" on public.client_alerts;
+drop policy if exists "clients read visible alerts" on public.client_alerts;
+drop policy if exists "consultants manage recommendations" on public.client_recommendations;
+drop policy if exists "clients read visible recommendations" on public.client_recommendations;
+drop policy if exists "consultants manage stakeholders" on public.client_stakeholders;
+drop policy if exists "clients read own stakeholders" on public.client_stakeholders;
+drop policy if exists "consultants manage events" on public.client_events;
+drop policy if exists "clients read own events" on public.client_events;
+drop policy if exists "consultants manage files" on public.client_files;
+drop policy if exists "clients read own files" on public.client_files;
+drop policy if exists "consultants manage all messages" on public.client_messages;
+drop policy if exists "clients read messages of assigned client" on public.client_messages;
+drop policy if exists "clients insert own messages" on public.client_messages;
+drop policy if exists "consultants manage rc storage" on storage.objects;
+drop policy if exists "consultants manage do storage" on storage.objects;
+drop policy if exists "consultants manage esg storage" on storage.objects;
+drop policy if exists "clients read assigned rc storage" on storage.objects;
+drop policy if exists "clients read assigned do storage" on storage.objects;
+drop policy if exists "clients read assigned esg storage" on storage.objects;
 create policy "consultants manage all profiles"
   on public.user_profiles for all
   using (public.is_consultant())

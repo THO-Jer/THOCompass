@@ -92,7 +92,7 @@ No necesitas “borrar todo” ni reemplazar manualmente el contenido anterior d
 2. Pegar la versión nueva de `supabase/schema.sql`.
 3. Ejecutarla completa.
 
-El archivo está escrito mayormente con `create table if not exists`, `create or replace function`, `drop trigger if exists` e `insert ... on conflict`, así que está pensado para re-ejecutarse sin romper la base en cada iteración.
+El archivo está escrito mayormente con `create table if not exists`, `create or replace function`, `drop trigger if exists`, `drop policy if exists` e `insert ... on conflict`, así que está pensado para re-ejecutarse sin romper la base en cada iteración.
 
 ## Cómo diferenciar solicitudes de consultores vs clientes
 
