@@ -1599,9 +1599,9 @@ function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady}){
           <button className="btn btn-g" style={{width:'100%',justifyContent:'center'}} disabled={!isAuthReady} onClick={()=>onOAuthLogin?.('google', role)}>Continuar con Google</button>
           <button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} disabled={!isAuthReady} onClick={()=>onOAuthLogin?.('azure', role)}>Continuar con Microsoft</button>
         </div>
-        <div style={{textAlign:'center',fontSize:12,color:t.t3,marginBottom:12}}>Si todavía no configuraste OAuth en Supabase, puedes seguir usando el acceso demo.</div>
+        <div style={{textAlign:'center',fontSize:12,color:t.t3,marginBottom:12}}>Si todavía no configuraste Google/Azure OAuth en Supabase, puedes seguir usando temporalmente el acceso demo.</div>
         <button onClick={()=>onLogin(role)} style={{width:"100%",padding:13,background:`linear-gradient(135deg,${brand.rc},${brand.do})`,border:"none",borderRadius:8,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Space Grotesk',sans-serif"}}>Ingresar en modo demo</button>
-        <div style={{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,marginTop:14}}>OAuth real: Google + Microsoft · Prototipo con fallback demo</div>
+        <div style={{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,marginTop:14}}>OAuth real: Google + Microsoft/Azure · Sin Email Auth</div>
       </div>
     </div>
   );

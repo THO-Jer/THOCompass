@@ -1,6 +1,6 @@
 # THO Compass
 
-Prototipo React + Vite del panel THO Compass, ahora preparado para integrar autenticación OAuth con Supabase, persistencia de clientes y storage de documentos por módulo.
+Prototipo React + Vite del panel THO Compass, preparado para integrar autenticación OAuth con Supabase, persistencia de clientes y storage de documentos por módulo.
 
 ## Variables de entorno
 
@@ -21,13 +21,16 @@ npm run dev
 ## Auth y Supabase
 
 - Cliente Supabase: `src/lib/supabase.js`
-- Esquema inicial SQL + RLS + buckets: `supabase/schema.sql`
-- Providers esperados: Google OAuth y Microsoft/Azure OAuth.
+- Esquema SQL + RLS + storage policies: `supabase/schema.sql`
+- Providers esperados: **solo** Google OAuth y Microsoft/Azure OAuth.
+- No se considera Email Auth / magic link en este flujo.
 
 ## Flujo previsto
 
 - Usuarios cliente: se autentican con Google/Microsoft y luego quedan pendientes de aprobación/asignación a cliente.
 - Usuarios consultora: se autentican con Google/Microsoft y ven todos los clientes una vez aprobados.
+- Existe el rol `super_consultant` para el administrador principal.
+- Un usuario cliente puede quedar asignado a una o varias organizaciones, pero nunca recibe acceso por defecto: depende de `client_user_access` y `access_status`.
 - Buckets de storage separados por módulo:
   - `rc-documents`
   - `do-documents`
@@ -35,6 +38,6 @@ npm run dev
 
 ## Estado actual
 
-- OAuth ya está preparado en la UI con fallback demo si Supabase no está configurado.
+- OAuth ya está preparado en la UI con fallback demo si Supabase no está configurado localmente.
 - La carga de archivos ya considera bucket por módulo y conserva el nombre original dentro del path de storage.
-- El selector visual de archivos existentes en Storage quedó anunciado en UI como siguiente iteración.
+- El schema ahora incluye períodos estructurados (`reporting_periods`), historial, agenda, alertas, recomendaciones y storage policies básicas por bucket/carpeta.
