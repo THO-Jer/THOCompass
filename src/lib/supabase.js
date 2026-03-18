@@ -26,9 +26,29 @@ export function moduleKeyToBucket(moduleKey) {
 }
 
 
+function isLocalhostUrl(value) {
+  if (!value) return false;
+  return /localhost|127\.0\.0\.1/.test(value);
+}
+
 export function getOAuthRedirectUrl() {
   const explicitAppUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, "");
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const base = explicitAppUrl || origin;
+  const origin = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "";
+
+  // In production, prefer the live origin if VITE_APP_URL still points to localhost.
+  const base = origin && !isLocalhostUrl(origin)
+    ? (isLocalhostUrl(explicitAppUrl) ? origin : (explicitAppUrl || origin))
+    : (explicitAppUrl || origin);
+
   return base ? `${base}/auth/callback` : undefined;
+}
+
+export function getAuthDebugInfo() {
+  const explicitAppUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, "") || "(no definida)";
+  const origin = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "(sin window)";
+  return {
+    explicitAppUrl,
+    origin,
+    redirectUrl: getOAuthRedirectUrl() || "(sin redirect)",
+  };
 }

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
-import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl } from "./lib/supabase";
+import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo } from "./lib/supabase";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
 const ThemeCtx = createContext();
@@ -1573,7 +1573,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady}){
+function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady,authDebug}){
   const [role,setRole]=useState("consultant");
   return(
     <div className="login-wrap">
@@ -1587,6 +1587,12 @@ function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady}){
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:3,textTransform:"uppercase",marginBottom:18}}>Plataforma de Reputación Corporativa</div>
         <div className="alert al-b" style={{marginBottom:18}}>Usa Microsoft/Azure o Google. Tras el primer login, el acceso queda pendiente hasta que una consultora lo apruebe en el centro de control.</div>
         {authMsg&&<div className="alert al-a" style={{marginBottom:18}}>{authMsg}</div>}
+        {authDebug&&<div style={{marginBottom:18,padding:12,borderRadius:12,border:`1px solid ${t.b2}`,background:t.s2}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>Debug OAuth callback</div>
+          <div style={{fontSize:12,color:t.t2,marginBottom:4}}><strong style={{color:t.t1}}>VITE_APP_URL:</strong> <span style={{wordBreak:'break-all'}}>{authDebug.explicitAppUrl}</span></div>
+          <div style={{fontSize:12,color:t.t2,marginBottom:4}}><strong style={{color:t.t1}}>window.location.origin:</strong> <span style={{wordBreak:'break-all'}}>{authDebug.origin}</span></div>
+          <div style={{fontSize:12,color:t.t2}}><strong style={{color:t.t1}}>redirectTo efectivo:</strong> <span style={{wordBreak:'break-all'}}>{authDebug.redirectUrl}</span></div>
+        </div>}
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>Tipo de acceso esperado</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
           {[['consultant','⚙️','Consultora'],['client','📊','Cliente']].map(([r,ic,l])=>(
@@ -1613,6 +1619,7 @@ export default function App(){
   const [session,setSession]=useState(null);
   const [authReady,setAuthReady]=useState(false);
   const [authMsg,setAuthMsg]=useState(isSupabaseConfigured ? "" : "Supabase no está configurado localmente. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para activar OAuth real.");
+  const authDebug = getAuthDebugInfo();
   const [sidebarOpen,setSidebarOpen]=useState(true);
   const [clients,setClients]=useState(INIT_CLIENTS);
   const [page,setPage]=useState("home");
@@ -1737,7 +1744,7 @@ export default function App(){
     :root{--b1:${t.b1};--b2:${t.b2};--s2:${t.s2};--s3:${t.s3};--t1:${t.t1};--t2:${t.t2};--t3:${t.t3};--t4:${t.t4};}
   `;
 
-  if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} onOAuthLogin={oauthLogin} t={t} authMsg={authMsg} isAuthReady={authReady}/></>);
+  if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} onOAuthLogin={oauthLogin} t={t} authMsg={authMsg} isAuthReady={authReady} authDebug={authDebug}/></>);
 
   const pageLabel=nav.find(n=>n.id===page)?.label||"Dashboard";
 

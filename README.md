@@ -26,6 +26,7 @@ npm run dev
 - Providers esperados: **solo** Google OAuth y Microsoft/Azure OAuth.
 - No se considera Email Auth / magic link en este flujo.
 - El callback del frontend ahora se resuelve en `VITE_APP_URL/auth/callback` (o `window.location.origin/auth/callback` como fallback).
+- La pantalla de login muestra un bloque **Debug OAuth callback** con `VITE_APP_URL`, `window.location.origin` y el `redirectTo` efectivo para detectar rápido una URL mal inyectada en Vercel.
 
 ## Checklist para evitar `ERR_CONNECTION_REFUSED`
 
