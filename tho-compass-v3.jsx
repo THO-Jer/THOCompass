@@ -460,6 +460,11 @@ const INIT_CLIENTS = [
       {from:"client",text:"¿Cuándo tendremos el análisis del sector norte?",date:"14 Mar · 10:32"},
       {from:"consultant",text:"Esta semana enviamos el análisis detallado con acciones recomendadas.",date:"14 Mar · 11:05"},
     ],
+    authorized_users:["rfernandez@mlosandes.cl","gerencia@mlosandes.cl"],
+    stakeholders:[
+      {name:"Junta de Vecinos La Greda",type:"Comunidad",influence:"Alta",relation:"Tensionada",last:"12 Mar 2025"},
+      {name:"Municipalidad de Los Vilos",type:"Institucional",influence:"Media",relation:"Activa",last:"10 Mar 2025"},
+    ],
     files:[
       {name:"Encuesta_Stakeholders_Q1_2025.xlsx",type:"excel",date:"5 Mar 2025",module:"RC",ai_score:68,status:"applied"},
       {name:"Acta_Mesa_Dialogo_Feb2025.docx",type:"doc",date:"28 Feb 2025",module:"RC",ai_score:71,status:"applied"},
@@ -493,6 +498,10 @@ const INIT_CLIENTS = [
     recommendations:["Diagnóstico cultural antes de intervenciones de clima.","Plan de RC para proyecto Coronel."],
     internal_notes:"Reporte NO publicado. Esperando datos de encuesta engagement de RRHH.",
     messages:[],
+    authorized_users:["amora@biobio.cl"],
+    stakeholders:[
+      {name:"Sindicato Proyecto Coronel",type:"Trabajadores",influence:"Alta",relation:"En desarrollo",last:"6 Mar 2025"},
+    ],
     files:[{name:"Notas_Entrevista_Comunidad.txt",type:"txt",date:"8 Mar 2025",module:"RC",ai_score:52,status:"applied"}],
     events:[{day:20,text:"Call kick-off Coronel",color:brand.blue}],
     profile:{sector:"Construcción e Inmobiliario",size:"Mediana (200–500 empleados)",region:"Biobío",since:"2025"},
@@ -611,8 +620,16 @@ function Calendar({events=[]}){
 }
 
 // ─── HEATMAP ──────────────────────────────────────────────────────────────────
-function RiskHeatmap(){
-  const areas=["Comunidad","Trabajadores","Regulatorio","Ambiental","Reputación"];
+function RiskHeatmap({client}){
+  const areasBase=[
+    {key:"community",label:"Comunidad",mods:["rc"]},
+    {key:"workers",label:"Trabajadores",mods:["do"]},
+    {key:"reg",label:"Regulatorio",mods:["rc","esg"]},
+    {key:"env",label:"Ambiental",mods:["esg"]},
+    {key:"rep",label:"Reputación",mods:["rc","do","esg"]},
+  ];
+  const activeMods=Object.entries(client?.modules||{}).filter(([,v])=>v).map(([k])=>k);
+  const areas=areasBase.filter(a=>a.mods.some(m=>activeMods.includes(m)));
   const dims=["Probabilidad","Impacto","Urgencia","Tendencia","Control"];
   const data=[[30,45,60,70,55],[75,60,50,40,65],[55,70,45,50,60],[65,80,55,60,45],[85,75,70,65,50]];
   const cc=v=>v>=70?`rgba(239,68,68,${.12+(v-70)/80})`
@@ -624,7 +641,7 @@ function RiskHeatmap(){
         <div/>
         {dims.map(d=><div key={d} className="hm-clbl">{d}</div>)}
         {areas.map((a,ai)=>[
-          <div key={`l${ai}`} className="hm-lbl">{a}</div>,
+          <div key={`l${ai}`} className="hm-lbl">{a.label}</div>,
           ...data[ai].map((v,di)=>(
             <div key={`c${ai}${di}`} className="hm-cell" style={{background:cc(v),color:ct(v)}}>{v}</div>
           ))
@@ -763,8 +780,9 @@ function Messages({messages,onSend}){
 }
 
 // ─── MODULE DETAIL: RC ────────────────────────────────────────────────────────
-function ModuleRC({client,isConsultant}){
+function ModuleRC({client,isConsultant,onUpdateStakeholders}){
   const m=MOD.rc; const [tab,setTab]=useState("overview");
+  const [newStake,setNewStake]=useState({name:"",type:"Comunidad",influence:"Media",relation:"En desarrollo",last:""});
   const radar=[
     {s:"Percepción",A:client.rc_subs.percepcion},{s:"Compromisos",A:client.rc_subs.compromisos},
     {s:"Diálogo",A:client.rc_subs.dialogo},{s:"Conflictividad",A:client.rc_subs.conflictividad},
@@ -784,7 +802,7 @@ function ModuleRC({client,isConsultant}){
       </div>
       {tab==="overview"&&(
         <>
-          <div className="g4 fu">
+                    <div className="g4 fu">
             {[["LSO Global",client.rc,m.color],["Percepción",client.rc_subs.percepcion,m.color],["Compromisos",client.rc_subs.compromisos,m.color],["Conflictividad",client.rc_subs.conflictividad,brand.red]].map(([l,v,c])=>(
               <div key={l} className="detail-kpi"><div className="dkpi-val" style={{color:c}}>{v}</div><div className="dkpi-lbl">{l}</div></div>
             ))}
@@ -867,26 +885,35 @@ function ModuleRC({client,isConsultant}){
       {tab==="stakeholders"&&(
         <div className="card fu">
           <div className="ctitle">Mapa de stakeholders</div>
+          {isConsultant&&<div className="alert al-b">Puedes agregar o eliminar stakeholders directamente desde esta vista. Se guardan en el cliente activo.</div>}
           <table className="tbl">
             <thead><tr><th>Stakeholder</th><th>Tipo</th><th>Nivel de influencia</th><th>Relación</th><th>Última interacción</th></tr></thead>
             <tbody>
-              {[
-                ["Comunidad La Greda","Comunidad","Alta","En riesgo","Feb 2025"],
-                ["Municipalidad de Ovalle","Gobierno local","Alta","Estable","Mar 2025"],
-                ["Junta de vigilancia río","Comunidad","Media","Favorable","Ene 2025"],
-                ["Sindicato trabajadores","Interno","Alta","Favorable","Mar 2025"],
-                ["ONGs ambientales","Sociedad civil","Media","Neutral","Feb 2025"],
-              ].map(([n,t,inf,rel,f],i)=>(
+              {(client.stakeholders||[]).map(({name:n,type:t,influence:inf,relation:rel,last:f},i)=>(
                 <tr key={i}>
                   <td style={{color:"var(--t1)",fontWeight:500}}>{n}</td>
                   <td>{t}</td>
                   <td><span className={`badge ${inf==="Alta"?"br":"ba"}`}>{inf}</span></td>
                   <td><span className={`badge ${rel==="Favorable"?"bg":rel==="En riesgo"?"br":"ba"}`}>{rel}</span></td>
-                  <td className="mono muted" style={{fontSize:11}}>{f}</td>
+                  <td className="mono muted" style={{fontSize:11}}>{f}{isConsultant&&<button className="btn btn-d btn-sm" style={{marginLeft:8}} onClick={()=>onUpdateStakeholders?.((client.stakeholders||[]).filter((_,idx)=>idx!==i))}>Eliminar</button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {isConsultant&&(
+            <div style={{marginTop:12,display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr auto",gap:8}}>
+              <input className="fi" placeholder="Nuevo stakeholder" value={newStake.name} onChange={e=>setNewStake(p=>({...p,name:e.target.value}))}/>
+              <input className="fi" placeholder="Tipo" value={newStake.type} onChange={e=>setNewStake(p=>({...p,type:e.target.value}))}/>
+              <input className="fi" placeholder="Influencia" value={newStake.influence} onChange={e=>setNewStake(p=>({...p,influence:e.target.value}))}/>
+              <input className="fi" placeholder="Relación" value={newStake.relation} onChange={e=>setNewStake(p=>({...p,relation:e.target.value}))}/>
+              <button className="btn btn-g btn-sm" onClick={()=>{
+                if(!newStake.name.trim())return;
+                const last=newStake.last||new Date().toLocaleDateString("es-CL");
+                onUpdateStakeholders?.([...(client.stakeholders||[]),{...newStake,last}]);
+                setNewStake({name:"",type:"Comunidad",influence:"Media",relation:"En desarrollo",last:""});
+              }}>+ Agregar</button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -913,7 +940,7 @@ function ModuleDO({client}){
       </div>
       {tab==="overview"&&(
         <>
-          <div className="g4 fu">
+                    <div className="g4 fu">
             {[["Salud Global",client.do,m.color],["Cultura",client.do_subs.cultura,m.color],["Engagement",client.do_subs.engagement,"#e879f9"],["Liderazgo",client.do_subs.liderazgo,brand.blue]].map(([l,v,c])=>(
               <div key={l} className="detail-kpi"><div className="dkpi-val" style={{color:c}}>{v}</div><div className="dkpi-lbl">{l}</div></div>
             ))}
@@ -1012,6 +1039,7 @@ function ModuleESG({client}){
       </div>
       {tab==="overview"&&(
         <>
+          <div className="alert al-b">ℹ️ Madurez ESG se alimenta desde Carga IA (módulo ESG), matrices de cumplimiento y evidencias de programas. La IA puede sugerir qué reportar y qué priorizar para mejora.</div>
           <div className="g4 fu">
             {[["ESG Global",client.esg,m.color],["Ambiental (E)",client.esg_subs?.ambiental,"#4ade80"],["Social (S)",client.esg_subs?.social,brand.blue],["Gobernanza (G)",client.esg_subs?.gobernanza,"#a78bfa"]].map(([l,v,c])=>(
               <div key={l} className="detail-kpi"><div className="dkpi-val" style={{color:c}}>{v??"—"}</div><div className="dkpi-lbl">{l}</div></div>
@@ -1045,6 +1073,11 @@ function ModuleESG({client}){
                 </div>
               ))}
             </div>
+          </div>
+          <div className="card" style={{marginTop:16}}>
+            <div className="sec-hdr"><div className="ctitle mb0">Reportería rápida ESG</div><span className="badge besg">Stakeholder-ready</span></div>
+            <div style={{fontSize:13,color:"var(--t2)",marginBottom:12}}>Genera un resumen ejecutivo para stakeholders con fortalezas, brechas y mejoras sugeridas por IA.</div>
+            <div className="btn-row"><button className="btn btn-esg btn-sm">Generar reporte ejecutivo</button><button className="btn btn-g btn-sm">Ver sugerencias IA (mostrar/no mostrar)</button></div>
           </div>
         </>
       )}
@@ -1225,6 +1258,7 @@ function ConsultantHome({clients}){
 function ClientDashboard({client,onMsg}){
   const [tab,setTab]=useState("overview");
   const activeM=Object.entries(client.modules).filter(([,v])=>v);
+  const canShowIRCS=activeM.length>=2;
   const prev=client.trend[client.trend.length-2];
   const curr=client.trend[client.trend.length-1];
   const radarData=[
@@ -1259,7 +1293,7 @@ function ClientDashboard({client,onMsg}){
               <div className="hero-eye">THO · Índice de Reputación Corporativa Sostenible</div>
               <div className="hero-co">{client.name}</div>
               <div className="hero-per">{client.industry} · Período {client.period}</div>
-              <div className="hero-desc">Su organización mantiene una posición <strong style={{color:sc(client.ircs)}}>{client.ircs>=70?"favorable":client.ircs>=50?"en desarrollo":"crítica"}</strong> en el IRCS, que integra los servicios activos de relacionamiento, desarrollo organizacional y sostenibilidad.</div>
+              <div className="hero-desc">{canShowIRCS?<>Su organización mantiene una posición <strong style={{color:sc(client.ircs)}}>{client.ircs>=70?"favorable":client.ircs>=50?"en desarrollo":"crítica"}</strong> en el IRCS, que integra los servicios activos.</>:<>IRCS global no aplica con menos de 2 módulos activos. Actualmente se muestra seguimiento operativo por módulo.</>}</div>
               <div className="hero-tags">
                 {activeM.map(([k])=>(
                   <span key={k} className="mod-tag" style={{color:MOD[k].color,borderColor:MOD[k].color}}>{MOD[k].icon} {MOD[k].short} · {client[k]}</span>
@@ -1267,8 +1301,8 @@ function ClientDashboard({client,onMsg}){
               </div>
             </div>
             <div style={{textAlign:"center"}}>
-              <ScoreRing val={client.ircs} size={128}/>
-              <div style={{marginTop:9,fontSize:12,color:"var(--t3)"}}>IRCS Global</div>
+              <ScoreRing val={canShowIRCS?client.ircs:null} size={128}/>
+              <div style={{marginTop:9,fontSize:12,color:"var(--t3)"}}>{canShowIRCS?"IRCS Global":"IRCS no disponible"}</div>
               <div className="mono" style={{fontSize:11,color:brand.green,marginTop:3}}>↑ +{curr.ircs-prev.ircs} vs período anterior</div>
             </div>
           </div>
@@ -1385,264 +1419,104 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
   const [tab,setTab]=useState("overview");
   const [weights,setWeights]=useState(null);
   const [saved,setSaved]=useState(false);
+  const [uploadModule,setUploadModule]=useState("RC");
+  const [newUserMail,setNewUserMail]=useState("");
   const client=clients.find(c=>c.id===selId);
-  useEffect(()=>setWeights({...client.weights}),[selId]);
+
+  useEffect(()=>{ if(client) setWeights({...client.weights}); },[selId,client]);
 
   function toggle(f){setClients(p=>p.map(c=>c.id===selId?{...c,[f]:!c[f]}:c));}
-  function toggleMod(m){setClients(p=>p.map(c=>c.id===selId?{...c,modules:{...c.modules,[m]:!c.modules[m]}}:c));}
+  function toggleMod(m){
+    setClients(p=>p.map(c=>{
+      if(c.id!==selId)return c;
+      const modules={...c.modules,[m]:!c.modules[m]};
+      const active=Object.entries(modules).filter(([,v])=>v).map(([k])=>k);
+      let weights={...c.weights};
+      if(active.length===1){weights={rc:0,do:0,esg:0,[active[0]]:100};}
+      return {...c,modules,weights};
+    }));
+  }
+  function updateClientField(field,val){setClients(p=>p.map(c=>c.id===selId?{...c,[field]:val}:c));}
   function sendMsg(txt,from){
     const d=new Date(); const ds=`${d.getDate()} Mar · ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
     setClients(p=>p.map(c=>c.id===selId?{...c,messages:[...c.messages,{from,text:txt,date:ds}]}:c));
   }
   function applyFile(){
-    const d=new Date(); const nf={name:`Archivo_${d.getHours()}${d.getMinutes()}.xlsx`,type:"excel",date:`${d.getDate()} Mar 2025`,module:"RC",ai_score:70,status:"applied"};
+    const d=new Date();
+    const nf={name:`Archivo_${d.getHours()}${d.getMinutes()}.xlsx`,type:"excel",date:`${d.getDate()} Mar 2025`,module:uploadModule,ai_score:70,status:"applied"};
     setClients(p=>p.map(c=>c.id===selId?{...c,files:[nf,...c.files]}:c));
   }
   function addClient(){
     const nextId=Math.max(...clients.map(c=>c.id),0)+1;
-    const base=clients[0];
+    const base=INIT_CLIENTS[0];
     const newClient={
-      ...JSON.parse(JSON.stringify(base)),
-      id:nextId,
-      name:`Nuevo Cliente ${nextId}`,
-      logo:"🧭",
-      industry:"Por definir",
-      contact:"Por definir",
-      email:`cliente${nextId}@empresa.cl`,
-      published:false,
-      period:"Q1 2025",
-      ircs:null,rc:null,do:null,esg:null,
+      ...JSON.parse(JSON.stringify(base)), id:nextId, name:`Nuevo Cliente ${nextId}`, logo:"🧭", industry:"Por definir", contact:"Por definir",
+      email:`cliente${nextId}@empresa.cl`, published:false, period:"Q1 2025", ircs:null,rc:null,do:null,esg:null,
       rc_subs:{ percepcion:null, compromisos:null, dialogo:null, conflictividad:null },
-      do_subs:{ cultura:null, engagement:null, liderazgo:null },
-      esg_subs:{ ambiental:null, social:null, gobernanza:null },
-      trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[],
-      internal_notes:"",
+      do_subs:{ cultura:null, engagement:null, liderazgo:null }, esg_subs:{ ambiental:null, social:null, gobernanza:null },
+      trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[], stakeholders:[], authorized_users:[], internal_notes:"",
       profile:{sector:"Por definir",size:"Por definir",region:"Por definir",since:"2026"},
     };
-    setClients(p=>[...p,newClient]);
-    setSelId(nextId);
+    setClients(p=>[...p,newClient]); setSelId(nextId);
   }
   function deleteClient(id){
-    if(clients.length<=1)return;
     const next=clients.filter(c=>c.id!==id);
     setClients(next);
-    if(selId===id)setSelId(next[0].id);
+    if(selId===id)setSelId(next[0]?.id||null);
   }
   function resetClientData(id){
     const base=INIT_CLIENTS.find(c=>c.id===id);
-    setClients(p=>p.map(c=>{
-      if(c.id!==id)return c;
-      if(base)return JSON.parse(JSON.stringify(base));
-      return {
-        ...c,
-        ircs:null,rc:null,do:null,esg:null,
-        rc_subs:{ percepcion:null, compromisos:null, dialogo:null, conflictividad:null },
-        do_subs:{ cultura:null, engagement:null, liderazgo:null },
-        esg_subs:{ ambiental:null, social:null, gobernanza:null },
-        trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[],
-        internal_notes:"",
-      };
-    }));
+    setClients(p=>p.map(c=>{ if(c.id!==id)return c; if(base)return JSON.parse(JSON.stringify(base)); return {...c,ircs:null,rc:null,do:null,esg:null,trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[],stakeholders:[],internal_notes:""}; }));
   }
 
   const tabs=[["overview","Resumen"],["upload","Carga IA"],["heatmap","Mapa Riesgo"],["weights","Pesos"],["admin","Admin"],["messages","Mensajes"],["files","Historial"]];
+
+  if(!client){
+    return <div className="page fu"><div className="card"><div className="ctitle">Sin clientes creados</div><div className="muted" style={{marginBottom:12}}>Actualmente no hay clientes. Puedes crear uno nuevo desde aquí.</div><button className="btn btn-g btn-sm" onClick={addClient}>+ Crear cliente</button></div></div>;
+  }
 
   return(
     <div className="page fu">
       <div className="ph">
         <div className="ph-eye">Panel de Administración · THO Consultora</div>
         <div className="ph-title">Centro de control</div>
-        <div className="ph-desc muted">Gestiona datos, pesos y publicación para cada cliente</div>
+        <div className="ph-desc muted">Gestiona datos, usuarios, cargas de evidencia y publicación por cliente.</div>
       </div>
-      {/* Client selector */}
       <div className="card card-sm" style={{marginBottom:16}}>
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"var(--t3)",letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>Cliente activo</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {clients.map(c=>(
-            <div key={c.id} onClick={()=>setSelId(c.id)} style={{
-              padding:"7px 14px",borderRadius:20,cursor:"pointer",transition:"all .15s",
-              border:`1px solid ${selId===c.id?"rgba(59,130,246,.4)":"var(--b2)"}`,
-              background:selId===c.id?brand.blueA:"var(--s2)",
-              color:selId===c.id?brand.blue:"var(--t2)",fontSize:13,fontWeight:500,
-              display:"flex",alignItems:"center",gap:8,
-            }}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:c.published?brand.green:brand.amber}}/>
-              {c.logo} {c.name}
-              {!c.published&&<span style={{fontSize:10,opacity:.6}}>BORRADOR</span>}
-            </div>
-          ))}
+          {clients.map(c=>(<div key={c.id} onClick={()=>setSelId(c.id)} style={{padding:"7px 14px",borderRadius:20,cursor:"pointer",transition:"all .15s",border:`1px solid ${selId===c.id?"rgba(59,130,246,.4)":"var(--b2)"}`,background:selId===c.id?brand.blueA:"var(--s2)",color:selId===c.id?brand.blue:"var(--t2)",fontSize:13,fontWeight:500,display:"flex",alignItems:"center",gap:8}}><div style={{width:6,height:6,borderRadius:"50%",background:c.published?brand.green:brand.amber}}/>{c.logo} {c.name}</div>))}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
+          <input className="fi" value={client.name} onChange={e=>updateClientField('name',e.target.value)} placeholder="Nombre cliente"/>
+          <input className="fi" value={client.email} onChange={e=>updateClientField('email',e.target.value)} placeholder="Email principal"/>
+          <input className="fi" value={client.industry} onChange={e=>updateClientField('industry',e.target.value)} placeholder="Industria"/>
+          <input className="fi" value={client.logo} onChange={e=>updateClientField('logo',e.target.value)} placeholder="Logo emoji"/>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
           <button className="btn btn-g btn-sm" onClick={addClient}>+ Agregar cliente</button>
-          <button className="btn btn-d btn-sm" onClick={()=>deleteClient(selId)} disabled={clients.length<=1}>🗑 Eliminar cliente activo</button>
+          <button className="btn btn-d btn-sm" onClick={()=>deleteClient(selId)}>🗑 Eliminar cliente activo</button>
           <button className="btn btn-s btn-sm" onClick={()=>resetClientData(selId)}>↺ Limpiar datos cargados</button>
         </div>
       </div>
-      {/* Publish banner */}
       <div className={`pub-banner ${client.published?"pub-live":"pub-draft"}`}>
-        <div className="pub-info">
-          <div className="pub-dot" style={{background:client.published?brand.green:brand.amber}}/>
-          <div>
-            <div style={{fontSize:13,fontWeight:600,color:"var(--t1)"}}>{client.published?"Publicado — visible para el cliente":"Borrador — el cliente no puede verlo"}</div>
-            <div style={{fontSize:11,color:"var(--t3)"}}>{client.name} · {client.period}</div>
-          </div>
-        </div>
-        <button className={`btn btn-sm ${client.published?"btn-g":"btn-s"}`} onClick={()=>toggle("published")}>
-          {client.published?"Despublicar":"✓ Publicar al cliente"}
-        </button>
+        <div className="pub-info"><div className="pub-dot" style={{background:client.published?brand.green:brand.amber}}/><div><div style={{fontSize:13,fontWeight:600,color:"var(--t1)"}}>{client.published?"Publicado — visible para el cliente":"Borrador — el cliente no puede verlo"}</div><div style={{fontSize:11,color:"var(--t3)"}}>{client.name} · {client.period}</div></div></div>
+        <button className={`btn btn-sm ${client.published?"btn-g":"btn-s"}`} onClick={()=>toggle("published")}>{client.published?"Despublicar":"✓ Publicar al cliente"}</button>
       </div>
-      <div className="tabs" style={{flexWrap:"wrap"}}>
-        {tabs.map(([id,l])=>(
-          <button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>
-            {l}
-            {id==="messages"&&client.messages.filter(m=>m.from==="client").length>0&&(
-              <span style={{marginLeft:5,background:brand.red,color:"white",borderRadius:10,padding:"0 5px",fontSize:10}}>
-                {client.messages.filter(m=>m.from==="client").length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <div className="tabs" style={{flexWrap:"wrap"}}>{tabs.map(([id,l])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</button>)}</div>
 
-      {tab==="overview"&&(
-        <>
-          <div className="g4 fu">
-            {[["IRCS",client.ircs],["RC",client.rc],["DO",client.do],["ESG",client.esg]].map(([l,v])=>(
-              <div key={l} className="stat-chip"><div className="stat-val" style={{color:sc(v??0)}}>{v??"—"}</div><div className="stat-lbl">{l}</div></div>
-            ))}
-          </div>
-          <div className="card">
-            <div className="sec-hdr"><div className="ctitle mb0">Todos los subindicadores</div><span className="badge bb">Solo consultora</span></div>
-            <table className="tbl">
-              <thead><tr><th>Módulo</th><th>Subindicador</th><th>Score</th><th>Estado</th></tr></thead>
-              <tbody>
-                {[["RC","Percepción y confianza",client.rc_subs.percepcion],["RC","Compromisos",client.rc_subs.compromisos],["RC","Calidad del diálogo",client.rc_subs.dialogo],["RC","Conflictividad",client.rc_subs.conflictividad],["DO","Cultura",client.do_subs.cultura],["DO","Engagement",client.do_subs.engagement],["DO","Liderazgo",client.do_subs.liderazgo],["ESG","Ambiental",client.esg_subs.ambiental],["ESG","Social",client.esg_subs.social],["ESG","Gobernanza",client.esg_subs.gobernanza]].map(([m,s,v],i)=>(
-                  <tr key={i}>
-                    <td><span className={`badge b${m.toLowerCase()}`}>{m}</span></td>
-                    <td style={{color:"var(--t1)"}}>{s}</td>
-                    <td><span className="mono" style={{color:sc(v),fontSize:14}}>{v??"—"}</span></td>
-                    <td><ScoreBadge v={v}/></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="card" style={{marginTop:16}}>
-            <div className="ctitle">Notas internas</div>
-            <textarea className="fta" defaultValue={client.internal_notes}/>
-            <div className="btn-row"><button className="btn btn-p btn-sm">Guardar nota</button></div>
-          </div>
-        </>
-      )}
-      {tab==="upload"&&(
-        <div className="card fu">
-          <div className="ctitle">Carga multi-fuente con análisis IA</div>
-          <div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube cualquier archivo del período. La IA detecta el tipo de contenido, extrae indicadores y propone actualizaciones de score para tu revisión.</div>
-          <div className="alert al-rc" style={{marginBottom:16}}>✦ La IA propone — tú decides. Ningún score se actualiza sin tu confirmación.</div>
-          <FileUpload onApply={applyFile}/>
-        </div>
-      )}
-      {tab==="heatmap"&&(
-        <div className="card fu">
-          <div className="ctitle">Mapa de calor de riesgos — {client.name}</div>
-          <RiskHeatmap/>
-        </div>
-      )}
-      {tab==="weights"&&weights&&(
-        <div className="card fu">
-          <div className="ctitle">Configuración de pesos IRCS — {client.name}</div>
-          <div style={{fontSize:13,color:"var(--t2)",marginBottom:22}}>Ajusta el peso de cada módulo en el cálculo del IRCS. Deben sumar 100%.</div>
-          {Object.entries(MOD).map(([key,m])=>(
-            <div key={key} style={{marginBottom:22,opacity:client.modules[key]?1:.4}}>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>{m.label}{!client.modules[key]&&" (no activo)"}</div>
-              <div className="sldr-wrap">
-                <input type="range" min={0} max={80} value={weights[key]} className="sldr"
-                  disabled={!client.modules[key]}
-                  onChange={e=>setWeights(p=>({...p,[key]:parseInt(e.target.value)}))}/>
-                <div className="sldr-val" style={{color:m.color}}>{weights[key]}%</div>
-              </div>
-            </div>
-          ))}
-          <div style={{padding:"12px 16px",background:"var(--s2)",borderRadius:8,marginBottom:16}}>
-            <span className="mono" style={{fontSize:12,color:"var(--t3)"}}>
-              Total: <span style={{color:weights.rc+weights.do+weights.esg===100?brand.green:brand.red}}>{weights.rc+weights.do+weights.esg}%</span>
-              {weights.rc+weights.do+weights.esg!==100&&<span style={{color:brand.amber,marginLeft:10}}>· Deben sumar 100</span>}
-            </span>
-          </div>
-          <button className="btn btn-p btn-sm" onClick={()=>{setSaved(true);setTimeout(()=>setSaved(false),2000);}}>
-            {saved?"✓ Guardado":"Aplicar pesos"}
-          </button>
-        </div>
-      )}
-      {tab==="admin"&&(
-        <div className="fu">
-          <div className="card" style={{marginBottom:16}}>
-            <div className="ctitle">Gestión de módulos por cliente</div>
-            {clients.map(c=>(
-              <div key={c.id} className="client-admin-row">
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
-                  <div>
-                    <div style={{fontSize:14,fontFamily:"'Fraunces',serif",color:"var(--t1)"}}>{c.logo} {c.name}</div>
-                    <div style={{fontSize:11,color:"var(--t3)",fontFamily:"'JetBrains Mono',monospace"}}>{c.industry} · {c.period}</div>
-                  </div>
-                  <div style={{display:"flex",gap:9,alignItems:"center"}}>
-                    <span className={`badge ${c.published?"bg":"ba"}`}>{c.published?"Publicado":"Borrador"}</span>
-                    <button className="btn btn-g btn-sm">Editar</button>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:20}}>
-                  {Object.entries(MOD).map(([key,m])=>(
-                    <div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
-                      <label className="tgl">
-                        <input type="checkbox" checked={c.modules[key]} onChange={()=>c.id===selId?toggleMod(key):null}/>
-                        <div className="tgl-sl"/>
-                      </label>
-                      <span style={{fontSize:11,color:c.modules[key]?m.color:"var(--t4)"}}>{m.short}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Tip: usa “+ Agregar cliente”, “Eliminar cliente activo” y “Limpiar datos cargados” desde el selector superior.</div>
-          </div>
-          <div className="card">
-            <div className="ctitle">Usuarios y accesos</div>
-            <table className="tbl">
-              <thead><tr><th>Email</th><th>Empresa</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
-              <tbody>
-                {[["rfernandez@mlosandes.cl","Minera Los Andes","Cliente","Activo"],["amora@biobio.cl","Constructora BíoBío","Cliente","Activo"],["admin@tho.cl","THO Consultora","Admin","Activo"]].map(([e,emp,r,s],i)=>(
-                  <tr key={i}>
-                    <td style={{color:"var(--t1)"}}>{e}</td><td>{emp}</td>
-                    <td><span className={`badge ${r==="Admin"?"bb":"bg"}`}>{r}</span></td>
-                    <td><span className="badge bg">{s}</span></td>
-                    <td><button className="btn btn-d btn-sm">Suspender</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button className="btn btn-g btn-sm" style={{marginTop:12}}>+ Invitar usuario</button>
-          </div>
-        </div>
-      )}
-      {tab==="messages"&&(
-        <div className="card fu">
-          <div className="ctitle">Mensajes de {client.name}</div>
-          <Messages messages={client.messages} onSend={txt=>sendMsg(txt,"consultant")}/>
-        </div>
-      )}
-      {tab==="files"&&(
-        <div className="card fu">
-          <div className="sec-hdr"><div className="ctitle mb0">Historial de archivos</div><span className="badge bb">{client.files.length} archivos</span></div>
-          {client.files.map((f,i)=>(
-            <div key={i} className="file-row">
-              <div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div>
-              <div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div>
-              <span className="badge bg">Aplicado</span>
-              <button className="btn btn-g btn-sm">Ver análisis</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {tab==="overview"&&<div className="card fu"><div className="ctitle">Resumen de {client.name}</div><div className="g4" style={{marginBottom:0}}>{[["IRCS",client.ircs],["RC",client.rc],["DO",client.do],["ESG",client.esg]].map(([l,v])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:sc(v??0)}}>{v??"—"}</div><div className="stat-lbl">{l}</div></div>)}</div></div>}
+
+      {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos para el módulo seleccionado. Ejemplo: liderazgo va a DO; políticas y cumplimiento van a ESG.</div><FileUpload onApply={applyFile}/></div>}
+
+      {tab==="heatmap"&&<div className="card fu"><div className="ctitle">Mapa de calor de riesgos — {client.name}</div><div className="alert al-b">ℹ️ El mapa se recalcula por módulos activos. Si solo hay RC, no se muestran dimensiones ambientales.</div><RiskHeatmap client={client}/></div>}
+
+      {tab==="weights"&&weights&&<div className="card fu"><div className="ctitle">Configuración de pesos IRCS — {client.name}</div><div style={{fontSize:13,color:"var(--t2)",marginBottom:22}}>Si hay sólo 1 módulo activo, su peso queda en 100%. IRCS integrado requiere 2+ módulos.</div>{Object.entries(MOD).map(([key,m])=><div key={key} style={{marginBottom:22,opacity:client.modules[key]?1:.4}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>{m.label}{!client.modules[key]&&" (no activo)"}</div><div className="sldr-wrap"><input type="range" min={0} max={100} value={weights[key]} className="sldr" disabled={!client.modules[key]} onChange={e=>setWeights(p=>({...p,[key]:parseInt(e.target.value)}))}/><div className="sldr-val" style={{color:m.color}}>{weights[key]}%</div></div></div>)}<button className="btn btn-p btn-sm" onClick={()=>{setClients(p=>p.map(c=>c.id===selId?{...c,weights}:c));setSaved(true);setTimeout(()=>setSaved(false),2000);}}>{saved?"✓ Guardado":"Aplicar pesos"}</button>{Object.values(client.modules).filter(Boolean).length<2&&<div className="alert al-a" style={{marginTop:12}}>IRCS global no se muestra con menos de 2 módulos activos.</div>}</div>}
+
+      {tab==="admin"&&<div className="fu"><div className="card" style={{marginBottom:16}}><div className="ctitle">Gestión de módulos por cliente</div>{clients.map(c=><div key={c.id} className="client-admin-row"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div><div style={{fontSize:14,fontFamily:"'Fraunces',serif",color:"var(--t1)"}}>{c.logo} {c.name}</div><div style={{fontSize:11,color:"var(--t3)",fontFamily:"'JetBrains Mono',monospace"}}>{c.industry} · {c.period}</div></div><span className={`badge ${c.published?"bg":"ba"}`}>{c.published?"Publicado":"Borrador"}</span></div><div style={{display:"flex",gap:20}}>{Object.entries(MOD).map(([key,m])=><div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><label className="tgl"><input type="checkbox" checked={c.modules[key]} onChange={()=>{setSelId(c.id);toggleMod(key);}}/><div className="tgl-sl"/></label><span style={{fontSize:11,color:c.modules[key]?m.color:"var(--t4)"}}>{m.short}</span></div>)}</div></div>)}</div><div className="card"><div className="ctitle">Usuarios y accesos</div><div className="alert al-b">Esta lista es por cliente. Cliente activo: {client.name}.</div><table className="tbl"><thead><tr><th>Email</th><th>Empresa</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>{[["admin@tho.cl","THO Consultora","Admin","Activo"],...(client.authorized_users||[]).map(e=>[e,client.name,"Cliente","Activo"])].map(([e,emp,r,s],i)=><tr key={i}><td style={{color:"var(--t1)"}}>{e}</td><td>{emp}</td><td><span className={`badge ${r==="Admin"?"bb":"bg"}`}>{r}</span></td><td><span className="badge bg">{s}</span></td><td>{r!=="Admin"&&<button className="btn btn-d btn-sm" onClick={()=>setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:(c.authorized_users||[]).filter(m=>m!==e)}:c))}>Quitar</button>}</td></tr>)}</tbody></table><div style={{display:"flex",gap:8,marginTop:12}}><input className="fi" placeholder="nuevo.mail@empresa.cl" value={newUserMail} onChange={e=>setNewUserMail(e.target.value)}/><button className="btn btn-g btn-sm" onClick={()=>{if(!newUserMail.includes('@'))return;setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:[...(c.authorized_users||[]),newUserMail]}:c));setNewUserMail("");}}>+ Invitar usuario</button></div></div></div>}
+
+      {tab==="messages"&&<div className="card fu"><div className="ctitle">Mensajes de {client.name}</div><Messages messages={client.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div>}
+      {tab==="files"&&<div className="card fu"><div className="sec-hdr"><div className="ctitle mb0">Historial de archivos</div><span className="badge bb">{client.files.length} archivos</span></div>{client.files.map((f,i)=><div key={i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div></div>)}</div>}
     </div>
   );
 }
@@ -1704,10 +1578,12 @@ export default function App(){
   const isC=session?.role==="consultant";
   const clientData=clients[0];
   const selClient=clients.find(c=>c.id===selClientId);
+  const hasClients=clients.length>0;
 
   function login(role){setSession({role});if(role==="client")setShowTour(true);}
   function logout(){setSession(null);setPage("home");}
   function sendMsg(txt,from){
+    if(!clientData)return;
     const d=new Date(); const ds=`${d.getDate()} Mar · ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
     setClients(p=>p.map(c=>c.id===clientData.id?{...c,messages:[...c.messages,{from,text:txt,date:ds}]}:c));
   }
@@ -1720,12 +1596,13 @@ export default function App(){
     {id:"rc",icon:"🤝",label:"Relacionamiento",activeCls:"rc-active"},
     {id:"do",icon:"🏛️",label:"Desarrollo Org.",activeCls:"do-active"},
     {id:"esg",icon:"🌿",label:"Sostenibilidad",activeCls:"esg-active"},
+    {id:"messages",icon:"🔔",label:"Notificaciones"},
     {sep:true,label:"Cuenta"},
     {id:"profile",icon:"👤",label:"Perfil"},
     {id:"tour",icon:"❓",label:"Tour guiado"},
   ];
 
-  const clientNav=[
+  const clientNav=clientData?[
     {id:"home",icon:"◈",label:"Mi Dashboard"},
     {sep:true,label:"Servicios activos"},
     {id:"rc",icon:"🤝",label:"Relacionamiento",activeCls:"rc-active",locked:!clientData.modules.rc},
@@ -1735,7 +1612,7 @@ export default function App(){
     {id:"messages",icon:"✉",label:"Mensajes",badge:clientData.messages.filter(m=>m.from==="consultant").length||null},
     {id:"profile",icon:"👤",label:"Mi perfil"},
     {id:"tour",icon:"❓",label:"Tour guiado"},
-  ];
+  ]:[];
 
   const nav=isC?consultantNav:clientNav;
   const activeClient=isC?selClient:clientData;
@@ -1746,14 +1623,17 @@ export default function App(){
   }
 
   function renderPage(){
+    if(isC&&!hasClients&&page!=="control")return <div className="page fu"><div className="card"><div className="ctitle">No hay clientes todavía</div><button className="btn btn-g btn-sm" onClick={()=>setPage("control")}>Ir al centro de control</button></div></div>;
     if(isC){
       if(page==="home")return<ConsultantHome clients={clients}/>;
       if(page==="control")return<ConsultantPanel clients={clients} setClients={setClients} selId={selClientId} setSelId={setSelClientId}/>;
-      if(page==="rc")return<ModuleRC client={selClient} isConsultant={true}/>;
+      if(page==="rc"&&selClient)return<ModuleRC client={selClient} isConsultant={true} onUpdateStakeholders={stakeholders=>setClients(p=>p.map(c=>c.id===selClientId?{...c,stakeholders}:c))}/>;
       if(page==="do")return<ModuleDO client={selClient}/>;
       if(page==="esg")return<ModuleESG client={selClient}/>;
       if(page==="profile")return<ProfilePage isConsultant={true} client={selClient}/>;
+      if(page==="messages"&&selClient)return <div className="page fu"><div className="ph"><div className="ph-eye">Notificaciones</div><div className="ph-title">Mensajes de clientes</div></div><div className="card"><Messages messages={selClient.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div></div>;
     } else {
+      if(!clientData)return <div className="page fu"><div className="card">No hay datos de cliente disponibles.</div></div>;
       if(page==="home")return<ClientDashboard client={clientData} onMsg={sendMsg}/>;
       if(page==="rc"&&clientData.modules.rc)return<ModuleRC client={clientData} isConsultant={false}/>;
       if(page==="do"&&clientData.modules.do)return<ModuleDO client={clientData}/>;
@@ -1811,9 +1691,9 @@ export default function App(){
           </div>
           <div className="sb-bottom">
             <div className="sb-user">
-              <div className={`sb-avatar ${isC?"av-c":"av-cl"}`}>{isC?"TH":clientData.logo}</div>
+              <div className={`sb-avatar ${isC?"av-c":"av-cl"}`}>{isC?"TH":(clientData?.logo||"—")}</div>
               <div className="sb-user-info">
-                <div className="sb-uname">{isC?"THO Team":clientData.name}</div>
+                <div className="sb-uname">{isC?"THO Team":(clientData?.name||"Sin cliente")}</div>
                 <div className="sb-urole">{isC?"consultora":"cliente"}</div>
               </div>
             </div>
@@ -1834,10 +1714,10 @@ export default function App(){
                 {darkMode?"☀️":"🌙"}
               </button>
               <div className="notif-wrap">
-                <button className="tb-btn">🔔<div className="notif-dot"/></button>
+                <button className="tb-btn" onClick={()=>setPage("messages")} title="Notificaciones">🔔<div className="notif-dot"/></button>
               </div>
-              {isC&&(
-                <div className="client-chip" onClick={()=>setPage("control")}>
+              {isC&&selClient&&(
+                <div className="client-chip" onClick={()=>{const idx=clients.findIndex(c=>c.id===selClientId); if(idx>=0&&clients.length){setSelClientId(clients[(idx+1)%clients.length].id);} setPage("home");}} title="Cambiar cliente activo">
                   <div className="online-dot"/>
                   {selClient.logo} {selClient.name}
                   <span style={{color:"var(--t3)"}}>▾</span>
