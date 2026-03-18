@@ -112,12 +112,12 @@ create table if not exists public.client_user_access (
 -- ============================================================
 -- 5. CLIENT MODULES
 -- ============================================================
--- Nota: la columna del módulo Desarrollo Organizacional se define como "do"
--- porque DO es palabra reservada/comando en PostgreSQL.
+-- Nota: evitamos usar la columna `do` en SQL porque `DO` es comando reservado en PostgreSQL.
+-- Por eso en el schema se usan nombres explícitos: `do_enabled` y `do_score`.
 create table if not exists public.client_modules (
   client_id   uuid primary key references public.clients(id) on delete cascade,
   rc          boolean not null default true,
-  "do"        boolean not null default true,
+  do_enabled  boolean not null default true,
   esg         boolean not null default true,
   weight_rc   integer not null default 40 check (weight_rc between 0 and 100),
   weight_do   integer not null default 35 check (weight_do between 0 and 100),
@@ -133,7 +133,7 @@ create table if not exists public.client_scores (
   client_id           uuid     primary key references public.clients(id) on delete cascade,
   ircs                integer,
   rc                  integer,
-  "do"                integer,
+  do_score            integer,
   esg                 integer,
   rc_percepcion       integer,
   rc_compromisos      integer,
@@ -157,7 +157,7 @@ create table if not exists public.client_score_history (
   reporting_period_id uuid        not null references public.reporting_periods(id) on delete restrict,
   ircs                integer,
   rc                  integer,
-  "do"                integer,
+  do_score            integer,
   esg                 integer,
   rc_percepcion       integer,
   rc_compromisos      integer,

@@ -74,6 +74,9 @@ La app redirige a Supabase con `redirectTo = https://TU-DOMINIO-REAL.vercel.app/
   - `do-documents`
   - `esg-documents`
 
+
+> Nota técnica: en el schema SQL evitamos usar una columna llamada `do` porque `DO` es palabra reservada en PostgreSQL. Por eso en base de datos verás `do_enabled` y `do_score`, aunque en la UI el módulo siga llamándose DO.
+
 ## Estado actual
 
 - OAuth ya está preparado en la UI con fallback demo si Supabase no está configurado localmente.
