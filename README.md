@@ -1,6 +1,15 @@
 # THO Compass
 
-Preparé el proyecto para que se pueda ejecutar como una app React (Vite) y arreglé un error de sintaxis que impedía renderizar el menú lateral.
+Prototipo React + Vite del panel THO Compass, ahora preparado para integrar autenticación OAuth con Supabase, persistencia de clientes y storage de documentos por módulo.
+
+## Variables de entorno
+
+Crea un `.env.local` basado en `.env.example`:
+
+```bash
+VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+VITE_SUPABASE_ANON_KEY=tu-anon-key
+```
 
 ## Ejecutar en local
 
@@ -9,10 +18,23 @@ npm install
 npm run dev
 ```
 
-Luego abre la URL que muestra Vite (por defecto `http://localhost:5173`).
+## Auth y Supabase
 
-## Qué se corrigió
+- Cliente Supabase: `src/lib/supabase.js`
+- Esquema inicial SQL + RLS + buckets: `supabase/schema.sql`
+- Providers esperados: Google OAuth y Microsoft/Azure OAuth.
 
-- Se creó el bootstrap de aplicación (`index.html`, `src/main.jsx`, `package.json`).
-- Se incorporó el componente principal en `src/App.jsx`.
-- Se corrigió `opacity:item.locked?.35:1` por `opacity:item.locked ? .35 : 1`.
+## Flujo previsto
+
+- Usuarios cliente: se autentican con Google/Microsoft y luego quedan pendientes de aprobación/asignación a cliente.
+- Usuarios consultora: se autentican con Google/Microsoft y ven todos los clientes una vez aprobados.
+- Buckets de storage separados por módulo:
+  - `rc-documents`
+  - `do-documents`
+  - `esg-documents`
+
+## Estado actual
+
+- OAuth ya está preparado en la UI con fallback demo si Supabase no está configurado.
+- La carga de archivos ya considera bucket por módulo y conserva el nombre original dentro del path de storage.
+- El selector visual de archivos existentes en Storage quedó anunciado en UI como siguiente iteración.

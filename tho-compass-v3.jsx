@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
+import { supabase, isSupabaseConfigured, moduleKeyToBucket } from "./lib/supabase";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
 const ThemeCtx = createContext();
@@ -508,6 +509,27 @@ const INIT_CLIENTS = [
   },
 ];
 
+const MOCK_CONSULTANT_EMAILS = ["admin@tho.cl", "equipo@tho.cl"];
+
+function inferRoleFromUser(user) {
+  const explicitRole = user?.app_metadata?.role || user?.user_metadata?.role;
+  if (explicitRole === "consultant" || explicitRole === "client") return explicitRole;
+  const email = user?.email?.toLowerCase() || "";
+  if (MOCK_CONSULTANT_EMAILS.includes(email) || email.endsWith("@tho.cl")) return "consultant";
+  return "client";
+}
+
+function formatAuthSession(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    role: inferRoleFromUser(user),
+    approvalStatus: user?.app_metadata?.approval_status || "pending",
+    provider: user?.app_metadata?.provider || user?.user_metadata?.provider || null,
+  };
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const sc = v => v===null||v===undefined?"var(--t3)":v>=70?brand.green:v>=50?brand.amber:brand.red;
 const ScoreBadge = ({v})=>{
@@ -668,6 +690,9 @@ function FileUpload({onApply}){
   const addFiles=list=>{
     const m=Array.from(list).map(f=>({
       name:f.name,
+      raw:f,
+      size:f.size,
+      mimeType:f.type,
       type:f.name.match(/\.(xlsx|csv)$/i)?"excel":f.name.match(/\.pdf$/i)?"pdf":f.name.match(/\.docx?$/i)?"doc":"txt"
     }));
     setFiles(p=>[...p,...m]);
@@ -743,7 +768,7 @@ function FileUpload({onApply}){
             </div>
           ))}
           <div className="btn-row">
-            <button className="btn btn-s btn-sm" onClick={()=>{onApply&&onApply();setProposal(null);setFiles([]);}}>✓ Aplicar propuesta</button>
+            <button className="btn btn-s btn-sm" onClick={()=>{onApply&&onApply(files);setProposal(null);setFiles([]);}}>✓ Aplicar propuesta</button>
             <button className="btn btn-g btn-sm" onClick={()=>setProposal(null)}>Descartar</button>
           </div>
         </div>
@@ -1421,6 +1446,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
   const [saved,setSaved]=useState(false);
   const [uploadModule,setUploadModule]=useState("RC");
   const [newUserMail,setNewUserMail]=useState("");
+  const [uploadMsg,setUploadMsg]=useState("");
   const client=clients.find(c=>c.id===selId);
 
   useEffect(()=>{ if(client) setWeights({...client.weights}); },[selId,client]);
@@ -1441,10 +1467,35 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
     const d=new Date(); const ds=`${d.getDate()} Mar · ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
     setClients(p=>p.map(c=>c.id===selId?{...c,messages:[...c.messages,{from,text:txt,date:ds}]}:c));
   }
-  function applyFile(){
+  async function applyFile(uploadedFiles=[]){
     const d=new Date();
-    const nf={name:`Archivo_${d.getHours()}${d.getMinutes()}.xlsx`,type:"excel",date:`${d.getDate()} Mar 2025`,module:uploadModule,ai_score:70,status:"applied"};
-    setClients(p=>p.map(c=>c.id===selId?{...c,files:[nf,...c.files]}:c));
+    const moduleKey = uploadModule.toLowerCase();
+    const bucket = moduleKeyToBucket(moduleKey);
+    const created = [];
+    for (const file of uploadedFiles) {
+      let storagePath = `${client.id || selId}/${Date.now()}-${file.name}`;
+      if (supabase && file.raw) {
+        const { error } = await supabase.storage.from(bucket).upload(storagePath, file.raw, { upsert: false });
+        if (error) {
+          setUploadMsg(`Error al subir ${file.name}: ${error.message}`);
+          continue;
+        }
+      }
+      created.push({
+        name:file.name,
+        type:file.type,
+        date:`${d.getDate()} Mar 2025`,
+        module:uploadModule,
+        ai_score:70,
+        status:supabase ? "uploaded" : "local-only",
+        storage_bucket:bucket,
+        storage_path:storagePath,
+      });
+    }
+    if (created.length) {
+      setClients(p=>p.map(c=>c.id===selId?{...c,files:[...created,...c.files]}:c));
+      setUploadMsg(`${created.length} archivo(s) cargado(s) correctamente en ${bucket}.`);
+    }
   }
   function addClient(){
     const nextId=Math.max(...clients.map(c=>c.id),0)+1;
@@ -1507,7 +1558,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
 
       {tab==="overview"&&<div className="card fu"><div className="ctitle">Resumen de {client.name}</div><div className="g4" style={{marginBottom:0}}>{[["IRCS",client.ircs],["RC",client.rc],["DO",client.do],["ESG",client.esg]].map(([l,v])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:sc(v??0)}}>{v??"—"}</div><div className="stat-lbl">{l}</div></div>)}</div></div>}
 
-      {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos para el módulo seleccionado. Ejemplo: liderazgo va a DO; políticas y cumplimiento van a ESG.</div><FileUpload onApply={applyFile}/></div>}
+      {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos desde tu disco local al bucket del módulo seleccionado. Próxima iteración: selector embebido de archivos ya existentes en Storage.</div>{uploadMsg&&<div className="alert al-b">{uploadMsg}</div>}<div className="btn-row"><button className="btn btn-g btn-sm" onClick={()=>setUploadMsg(`Abrir selector de Storage para bucket ${moduleKeyToBucket(uploadModule.toLowerCase())} (pendiente de interfaz dedicada).`)}>Abrir archivos desde Storage</button></div><FileUpload onApply={applyFile}/></div>}
 
       {tab==="heatmap"&&<div className="card fu"><div className="ctitle">Mapa de calor de riesgos — {client.name}</div><div className="alert al-b">ℹ️ El mapa se recalcula por módulos activos. Si solo hay RC, no se muestran dimensiones ambientales.</div><RiskHeatmap client={client}/></div>}
 
@@ -1522,41 +1573,35 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-function Login({onLogin,t}){
+function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady}){
   const [role,setRole]=useState("consultant");
   return(
     <div className="login-wrap">
       <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(${t.b1} 1px,transparent 1px)`,backgroundSize:"28px 28px",opacity:.6}}/>
       <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,rgba(249,115,22,.05),transparent 65%)`,top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}/>
-      <div style={{position:"relative",background:t.s1,border:`1px solid ${t.b2}`,borderRadius:20,padding:44,width:400,boxShadow:t.shadowLg,animation:"fadeUp .4s ease both"}}>
+      <div style={{position:"relative",background:t.s1,border:`1px solid ${t.b2}`,borderRadius:20,padding:44,width:420,boxShadow:t.shadowLg,animation:"fadeUp .4s ease both"}}>
         <div style={{fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:26,color:t.t1,marginBottom:3}}>
           <span style={{marginRight:8,opacity:.85}}>🧭</span>
           THO <span style={{background:`linear-gradient(90deg,${brand.rc},${brand.do})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Compass</span>
         </div>
-        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:3,textTransform:"uppercase",marginBottom:32}}>Plataforma de Reputación Corporativa</div>
-        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>Tipo de acceso</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
-          {[["consultant","⚙️","Consultora"],["client","📊","Cliente"]].map(([r,ic,l])=>(
-            <div key={r} onClick={()=>setRole(r)} style={{
-              padding:"14px 10px",borderRadius:12,border:`1px solid ${role===r?"rgba(249,115,22,.4)":t.b2}`,
-              background:role===r?brand.rcA:t.s2,color:role===r?brand.rc:t.t3,
-              cursor:"pointer",textAlign:"center",transition:"all .2s",
-            }}>
-              <div style={{fontSize:22,marginBottom:5}}>{ic}</div>
-              <div style={{fontSize:13,fontWeight:600}}>{l}</div>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:3,textTransform:"uppercase",marginBottom:18}}>Plataforma de Reputación Corporativa</div>
+        <div className="alert al-b" style={{marginBottom:18}}>Usa Microsoft/Azure o Google. Tras el primer login, el acceso queda pendiente hasta que una consultora lo apruebe en el centro de control.</div>
+        {authMsg&&<div className="alert al-a" style={{marginBottom:18}}>{authMsg}</div>}
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>Tipo de acceso esperado</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+          {[['consultant','⚙️','Consultora'],['client','📊','Cliente']].map(([r,ic,l])=>(
+            <div key={r} onClick={()=>setRole(r)} style={{padding:"14px 10px",borderRadius:12,border:`1px solid ${role===r?"rgba(249,115,22,.4)":t.b2}`,background:role===r?brand.rcA:t.s2,color:role===r?brand.rc:t.t3,cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
+              <div style={{fontSize:22,marginBottom:5}}>{ic}</div><div style={{fontSize:13,fontWeight:600}}>{l}</div>
             </div>
           ))}
         </div>
-        <div style={{marginBottom:14}}><label style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:7}}>Email</label>
-          <input style={{width:"100%",background:t.s2,border:`1px solid ${t.b2}`,borderRadius:8,padding:"10px 13px",color:t.t1,fontSize:13,outline:"none"}} placeholder={role==="consultant"?"equipo@tho.cl":"contacto@empresa.cl"}/>
+        <div className="btn-row" style={{marginBottom:12}}>
+          <button className="btn btn-g" style={{width:'100%',justifyContent:'center'}} disabled={!isAuthReady} onClick={()=>onOAuthLogin?.('google', role)}>Continuar con Google</button>
+          <button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} disabled={!isAuthReady} onClick={()=>onOAuthLogin?.('azure', role)}>Continuar con Microsoft</button>
         </div>
-        <div style={{marginBottom:20}}><label style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:7}}>Contraseña</label>
-          <input type="password" style={{width:"100%",background:t.s2,border:`1px solid ${t.b2}`,borderRadius:8,padding:"10px 13px",color:t.t1,fontSize:13,outline:"none"}} placeholder="••••••••"/>
-        </div>
-        <button onClick={()=>onLogin(role)} style={{width:"100%",padding:13,background:`linear-gradient(135deg,${brand.rc},${brand.do})`,border:"none",borderRadius:8,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Space Grotesk',sans-serif"}}>
-          Ingresar a THO Compass
-        </button>
-        <div style={{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,marginTop:14}}>Prototipo v3 · Datos simulados</div>
+        <div style={{textAlign:'center',fontSize:12,color:t.t3,marginBottom:12}}>Si todavía no configuraste OAuth en Supabase, puedes seguir usando el acceso demo.</div>
+        <button onClick={()=>onLogin(role)} style={{width:"100%",padding:13,background:`linear-gradient(135deg,${brand.rc},${brand.do})`,border:"none",borderRadius:8,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Space Grotesk',sans-serif"}}>Ingresar en modo demo</button>
+        <div style={{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:t.t3,marginTop:14}}>OAuth real: Google + Microsoft · Prototipo con fallback demo</div>
       </div>
     </div>
   );
@@ -1566,6 +1611,8 @@ function Login({onLogin,t}){
 export default function App(){
   const [darkMode,setDarkMode]=useState(true);
   const [session,setSession]=useState(null);
+  const [authReady,setAuthReady]=useState(false);
+  const [authMsg,setAuthMsg]=useState(isSupabaseConfigured ? "" : "Supabase no está configurado localmente. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para activar OAuth real.");
   const [sidebarOpen,setSidebarOpen]=useState(true);
   const [clients,setClients]=useState(INIT_CLIENTS);
   const [page,setPage]=useState("home");
@@ -1580,8 +1627,39 @@ export default function App(){
   const selClient=clients.find(c=>c.id===selClientId);
   const hasClients=clients.length>0;
 
-  function login(role){setSession({role});if(role==="client")setShowTour(true);}
-  function logout(){setSession(null);setPage("home");}
+  useEffect(()=>{
+    let active = true;
+    if (!supabase) { setAuthReady(false); return; }
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(formatAuthSession(data.session?.user) || null);
+      setAuthReady(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(formatAuthSession(nextSession?.user) || null);
+    });
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  async function oauthLogin(provider, role){
+    if (!supabase) return;
+    const providerName = provider === 'azure' ? 'azure' : 'google';
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: providerName,
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: providerName === 'google' ? { access_type: 'offline', prompt: 'consent' } : undefined,
+      },
+    });
+    if (error) setAuthMsg(`No se pudo iniciar sesión con ${providerName}: ${error.message}`);
+    else setAuthMsg(`Redirigiendo a ${providerName}. El rol esperado para esta solicitud es ${role}. Luego podrás aprobar el acceso desde Compass.`);
+  }
+
+  function login(role){setSession({role, approvalStatus:'demo'});if(role==="client")setShowTour(true);}
+  async function logout(){ if (supabase) await supabase.auth.signOut(); setSession(null);setPage("home"); }
   function sendMsg(txt,from){
     if(!clientData)return;
     const d=new Date(); const ds=`${d.getDate()} Mar · ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
@@ -1655,7 +1733,7 @@ export default function App(){
     :root{--b1:${t.b1};--b2:${t.b2};--s2:${t.s2};--s3:${t.s3};--t1:${t.t1};--t2:${t.t2};--t3:${t.t3};--t4:${t.t4};}
   `;
 
-  if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} t={t}/></>);
+  if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} onOAuthLogin={oauthLogin} t={t} authMsg={authMsg} isAuthReady={authReady}/></>);
 
   const pageLabel=nav.find(n=>n.id===page)?.label||"Dashboard";
 
