@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, createContext, useContext } from "r
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
 import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo } from "./lib/supabase";
 import ApprovalPanel from "./components/ApprovalPanel";
+import PendingAccess from "./components/PendingAccess";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
 const ThemeCtx = createContext();
@@ -543,16 +544,28 @@ function inferRoleFromUser(user) {
   return "client";
 }
 
-function formatAuthSession(user) {
+function formatAuthSession(user, profile) {
   if (!user) return null;
   return {
     id: user.id,
     email: user.email,
     displayName: getUserDisplayName(user),
-    role: inferRoleFromUser(user),
-    approvalStatus: user?.app_metadata?.approval_status || "pending",
+    role: profile?.role || inferRoleFromUser(user),
+    approvalStatus: profile?.approval_status || user?.app_metadata?.approval_status || "pending",
     provider: user?.app_metadata?.provider || user?.user_metadata?.provider || null,
   };
+}
+
+async function getUserProfile(userId) {
+  if (!supabase || !userId) return null;
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("approval_status, role")
+    .eq("id", userId)
+    .single();
+
+  if (error) return null;
+  return data;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -1824,17 +1837,19 @@ export default function App(){
   useEffect(()=>{
     let active = true;
     if (!supabase) { setAuthReady(false); return; }
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return;
-      const next = formatAuthSession(data.session?.user) || null;
+      const profile = await getUserProfile(data.session?.user?.id);
+      const next = formatAuthSession(data.session?.user, profile) || null;
       setSession(next);
       setAuthReady(true);
       if (next && typeof window !== "undefined" && window.location.pathname === "/auth/callback") {
         window.history.replaceState({}, "", "/");
       }
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(formatAuthSession(nextSession?.user) || null);
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      const profile = await getUserProfile(nextSession?.user?.id);
+      setSession(formatAuthSession(nextSession?.user, profile) || null);
     });
     return () => {
       active = false;
@@ -1932,6 +1947,15 @@ export default function App(){
   `;
 
   if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} onOAuthLogin={oauthLogin} t={t} authMsg={authMsg} isAuthReady={authReady} authDebug={authDebug}/></>);
+
+  if (session.approvalStatus === "pending" || session.approvalStatus === "disabled") return (
+    <PendingAccess
+      userEmail={session.email}
+      userName={session.displayName}
+      disabled={session.approvalStatus === "disabled"}
+      onSignOut={logout}
+    />
+  );
 
   const pageLabel=nav.find(n=>n.id===page)?.label||"Dashboard";
 
