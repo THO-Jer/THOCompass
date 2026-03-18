@@ -3,6 +3,7 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Area
 import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo } from "./lib/supabase";
 import ApprovalPanel from "./components/ApprovalPanel";
 import PendingAccess from "./components/PendingAccess";
+import { useAuthGuard, fetchPendingUsers, fetchApprovedUsers, fetchClients, approveUser, disableUser, reEnableUser } from "./hooks/useAuthGuard";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
 const ThemeCtx = createContext();
@@ -544,7 +545,7 @@ function inferRoleFromUser(user) {
   return "client";
 }
 
-function formatAuthSession(user, profile) {
+function formatRawUserSession(user, profile) {
   if (!user) return null;
   return {
     id: user.id,
@@ -556,17 +557,6 @@ function formatAuthSession(user, profile) {
   };
 }
 
-async function getUserProfile(userId) {
-  if (!supabase || !userId) return null;
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("approval_status, role")
-    .eq("id", userId)
-    .single();
-
-  if (error) return null;
-  return data;
-}
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const sc = v => v===null||v===undefined?"var(--t3)":v>=70?brand.green:v>=50?brand.amber:brand.red;
@@ -1515,39 +1505,21 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
     }
 
     async function loadApprovalData() {
-      const [pendingRes, clientsRes, approvedRes] = await Promise.all([
-        supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("approval_status", "pending")
-          .eq("role", "client")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("clients")
-          .select("id, name, logo, industry"),
-        supabase
-          .from("user_profiles")
-          .select("*, client_user_access(client_id, access_status, clients(id, name, logo))")
-          .in("approval_status", ["approved", "disabled"])
-          .eq("role", "client")
-          .order("created_at", { ascending: false }),
-      ]);
+      try {
+        const [pendingData, clientsData, approvedData] = await Promise.all([
+          fetchPendingUsers(),
+          fetchClients(),
+          fetchApprovedUsers(),
+        ]);
 
-      if (!active) return;
+        if (!active) return;
 
-      if (pendingRes.error || clientsRes.error || approvedRes.error) {
-        setApprovalMsg(`No se pudo cargar aprobación desde Supabase: ${pendingRes.error?.message || clientsRes.error?.message || approvedRes.error?.message}`);
-        setApprovalClients(fallbackClients);
-        setApprovalLoaded(true);
-        return;
-      }
-
-      setApprovalPendingUsers((pendingRes.data || []).map((user) => ({
+        setApprovalPendingUsers((pendingData || []).map((user) => ({
         ...user,
         assigned_client: null,
       })));
-      setApprovalClients((clientsRes.data || []).length ? clientsRes.data : fallbackClients);
-      setApprovalApprovedUsers((approvedRes.data || []).map((user) => {
+      setApprovalClients((clientsData || []).length ? clientsData : fallbackClients);
+      setApprovalApprovedUsers((approvedData || []).map((user) => {
         const approvedAccess = (user.client_user_access || []).find((entry) => entry.access_status === "approved");
         return {
           ...user,
@@ -1558,6 +1530,12 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
       }));
       setApprovalLoaded(true);
       setApprovalMsg("");
+      } catch (error) {
+        if (!active) return;
+        setApprovalMsg(`No se pudo cargar aprobación desde Supabase: ${error.message}`);
+        setApprovalClients(fallbackClients);
+        setApprovalLoaded(true);
+      }
     }
 
     loadApprovalData();
@@ -1577,22 +1555,10 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
       return;
     }
 
-    const updateRes = await supabase
-      .from("user_profiles")
-      .update({ approval_status: "approved", updated_at: new Date().toISOString() })
-      .eq("id", userId);
-
-    if (updateRes.error) {
-      setApprovalMsg(`No se pudo aprobar el usuario: ${updateRes.error.message}`);
-      return;
-    }
-
-    const accessRes = await supabase
-      .from("client_user_access")
-      .upsert({ client_id: selectedClientId, user_id: userId, access_status: "approved" }, { onConflict: "client_id,user_id" });
-
-    if (accessRes.error) {
-      setApprovalMsg(`El usuario quedó aprobado, pero falló la asignación al cliente: ${accessRes.error.message}`);
+    try {
+      await approveUser(userId, selectedClientId);
+    } catch (error) {
+      setApprovalMsg(`No se pudo aprobar el usuario: ${error.message}`);
       return;
     }
 
@@ -1613,12 +1579,9 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
       return;
     }
 
-    const { error } = await supabase
-      .from("user_profiles")
-      .update({ approval_status: "disabled", updated_at: new Date().toISOString() })
-      .eq("id", userId);
-
-    if (error) {
+    try {
+      await disableUser(userId);
+    } catch (error) {
       setApprovalMsg(`No se pudo deshabilitar el usuario: ${error.message}`);
       return;
     }
@@ -1635,12 +1598,9 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
       return;
     }
 
-    const { error } = await supabase
-      .from("user_profiles")
-      .update({ approval_status: "approved", updated_at: new Date().toISOString() })
-      .eq("id", userId);
-
-    if (error) {
+    try {
+      await reEnableUser(userId);
+    } catch (error) {
       setApprovalMsg(`No se pudo reactivar el usuario: ${error.message}`);
       return;
     }
@@ -1816,8 +1776,8 @@ function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady,authDebug}){
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function App(){
   const [darkMode,setDarkMode]=useState(true);
-  const [session,setSession]=useState(null);
-  const [authReady,setAuthReady]=useState(false);
+  const [demoSession,setDemoSession]=useState(null);
+  const auth = useAuthGuard();
   const [authMsg,setAuthMsg]=useState(isSupabaseConfigured ? "" : "Supabase no está configurado localmente. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para activar OAuth real.");
   const authDebug = getAuthDebugInfo();
   const [sidebarOpen,setSidebarOpen]=useState(true);
@@ -1828,34 +1788,13 @@ export default function App(){
 
   const t=darkMode?darkTokens:lightTokens;
   const css=buildCSS(t);
+  const authReady = !isSupabaseConfigured || auth.status !== "loading";
+  const session = demoSession || formatRawUserSession(auth.session?.user, auth.profile);
 
   const isC=isConsultantRole(session?.role);
   const clientData=clients[0];
   const selClient=clients.find(c=>c.id===selClientId);
   const hasClients=clients.length>0;
-
-  useEffect(()=>{
-    let active = true;
-    if (!supabase) { setAuthReady(false); return; }
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!active) return;
-      const profile = await getUserProfile(data.session?.user?.id);
-      const next = formatAuthSession(data.session?.user, profile) || null;
-      setSession(next);
-      setAuthReady(true);
-      if (next && typeof window !== "undefined" && window.location.pathname === "/auth/callback") {
-        window.history.replaceState({}, "", "/");
-      }
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      const profile = await getUserProfile(nextSession?.user?.id);
-      setSession(formatAuthSession(nextSession?.user, profile) || null);
-    });
-    return () => {
-      active = false;
-      listener.subscription.unsubscribe();
-    };
-  }, []);
 
   async function oauthLogin(provider, role){
     if (!supabase) return;
@@ -1871,8 +1810,8 @@ export default function App(){
     else setAuthMsg(`Redirigiendo a ${providerName}. Callback configurado: ${getOAuthRedirectUrl()}. El rol esperado para esta solicitud es ${role}.`);
   }
 
-  function login(role){setSession({role, approvalStatus:'demo'});if(role==="client")setShowTour(true);}
-  async function logout(){ if (supabase) await supabase.auth.signOut(); setSession(null);setPage("home"); }
+  function login(role){setDemoSession({role, approvalStatus:"demo", displayName:role==="consultant"?"Demo THO":"Demo Cliente", email:role==="consultant"?"demo@tho.cl":"demo@cliente.cl"});if(role==="client")setShowTour(true);}
+  async function logout(){ if (demoSession) setDemoSession(null); else await auth.signOut(); setPage("home"); }
   function sendMsg(txt,from){
     if(!clientData)return;
     const d=new Date(); const ds=`${d.getDate()} Mar · ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
@@ -1946,9 +1885,11 @@ export default function App(){
     :root{--b1:${t.b1};--b2:${t.b2};--s2:${t.s2};--s3:${t.s3};--t1:${t.t1};--t2:${t.t2};--t3:${t.t3};--t4:${t.t4};}
   `;
 
+  if (auth.status === "loading" && !demoSession) return <><style>{css}{dynCSS}</style><div className="login-wrap"><div className="card" style={{padding:24}}>Cargando acceso…</div></div></>;
+
   if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} onOAuthLogin={oauthLogin} t={t} authMsg={authMsg} isAuthReady={authReady} authDebug={authDebug}/></>);
 
-  if (session.approvalStatus === "pending" || session.approvalStatus === "disabled") return (
+  if (!demoSession && (auth.status === "pending" || auth.status === "disabled")) return (
     <PendingAccess
       userEmail={session.email}
       userName={session.displayName}
