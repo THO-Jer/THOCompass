@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
 import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo } from "./lib/supabase";
+import ApprovalPanel from "./components/ApprovalPanel";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
 const ThemeCtx = createContext();
@@ -1473,9 +1474,167 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
   const [uploadModule,setUploadModule]=useState("RC");
   const [newUserMail,setNewUserMail]=useState("");
   const [uploadMsg,setUploadMsg]=useState("");
+  const [approvalPendingUsers,setApprovalPendingUsers]=useState([]);
+  const [approvalApprovedUsers,setApprovalApprovedUsers]=useState([]);
+  const [approvalClients,setApprovalClients]=useState([]);
+  const [approvalMsg,setApprovalMsg]=useState("");
+  const [approvalLoaded,setApprovalLoaded]=useState(false);
   const client=clients.find(c=>c.id===selId);
 
   useEffect(()=>{ if(client) setWeights({...client.weights}); },[selId,client]);
+
+
+  useEffect(()=>{
+    let active = true;
+
+    const fallbackClients = clients.map((c) => ({
+      id: String(c.id),
+      name: c.name,
+      logo: c.logo,
+      industry: c.industry,
+    }));
+
+    if (!supabase) {
+      setApprovalClients(fallbackClients);
+      setApprovalLoaded(true);
+      setApprovalMsg("Supabase no está configurado. Puedes revisar el flujo con datos demo mientras conectas las queries reales.");
+      return;
+    }
+
+    async function loadApprovalData() {
+      const [pendingRes, clientsRes, approvedRes] = await Promise.all([
+        supabase
+          .from("user_profiles")
+          .select("*")
+          .eq("approval_status", "pending")
+          .eq("role", "client")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("clients")
+          .select("id, name, logo, industry"),
+        supabase
+          .from("user_profiles")
+          .select("*, client_user_access(client_id, access_status, clients(id, name, logo))")
+          .in("approval_status", ["approved", "disabled"])
+          .eq("role", "client")
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (!active) return;
+
+      if (pendingRes.error || clientsRes.error || approvedRes.error) {
+        setApprovalMsg(`No se pudo cargar aprobación desde Supabase: ${pendingRes.error?.message || clientsRes.error?.message || approvedRes.error?.message}`);
+        setApprovalClients(fallbackClients);
+        setApprovalLoaded(true);
+        return;
+      }
+
+      setApprovalPendingUsers((pendingRes.data || []).map((user) => ({
+        ...user,
+        assigned_client: null,
+      })));
+      setApprovalClients((clientsRes.data || []).length ? clientsRes.data : fallbackClients);
+      setApprovalApprovedUsers((approvedRes.data || []).map((user) => {
+        const approvedAccess = (user.client_user_access || []).find((entry) => entry.access_status === "approved");
+        return {
+          ...user,
+          assigned_client: approvedAccess?.clients
+            ? { id: approvedAccess.clients.id, name: approvedAccess.clients.name, logo: approvedAccess.clients.logo }
+            : null,
+        };
+      }));
+      setApprovalLoaded(true);
+      setApprovalMsg("");
+    }
+
+    loadApprovalData();
+    return () => { active = false; };
+  }, [clients]);
+
+  async function handleApproveUser(userId, selectedClientId) {
+    if (!supabase) {
+      const assignedClient = approvalClients.find((entry) => entry.id === selectedClientId) || null;
+      setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+      setApprovalApprovedUsers((prev) => {
+        const target = approvalPendingUsers.find((user) => user.id === userId);
+        if (!target) return prev;
+        return [{ ...target, approval_status: "approved", assigned_client: assignedClient }, ...prev];
+      });
+      setApprovalMsg(`Usuario aprobado en modo demo para ${assignedClient?.name || "sin cliente"}.`);
+      return;
+    }
+
+    const updateRes = await supabase
+      .from("user_profiles")
+      .update({ approval_status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", userId);
+
+    if (updateRes.error) {
+      setApprovalMsg(`No se pudo aprobar el usuario: ${updateRes.error.message}`);
+      return;
+    }
+
+    const accessRes = await supabase
+      .from("client_user_access")
+      .upsert({ client_id: selectedClientId, user_id: userId, access_status: "approved" }, { onConflict: "client_id,user_id" });
+
+    if (accessRes.error) {
+      setApprovalMsg(`El usuario quedó aprobado, pero falló la asignación al cliente: ${accessRes.error.message}`);
+      return;
+    }
+
+    const assignedClient = approvalClients.find((entry) => entry.id === selectedClientId) || null;
+    const approvedUser = approvalPendingUsers.find((user) => user.id === userId);
+    setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+    if (approvedUser) {
+      setApprovalApprovedUsers((prev) => [{ ...approvedUser, approval_status: "approved", assigned_client: assignedClient }, ...prev]);
+    }
+    setApprovalMsg(`Usuario aprobado y asignado a ${assignedClient?.name || "cliente"}.`);
+  }
+
+  async function handleDisableUser(userId) {
+    if (!supabase) {
+      setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+      setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "disabled" } : user));
+      setApprovalMsg("Usuario deshabilitado en modo demo.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ approval_status: "disabled", updated_at: new Date().toISOString() })
+      .eq("id", userId);
+
+    if (error) {
+      setApprovalMsg(`No se pudo deshabilitar el usuario: ${error.message}`);
+      return;
+    }
+
+    setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+    setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "disabled" } : user));
+    setApprovalMsg("Usuario deshabilitado correctamente.");
+  }
+
+  async function handleReEnableUser(userId) {
+    if (!supabase) {
+      setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "approved" } : user));
+      setApprovalMsg("Usuario reactivado en modo demo.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ approval_status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", userId);
+
+    if (error) {
+      setApprovalMsg(`No se pudo reactivar el usuario: ${error.message}`);
+      return;
+    }
+
+    setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "approved" } : user));
+    setApprovalMsg("Usuario reactivado correctamente.");
+  }
 
   function toggle(f){setClients(p=>p.map(c=>c.id===selId?{...c,[f]:!c[f]}:c));}
   function toggleMod(m){
@@ -1546,7 +1705,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
     setClients(p=>p.map(c=>{ if(c.id!==id)return c; if(base)return JSON.parse(JSON.stringify(base)); return {...c,ircs:null,rc:null,do:null,esg:null,trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[],stakeholders:[],internal_notes:""}; }));
   }
 
-  const tabs=[["overview","Resumen"],["upload","Carga IA"],["heatmap","Mapa Riesgo"],["weights","Pesos"],["admin","Admin"],["messages","Mensajes"],["files","Historial"]];
+  const tabs=[["overview","Resumen"],["approvals","Aprobaciones"],["upload","Carga IA"],["heatmap","Mapa Riesgo"],["weights","Pesos"],["admin","Admin"],["messages","Mensajes"],["files","Historial"]];
 
   if(!client){
     return <div className="page fu"><div className="card"><div className="ctitle">Sin clientes creados</div><div className="muted" style={{marginBottom:12}}>Actualmente no hay clientes. Puedes crear uno nuevo desde aquí.</div><button className="btn btn-g btn-sm" onClick={addClient}>+ Crear cliente</button></div></div>;
@@ -1583,6 +1742,8 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
       <div className="tabs" style={{flexWrap:"wrap"}}>{tabs.map(([id,l])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</button>)}</div>
 
       {tab==="overview"&&<div className="card fu"><div className="ctitle">Resumen de {client.name}</div><div className="g4" style={{marginBottom:0}}>{[["IRCS",client.ircs],["RC",client.rc],["DO",client.do],["ESG",client.esg]].map(([l,v])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:sc(v??0)}}>{v??"—"}</div><div className="stat-lbl">{l}</div></div>)}</div></div>}
+
+      {tab==="approvals"&&<div className="card fu"><div className="ctitle">Aprobación y acceso de usuarios cliente</div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}>Aprueba usuarios nuevos, asígnalos a una empresa y reactiva/desactiva accesos sin salir del Centro de Control.</div>{approvalLoaded&&<ApprovalPanel pendingUsers={approvalPendingUsers} approvedUsers={approvalApprovedUsers} clients={approvalClients} onApprove={handleApproveUser} onDisable={handleDisableUser} onReEnable={handleReEnableUser} statusMessage={approvalMsg} isUsingMocks={!supabase}/>}</div>}
 
       {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos desde tu disco local al bucket del módulo seleccionado. Próxima iteración: selector embebido de archivos ya existentes en Storage.</div>{uploadMsg&&<div className="alert al-b">{uploadMsg}</div>}<div className="btn-row"><button className="btn btn-g btn-sm" onClick={()=>setUploadMsg(`Abrir selector de Storage para bucket ${moduleKeyToBucket(uploadModule.toLowerCase())} (pendiente de interfaz dedicada).`)}>Abrir archivos desde Storage</button></div><FileUpload onApply={applyFile}/></div>}
 
