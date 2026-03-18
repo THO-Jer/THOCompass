@@ -111,3 +111,14 @@ En otras palabras:
 - **Solicitud de cliente**: mantienes `role='client'`, apruebas `approval_status`, y luego le otorgas acceso a una o más organizaciones vía `client_user_access`.
 
 Más adelante, si quieres un inbox más explícito, podemos agregar una tabla `access_requests`, pero con el modelo actual ya puedes manejarlo desde el control de accesos.
+
+
+## Control de accesos (consultores vs clientes)
+
+Sí: por ahora la diferenciación entre solicitudes de consultores y clientes se maneja desde el **control de accesos**.
+
+- Todo usuario nuevo entra por OAuth como `client` + `pending`.
+- Si realmente será consultor, lo promueves a `consultant` o `super_consultant`.
+- Si será cliente, mantienes `role='client'`, lo apruebas y luego le asignas una o más organizaciones vía `client_user_access`.
+
+Esto permite que ningún usuario vea información sensible por defecto, incluso después de autenticarse correctamente.
