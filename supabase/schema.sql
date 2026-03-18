@@ -480,9 +480,10 @@ create index if not exists idx_period_year_quarter on public.reporting_periods (
 -- ============================================================
 -- 1. Ejecutar este archivo en Supabase → SQL Editor
 -- 2. Habilitar SOLO Google y Microsoft Azure en Authentication → Providers
--- 3. Crear tu usuario en Authentication y luego promoverlo:
+-- 3. Crear tu usuario en Authentication y luego promoverlo.
+--    Usuario inicial esperado: jeremias@tho.cl
 --    update public.user_profiles
 --    set role='super_consultant', approval_status='approved'
---    where email='tu_mail@tho.cl';
+--    where email='jeremias@tho.cl';
 -- 4. Usar rutas de storage como: {client_id}/{module_key}/{timestamp}_{original_name}
 --    para que las storage policies por carpeta funcionen correctamente.

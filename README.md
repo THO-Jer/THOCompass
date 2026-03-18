@@ -67,7 +67,7 @@ La app redirige a Supabase con `redirectTo = https://TU-DOMINIO-REAL.vercel.app/
 
 - Usuarios cliente: se autentican con Google/Microsoft y luego quedan pendientes de aprobación/asignación a cliente.
 - Usuarios consultora: se autentican con Google/Microsoft y ven todos los clientes una vez aprobados.
-- Existe el rol `super_consultant` para el administrador principal.
+- Existe el rol `super_consultant` para el administrador principal. El bootstrap previsto deja a `jeremias@tho.cl` como superadmin/super consultant inicial.
 - Un usuario cliente puede quedar asignado a una o varias organizaciones, pero nunca recibe acceso por defecto: depende de `client_user_access` y `access_status`.
 - Buckets de storage separados por módulo:
   - `rc-documents`
