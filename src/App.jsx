@@ -496,8 +496,8 @@ const INIT_CLIENTS = [
           {id:"pr2",zone_id:"z-puerto",name:"Programa de monitoreo costero",program_type:"monitoring",status:"active",objective:"Dar trazabilidad a compromisos ambientales",starts_on:"2025-02-01",ends_on:"2025-12-15"},
         ],
         alerts:[
-          {id:"al1",zone_id:"z-norte",actor_id:"a1",severity:"red",category:"movilidad",title:"Aumento de tensión por tránsito de camiones",description:"Vecinos reportan alza de tránsito en horario punta.",visible_to_client:true,resolved:false,created_at:"2025-03-03"},
-          {id:"al2",zone_id:"z-puerto",severity:"amber",category:"vinculación",title:"Actor clave no vinculado hace 21 días",description:"Pendiente nueva reunión con directiva territorial.",visible_to_client:true,resolved:false,created_at:"2025-03-11"},
+          {id:"al1",zone_id:"z-norte",actor_id:"a1",source_record_id:"r1",severity:"red",category:"movilidad",title:"Aumento de tensión por tránsito de camiones",description:"Vecinos reportan alza de tránsito en horario punta.",visible_to_client:true,resolved:false,created_at:"2025-03-03"},
+          {id:"al2",zone_id:"z-puerto",source_record_id:"r2",severity:"amber",category:"vinculación",title:"Actor clave no vinculado hace 21 días",description:"Pendiente nueva reunión con directiva territorial.",visible_to_client:true,resolved:false,created_at:"2025-03-11"},
         ],
         activities:[
           {id:"r1",zone_id:"z-norte",program_id:"pr1",actor_id:"a1",record_type:"meeting",title:"Mesa con vecinos sector norte",activity_date:"2025-03-12",participants_count:18,organizations_count:4,nps_score:42,evaluation_score:58,qualitative_summary:"Reunión intensa con foco en tránsito y ruido.",tensions_text:"Percepción de baja respuesta operativa.",opportunities_text:"Abrir mesa técnica con plan semanal.",consultant_notes:"Se recomienda compromiso visible en 10 días."},
@@ -518,7 +518,7 @@ const INIT_CLIENTS = [
         id:"p-mla-esg", name:"Estrategia de sostenibilidad territorial 2025", module_key:"esg", project_type:"programmatic", description:"Portafolio ESG con foco en trazabilidad, programas y articulación interna.", status:"active", starts_on:"2025-02-01", ends_on:"2025-12-31",
         zones:[], actors:[],
         programs:[{id:"esg-pr1",name:"Ruta de indicadores ESG",program_type:"governance",status:"active",objective:"Ordenar evidencia y trazabilidad",starts_on:"2025-02-01",ends_on:"2025-10-31"}],
-        alerts:[{id:"esg-al1",severity:"amber",category:"trazabilidad",title:"Brecha de trazabilidad programática",description:"Faltan respaldos homogéneos entre áreas.",visible_to_client:true,resolved:false,created_at:"2025-03-09"}],
+        alerts:[{id:"esg-al1",source_record_id:"esg-r1",severity:"amber",category:"trazabilidad",title:"Brecha de trazabilidad programática",description:"Faltan respaldos homogéneos entre áreas.",visible_to_client:true,resolved:false,created_at:"2025-03-09"}],
         activities:[{id:"esg-r1",program_id:"esg-pr1",record_type:"internal_session",title:"Sesión de gobernanza ESG",activity_date:"2025-03-06",participants_count:7,organizations_count:1,evaluation_score:74,qualitative_summary:"Buena disposición ejecutiva.",tensions_text:"Falta claridad sobre dueños de datos.",opportunities_text:"Definir PMO ESG liviana.",consultant_notes:"Proyecto programático sin eje territorial principal."}],
         signals:[{id:"esg-s1",dimension:"trazabilidad programática",signal_type:"opportunity",severity:"green",confidence_score:0.7,summary:"Existe disposición ejecutiva para ordenar evidencia ESG.",visible_to_client:true,created_at:"2025-03-06"}],
         commitments:[{id:"esg-c1",title:"Definir owner por indicador",description:"Asignar responsables para trazabilidad ESG.",commitment_type:"issue",status:"open",due_date:"2025-04-02",visible_to_client:true}],
@@ -1296,9 +1296,81 @@ function moduleAccent(moduleKey){ return MOD[moduleKey]?.color || brand.blue; }
 function moduleGradient(moduleKey){ const mod = MOD[moduleKey] || MOD.rc; return `linear-gradient(135deg,${mod.color},${mod.color2})`; }
 function statusBadgeCls(status){ return status==="active"?"bg":status==="draft"?"ba":status==="paused"?"bb":"br"; }
 function projectTabs(project){
-  const base=[["summary","Resumen"],["activity","Actividad"],["actors","Actores"],["programs","Programas"],["alerts","Alertas"],["commitments","Compromisos"],["reports","Reportes"],["files","Archivos"]];
-  if(project?.module_key==="rc"||project?.project_type==="territorial") base.splice(1,0,["territory","Mapa / Territorio"]);
+  const base=[["summary","Resumen"],["activity","Actividad"],["actors","Actores"],["programs","Programas"],["alerts","Alertas"],["commitments","Compromisos"],["reports","Señales"],["files","Archivos"]];
+  if(project?.module_key==="rc"||project?.project_type==="territorial") base.splice(1,0,["territory","Territorio"]);
   return base;
+}
+function clampScore(value){ return Math.max(0, Math.min(100, Math.round(value))); }
+function labelizeDimension(key){ return key.replaceAll("_"," ").replace(/(^|\s)\S/g, c=>c.toUpperCase()); }
+function severityWeight(severity){ return severity==="red"?12:severity==="amber"?6:severity==="green"?-2:0; }
+function buildProjectSummary(project){
+  const activities=[...(project.activities||[])];
+  const alerts=[...(project.alerts||[])];
+  const commitments=[...(project.commitments||[])];
+  const signals=[...(project.signals||[])];
+  const programs=[...(project.programs||[])];
+  const openAlerts=alerts.filter(alert=>!alert.resolved);
+  const openCommitments=commitments.filter(item=>!["resolved","closed","rejected"].includes(item.status));
+  const activePrograms=programs.filter(program=>program.status==="active");
+  const recentActivities=[...activities].sort((a,b)=>new Date(b.activity_date)-new Date(a.activity_date));
+  const recentSignals=[...signals].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const evaluationValues=activities.map(activity=>[activity.evaluation_score,activity.nps_score]).flat().filter(v=>typeof v === "number" && !Number.isNaN(v));
+  const avgEvaluation=evaluationValues.length ? evaluationValues.reduce((sum,val)=>sum+val,0)/evaluationValues.length : 60;
+  const signalBuckets=(project.scores?.dimension_scores_json && typeof project.scores.dimension_scores_json === "object")
+    ? Object.fromEntries(Object.keys(project.scores.dimension_scores_json).map(key=>[key,60]))
+    : {participacion:60,confianza:60,articulacion:60,riesgos:60,oportunidades:60};
+
+  openAlerts.forEach(alert=>{
+    const penalty=severityWeight(alert.severity);
+    signalBuckets.riesgos=clampScore((signalBuckets.riesgos ?? 60) - penalty);
+    if(alert.category?.includes("confianza") || alert.category?.includes("licencia")) signalBuckets.confianza=clampScore((signalBuckets.confianza ?? 60) - penalty);
+    if(alert.category?.includes("particip") || alert.category?.includes("vinc")) signalBuckets.participacion=clampScore((signalBuckets.participacion ?? 60) - Math.max(2, penalty-2));
+  });
+
+  openCommitments.forEach(item=>{
+    const impact=item.status==="in_progress"?4:7;
+    signalBuckets.articulacion=clampScore((signalBuckets.articulacion ?? 60) - impact);
+    if(item.commitment_type === "issue" || item.commitment_type === "complaint") signalBuckets.confianza=clampScore((signalBuckets.confianza ?? 60) - (impact+2));
+  });
+
+  recentSignals.forEach(signal=>{
+    const key=(signal.dimension || "riesgos").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"_").replace(/^_|_$/g,"").toLowerCase() || "riesgos";
+    if(!(key in signalBuckets)) signalBuckets[key]=60;
+    const impact=signal.signal_type==="opportunity" ? (signal.severity==="green"?6:3) : signal.severity==="red"?-10:signal.severity==="amber"?-5:2;
+    signalBuckets[key]=clampScore(signalBuckets[key] + impact);
+  });
+
+  if(activities.length){
+    const participationBoost=Math.min(12, Math.round(activities.length*1.8));
+    signalBuckets.participacion=clampScore((signalBuckets.participacion ?? 60) + participationBoost);
+  }
+  signalBuckets.oportunidades=clampScore((signalBuckets.oportunidades ?? 60) + Math.round((avgEvaluation-60)/2));
+  signalBuckets.confianza=clampScore((signalBuckets.confianza ?? 60) + Math.round((avgEvaluation-55)/3));
+
+  const overallBase=avgEvaluation
+    - openAlerts.reduce((sum,alert)=>sum+severityWeight(alert.severity),0)
+    - openCommitments.reduce((sum,item)=>sum+(item.status==="in_progress"?4:7),0)
+    + activePrograms.length*2
+    + recentSignals.reduce((sum,signal)=>sum+(signal.signal_type==="opportunity"?3:(signal.severity==="red"?-4:signal.severity==="amber"?-2:1)),0);
+  const overallScore=clampScore(overallBase);
+  const statusLabel=overallScore>=75?"Sólido":overallScore>=63?"En atención":overallScore>=50?"Bajo vigilancia":"Crítico";
+
+  return {
+    overallScore,
+    statusLabel,
+    dimensionScores:signalBuckets,
+    openAlerts,
+    openCommitments,
+    recentActivities,
+    recentSignals,
+    activePrograms,
+    timeline:[
+      ...activities.map(item=>({id:`activity-${item.id}`,kind:"Actividad",date:item.activity_date,title:item.title,desc:item.qualitative_summary || item.consultant_notes || "Sin resumen cualitativo.",color:moduleAccent(project.module_key),sourceId:item.id,meta:`${item.record_type} · ${item.participants_count||0} participantes`})),
+      ...alerts.map(item=>({id:`alert-${item.id}`,kind:"Alerta",date:item.created_at,title:item.title,desc:item.description,color:item.severity==="red"?brand.red:item.severity==="amber"?brand.amber:brand.green,sourceId:item.source_record_id,meta:`${item.category || "sin categoría"} · ${item.resolved?"resuelta":"activa"}`})),
+      ...signals.map(item=>({id:`signal-${item.id}`,kind:"Señal",date:item.created_at,title:item.summary,desc:`${labelizeDimension(item.dimension || "riesgos")} · ${item.signal_type || "interpretación"}`,color:item.severity==="red"?brand.red:item.severity==="amber"?brand.amber:brand.green,sourceId:item.source_record_id,meta:`confianza ${item.confidence_score ?? "—"}`})),
+      ...commitments.map(item=>({id:`commitment-${item.id}`,kind:"Compromiso",date:item.due_date || item.created_at,title:item.title,desc:item.description || "Sin descripción.",color:brand.blue,sourceId:item.source_record_id,meta:`${item.commitment_type} · ${item.status}`})),
+    ].sort((a,b)=>new Date(b.date)-new Date(a.date)),
+  };
 }
 function ProjectPortfolio({clients,onOpenProject,isConsultant}){
   const visibleClients=isConsultant?clients:clients.slice(0,1);
@@ -1312,7 +1384,7 @@ function ProjectPortfolio({clients,onOpenProject,isConsultant}){
       {visibleClients.map(client=><div key={client.id} className="card fu" style={{marginBottom:16}}>
         <div className="sec-hdr"><div><div className="ctitle mb0">{client.logo} {client.name}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{client.industry} · {(client.projects||[]).length} proyecto(s)</div></div><span className={`badge ${client.published?"bg":"ba"}`}>{client.published?"Cliente visible":"Interno / borrador"}</span></div>
         <div className="g3" style={{marginTop:16}}>{(client.projects||[]).map(project=>{
-          const score=project.scores?.overall_score;
+          const score=buildProjectSummary(project).overallScore;
           const openAlerts=(project.alerts||[]).filter(a=>!a.resolved).length;
           const openCommitments=(project.commitments||[]).filter(c=>c.status!=="resolved"&&c.status!=="closed").length;
           return <div key={project.id} className="card" style={{padding:18,border:`1px solid ${moduleAccent(project.module_key)}35`,background:`linear-gradient(180deg,${MOD[project.module_key]?.cB||brand.blueA},transparent 50%)`}}>
@@ -1332,36 +1404,299 @@ function ProjectPortfolio({clients,onOpenProject,isConsultant}){
     </div>
   );
 }
-function ProjectWorkspace({client,project,isConsultant}){
+function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
   const [tab,setTab]=useState("summary");
+  const [selectedActivityId,setSelectedActivityId]=useState(project.activities?.[0]?.id || null);
+  const [selectedZoneId,setSelectedZoneId]=useState(project.zones?.[0]?.id || "all");
+  const [territoryFilter,setTerritoryFilter]=useState("all");
+  const [activityForm,setActivityForm]=useState({
+    record_type:"meeting",
+    activity_date:new Date().toISOString().slice(0,10),
+    title:"",
+    participants_count:"",
+    evaluation_score:"",
+    qualitative_summary:"",
+    tensions_text:"",
+    opportunities_text:"",
+    consultant_notes:"",
+    zone_id:project.zones?.[0]?.id || "",
+    actor_id:project.actors?.[0]?.id || "",
+  });
+  const [composer,setComposer]=useState({
+    signal:{dimension:"confianza",signal_type:"tension",severity:"amber",summary:"",confidence_score:"0.75",visible_to_client:true},
+    alert:{severity:"amber",category:"seguimiento",title:"",description:"",visible_to_client:true},
+    commitment:{title:"",description:"",commitment_type:"followup",status:"open",due_date:"",visible_to_client:true},
+  });
   const tabs=projectTabs(project);
-  const score=project.scores?.overall_score;
-  const dimensions=Object.entries(project.scores?.dimension_scores_json||{});
-  const openAlerts=(project.alerts||[]).filter(a=>!a.resolved);
-  const openCommitments=(project.commitments||[]).filter(c=>!["resolved","closed"].includes(c.status));
-  const latestActivities=[...(project.activities||[])].sort((a,b)=>new Date(b.activity_date)-new Date(a.activity_date));
-  const timeline=[
-    ...(project.activities||[]).map(a=>({kind:"Actividad",date:a.activity_date,title:a.title,desc:a.qualitative_summary,color:moduleAccent(project.module_key)})),
-    ...(project.alerts||[]).map(a=>({kind:"Alerta",date:a.created_at,title:a.title,desc:a.description,color:a.severity==="red"?brand.red:a.severity==="amber"?brand.amber:brand.green})),
-    ...(project.commitments||[]).map(c=>({kind:"Compromiso",date:c.due_date||client.period,title:c.title,desc:c.description,color:brand.blue})),
-  ].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const summary=buildProjectSummary(project);
+  const dimensions=Object.entries(summary.dimensionScores || {});
+  const selectedActivity=summary.recentActivities.find(activity=>activity.id===selectedActivityId) || summary.recentActivities[0] || null;
+  const zoneLookup=new Map((project.zones||[]).map(zone=>[zone.id, zone]));
+  const actorLookup=new Map((project.actors||[]).map(actor=>[actor.id, actor]));
+  const selectedZone = selectedZoneId === "all" ? null : zoneLookup.get(selectedZoneId) || null;
+  const visibleZones=(project.zones||[]).filter(zone=>territoryFilter==="all" || zone.zone_type===territoryFilter);
+  const visibleZoneIds=new Set(visibleZones.map(zone=>zone.id));
+  const territoryActors=(project.actors||[]).filter(actor=>territoryFilter==="all" ? true : visibleZoneIds.has(actor.zone_id));
+  const territoryAlerts=(project.alerts||[]).filter(alert=>territoryFilter==="all" ? true : visibleZoneIds.has(alert.zone_id));
+  const territoryPrograms=(project.programs||[]).filter(program=>territoryFilter==="all" ? true : visibleZoneIds.has(program.zone_id));
+
+  useEffect(()=>{
+    const firstActivity=project.activities?.[0]?.id || null;
+    if(selectedActivityId && project.activities?.some(activity=>activity.id===selectedActivityId)) return;
+    setSelectedActivityId(firstActivity);
+  }, [project.activities, selectedActivityId]);
+
+  useEffect(()=>{
+    const firstZone=project.zones?.[0]?.id || "all";
+    if(selectedZoneId === "all" || project.zones?.some(zone=>zone.id===selectedZoneId)) return;
+    setSelectedZoneId(firstZone);
+  }, [project.zones, selectedZoneId]);
+
+  function updateForm(field, value){
+    setActivityForm(prev=>({...prev,[field]:value}));
+  }
+
+  function patchProject(patch){
+    onUpdateProject?.({
+      ...project,
+      ...patch,
+    });
+  }
+
+  function createActivity(){
+    if(!activityForm.title.trim() || !activityForm.activity_date) return;
+    const nextId=`activity-${Date.now()}`;
+    const newActivity={
+      id:nextId,
+      project_id:project.id,
+      zone_id:activityForm.zone_id || null,
+      actor_id:activityForm.actor_id || null,
+      record_type:activityForm.record_type,
+      title:activityForm.title.trim(),
+      activity_date:activityForm.activity_date,
+      participants_count:activityForm.participants_count ? Number(activityForm.participants_count) : null,
+      evaluation_score:activityForm.evaluation_score ? Number(activityForm.evaluation_score) : null,
+      qualitative_summary:activityForm.qualitative_summary.trim(),
+      tensions_text:activityForm.tensions_text.trim(),
+      opportunities_text:activityForm.opportunities_text.trim(),
+      consultant_notes:activityForm.consultant_notes.trim(),
+      created_at:new Date().toISOString(),
+    };
+    patchProject({activities:[newActivity,...(project.activities||[])]});
+    setSelectedActivityId(nextId);
+    setActivityForm(prev=>({
+      ...prev,
+      title:"",
+      participants_count:"",
+      evaluation_score:"",
+      qualitative_summary:"",
+      tensions_text:"",
+      opportunities_text:"",
+      consultant_notes:"",
+    }));
+  }
+
+  function createLinkedRecord(kind){
+    if(!selectedActivity) return;
+    if(kind==="signal"){
+      if(!composer.signal.summary.trim()) return;
+      const newSignal={
+        id:`signal-${Date.now()}`,
+        project_id:project.id,
+        source_record_id:selectedActivity.id,
+        dimension:composer.signal.dimension,
+        signal_type:composer.signal.signal_type,
+        severity:composer.signal.severity,
+        confidence_score:Number(composer.signal.confidence_score || 0),
+        summary:composer.signal.summary.trim(),
+        visible_to_client:composer.signal.visible_to_client,
+        created_at:new Date().toISOString().slice(0,10),
+      };
+      patchProject({signals:[newSignal,...(project.signals||[])]});
+      setComposer(prev=>({...prev,signal:{...prev.signal,summary:""}}));
+      return;
+    }
+    if(kind==="alert"){
+      if(!composer.alert.title.trim()) return;
+      const newAlert={
+        id:`alert-${Date.now()}`,
+        project_id:project.id,
+        source_record_id:selectedActivity.id,
+        zone_id:selectedActivity.zone_id || null,
+        actor_id:selectedActivity.actor_id || null,
+        severity:composer.alert.severity,
+        category:composer.alert.category.trim(),
+        title:composer.alert.title.trim(),
+        description:composer.alert.description.trim(),
+        visible_to_client:composer.alert.visible_to_client,
+        resolved:false,
+        created_at:new Date().toISOString().slice(0,10),
+      };
+      patchProject({alerts:[newAlert,...(project.alerts||[])]});
+      setComposer(prev=>({...prev,alert:{...prev.alert,title:"",description:""}}));
+      return;
+    }
+    if(kind==="commitment"){
+      if(!composer.commitment.title.trim()) return;
+      const newCommitment={
+        id:`commitment-${Date.now()}`,
+        project_id:project.id,
+        source_record_id:selectedActivity.id,
+        zone_id:selectedActivity.zone_id || null,
+        actor_id:selectedActivity.actor_id || null,
+        title:composer.commitment.title.trim(),
+        description:composer.commitment.description.trim(),
+        commitment_type:composer.commitment.commitment_type,
+        status:composer.commitment.status,
+        due_date:composer.commitment.due_date || null,
+        visible_to_client:composer.commitment.visible_to_client,
+        created_at:new Date().toISOString().slice(0,10),
+      };
+      patchProject({commitments:[newCommitment,...(project.commitments||[])]});
+      setComposer(prev=>({...prev,commitment:{...prev.commitment,title:"",description:"",due_date:""}}));
+    }
+  }
+
+  const projectScore = summary.overallScore;
+
   return(
     <div className="page fu">
       <div className="ph">
         <div className="ph-eye">{client.logo} {client.name} · {MOD[project.module_key]?.label}</div>
         <div className="ph-title">{project.name}</div>
         <div className="ph-row"><span className={`badge ${statusBadgeCls(project.status)}`}>{project.status}</span><span className="mod-tag" style={{color:moduleAccent(project.module_key),borderColor:moduleAccent(project.module_key)}}>{project.project_type}</span><span style={{fontSize:12,color:"var(--t3)"}}>{project.starts_on} → {project.ends_on}</span></div>
-        <div className="ph-desc muted">Proyecto basado en seguimiento consultivo: actividades, alertas, señales, compromisos y evolución reciente.</div>
+        <div className="ph-desc muted">Workspace MVP del proyecto: actividades, señales, alertas, compromisos, score y lectura territorial nacen desde el propio proyecto.</div>
       </div>
       <div className="tabs" style={{flexWrap:"wrap"}}>{tabs.map(([id,label])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{label}</button>)}</div>
-      {tab==="summary"&&<><div className="hero fu"><div><div className="hero-eye">Índice general del proyecto</div><div className="hero-co">{project.scores?.status_label||"Sin lectura"}</div><div className="hero-desc">{project.description}</div><div className="hero-tags">{(project.signals||[]).slice(0,3).map(signal=><span key={signal.id} className="mod-tag" style={{color:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green,borderColor:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green}}>{signal.summary}</span>)}</div></div><div style={{textAlign:"center"}}><ScoreRing val={score??null} size={128} color={moduleAccent(project.module_key)}/><div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Actualizado {project.scores?.updated_at||"—"}</div></div></div><div className="g4 fu">{[["Alertas activas",openAlerts.length,openAlerts.length?brand.amber:"var(--t1)"],["Compromisos abiertos",openCommitments.length,openCommitments.length?brand.blue:"var(--t1)"],["Actividades",(project.activities||[]).length,"var(--t1)"],["Actores",(project.actors||[]).length,"var(--t1)"]].map(([l,v,c])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:c}}>{v}</div><div className="stat-lbl">{l}</div></div>)}</div><div className="g2"><div className="card fu"><div className="ctitle">Dimensiones del proyecto</div>{dimensions.map(([label,val])=><Prog key={label} label={label.replaceAll("_"," ")} val={val} color={moduleAccent(project.module_key)}/>)}</div><div className="card fu"><div className="ctitle">Últimas actividades</div>{latestActivities.slice(0,4).map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)",margin:"4px 0"}}>{item.activity_date} · {item.record_type}</div><div style={{fontSize:13,color:"var(--t2)"}}>{item.qualitative_summary}</div></div>)}</div></div></>}
-      {tab==="territory"&&<div className="g2"><div className="card fu"><div className="ctitle">Mapa territorial MVP</div><div style={{position:"relative",height:320,borderRadius:16,border:"1px solid var(--b1)",background:"linear-gradient(180deg,var(--s2),var(--s3))",overflow:"hidden"}}>{(project.zones||[]).map((zone,idx)=><div key={zone.id} style={{position:"absolute",left:idx===0?30:220,top:idx===0?40:120,width:idx===0?180:150,height:idx===0?120:100,borderRadius:24,background:`${moduleAccent(project.module_key)}22`,border:`1px solid ${moduleAccent(project.module_key)}55`,padding:16}}><div style={{fontFamily:"'Fraunces',serif",fontSize:18,color:"var(--t1)"}}>{zone.name}</div><div className="mono muted" style={{fontSize:11,marginTop:4}}>{zone.zone_type}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:12}}>{zone.notes}</div></div>)}{(project.actors||[]).map((actor,idx)=><div key={actor.id} style={{position:"absolute",left:idx===0?110:300,top:idx===0?90:170,padding:"6px 10px",borderRadius:16,background:"var(--s1)",border:`1px solid ${actor.relationship_status==="Tensionada"?brand.red:brand.blue}55`,fontSize:12,color:"var(--t1)"}}>{actor.name}</div>)}</div></div><div className="card fu"><div className="ctitle">Zonas, actores y programas</div>{(project.zones||[]).map(zone=><div key={zone.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{zone.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{zone.zone_type}</div></div><span className="badge bb">{(project.actors||[]).filter(a=>a.zone_id===zone.id).length} actores</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{zone.notes}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:8}}>Programas: {(project.programs||[]).filter(p=>p.zone_id===zone.id).map(p=>p.name).join(" · ")||"Sin programas"}</div></div>)}</div></div>}
-      {tab==="activity"&&<div className="card fu"><div className="ctitle">Activity Timeline</div>{timeline.map((item,idx)=><div key={idx} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{width:10,height:10,borderRadius:"50%",background:item.color,marginTop:6,flexShrink:0}}/><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}><span className="badge bb">{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span></div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div></div></div>)}</div>}
+
+      {tab==="summary"&&<>
+        <div className="hero fu">
+          <div>
+            <div className="hero-eye">Resumen operativo del proyecto</div>
+            <div className="hero-co">{summary.statusLabel}</div>
+            <div className="hero-desc">{project.description}</div>
+            <div className="hero-tags">{summary.recentSignals.slice(0,4).map(signal=><span key={signal.id} className="mod-tag" style={{color:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green,borderColor:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green}}>{signal.summary}</span>)}</div>
+          </div>
+          <div style={{textAlign:"center"}}><ScoreRing val={projectScore} size={128} color={moduleAccent(project.module_key)}/><div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Score recalculado desde actividad + alertas + compromisos + señales</div></div>
+        </div>
+        <div className="g4 fu">
+          {[["Alertas activas",summary.openAlerts.length,summary.openAlerts.length?brand.amber:"var(--t1)"],["Compromisos abiertos",summary.openCommitments.length,summary.openCommitments.length?brand.blue:"var(--t1)"],["Actividades",(project.activities||[]).length,"var(--t1)"],["Programas activos",summary.activePrograms.length,summary.activePrograms.length?brand.green:"var(--t1)"]].map(([l,v,c])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:c}}>{v}</div><div className="stat-lbl">{l}</div></div>)}
+        </div>
+        <div className="g2">
+          <div className="card fu">
+            <div className="ctitle">Dimensiones o sub-scores</div>
+            {dimensions.map(([label,val])=><Prog key={label} label={labelizeDimension(label)} val={val} color={moduleAccent(project.module_key)}/>) }
+            <div style={{fontSize:12,color:"var(--t3)",marginTop:12}}>Reglas demo: alertas rojas y compromisos abiertos bajan score; evaluación/NPS y señales de oportunidad lo suben.</div>
+          </div>
+          <div className="card fu">
+            <div className="ctitle">Señales interpretativas recientes</div>
+            {summary.recentSignals.slice(0,5).map(signal=><div key={signal.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{signal.summary}</div><span className={`badge ${signal.severity==="red"?"br":signal.severity==="amber"?"ba":"bg"}`}>{labelizeDimension(signal.dimension||"riesgos")}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>Fuente: {signal.source_record_id || "manual"} · Confianza {signal.confidence_score ?? "—"}</div></div>)}
+          </div>
+        </div>
+        <div className="g2">
+          <div className="card fu">
+            <div className="ctitle">Últimas actividades</div>
+            {summary.recentActivities.slice(0,5).map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)",margin:"4px 0"}}>{item.activity_date} · {item.record_type} · {item.participants_count || 0} participantes</div><div style={{fontSize:13,color:"var(--t2)"}}>{item.qualitative_summary || item.consultant_notes}</div></div>)}
+          </div>
+          <div className="card fu">
+            <div className="ctitle">Programas activos</div>
+            {summary.activePrograms.length ? summary.activePrograms.map(program=><div key={program.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{program.name}</div><span className={`badge ${statusBadgeCls(program.status)}`}>{program.status}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{program.starts_on} → {program.ends_on}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{program.objective}</div></div>) : <div className="muted">No hay programas activos.</div>}
+          </div>
+        </div>
+        <div className="g2">
+          <div className="card fu"><div className="ctitle">Alertas activas</div>{summary.openAlerts.map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div><div style={{fontSize:11,marginTop:4}}>Zona {zoneLookup.get(alert.zone_id)?.name || "sin zona"} · fuente {alert.source_record_id || "manual"}</div></div></div>)}</div>
+          <div className="card fu"><div className="ctitle">Compromisos abiertos</div>{summary.openCommitments.map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)"}}>{item.commitment_type} · vence {item.due_date || "—"} · fuente {item.source_record_id || "manual"}</div></div><span className={`badge ${item.status==="open"?"ba":item.status==="in_progress"?"bb":"bg"}`}>{item.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{item.description}</div></div>)}</div>
+        </div>
+        <div className="card fu">
+          <div className="ctitle">Timeline unificado del proyecto</div>
+          {summary.timeline.map(item=><div key={item.id} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{width:10,height:10,borderRadius:"50%",background:item.color,marginTop:6,flexShrink:0}}/><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className="badge bb">{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span>{item.sourceId&&<span className="mono muted" style={{fontSize:11}}>source_record_id: {item.sourceId}</span>}</div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></div>)}
+        </div>
+      </>}
+
+      {tab==="territory"&&<div className="g2">
+        <div className="card fu">
+          <div className="sec-hdr"><div className="ctitle mb0">Territorio RC</div><select className="fsel" style={{maxWidth:180}} value={territoryFilter} onChange={e=>setTerritoryFilter(e.target.value)}><option value="all">Todas las zonas</option><option value="direct">Influencia directa</option><option value="operational">Operación</option><option value="indirect">Indirecta</option></select></div>
+          <div style={{position:"relative",height:340,borderRadius:16,border:"1px solid var(--b1)",background:"linear-gradient(180deg,var(--s2),var(--s3))",overflow:"hidden"}}>
+            {visibleZones.map((zone,idx)=><button key={zone.id} onClick={()=>setSelectedZoneId(zone.id)} style={{position:"absolute",left:`${24 + (idx%2)*190}px`,top:`${36 + Math.floor(idx/2)*120}px`,width:160,height:92,borderRadius:24,background:selectedZoneId===zone.id?`${moduleAccent(project.module_key)}33`:`${moduleAccent(project.module_key)}18`,border:`1px solid ${selectedZoneId===zone.id?moduleAccent(project.module_key):`${moduleAccent(project.module_key)}55`}`,padding:16,textAlign:"left",cursor:"pointer",color:"var(--t1)"}}><div style={{fontFamily:"'Fraunces',serif",fontSize:18}}>{zone.name}</div><div className="mono muted" style={{fontSize:11,marginTop:4}}>{zone.zone_type}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:10}}>{(project.alerts||[]).filter(alert=>alert.zone_id===zone.id && !alert.resolved).length} alertas · {(project.actors||[]).filter(actor=>actor.zone_id===zone.id).length} actores</div></button>)}
+            {territoryActors.map((actor,idx)=><div key={actor.id} style={{position:"absolute",left:`${78 + (idx%3)*126}px`,top:`${84 + (idx%2)*138}px`,padding:"6px 10px",borderRadius:16,background:"var(--s1)",border:`1px solid ${actor.relationship_status==="Tensionada"?brand.red:brand.blue}55`,fontSize:12,color:"var(--t1)"}}>{actor.name}</div>)}
+          </div>
+        </div>
+        <div className="card fu">
+          <div className="ctitle">Detalle territorial</div>
+          {selectedZone ? <>
+            <div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)",marginBottom:6}}>{selectedZone.name}</div>
+            <div className="badge bb" style={{marginBottom:12}}>{selectedZone.zone_type}</div>
+            <div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}>{selectedZone.notes}</div>
+            <div className="ctitle-sm">Actores asociados</div>
+            {(project.actors||[]).filter(actor=>actor.zone_id===selectedZone.id).map(actor=><div key={actor.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{actor.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{actor.actor_type} · Influencia {actor.influence_level}</div></div><span className={`badge ${actor.relationship_status==="Tensionada"?"br":"bb"}`}>{actor.relationship_status}</span></div></div>)}
+            <div className="ctitle-sm" style={{marginTop:16}}>Alertas en la zona</div>
+            {(project.alerts||[]).filter(alert=>alert.zone_id===selectedZone.id).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div></div></div>)}
+            <div className="ctitle-sm" style={{marginTop:16}}>Programas y cobertura</div>
+            {(project.programs||[]).filter(program=>program.zone_id===selectedZone.id).map(program=><div key={program.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{program.name}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{program.objective}</div></div>)}
+          </> : <div className="muted">Selecciona una zona para ver actores, alertas y programas asociados.</div>}
+        </div>
+      </div>}
+
+      {tab==="activity"&&<div className="g2">
+        <div className="card fu">
+          <div className="ctitle">Listado de actividades + timeline</div>
+          {summary.timeline.map(item=><button key={item.id} onClick={()=>item.kind==="Actividad" && setSelectedActivityId(item.sourceId)} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid var(--b1)",background:"transparent",borderLeft:"none",borderRight:"none",borderTop:"none",width:"100%",textAlign:"left",cursor:item.kind==="Actividad"?"pointer":"default"}}><div style={{width:10,height:10,borderRadius:"50%",background:item.color,marginTop:6,flexShrink:0}}/><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className="badge bb">{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span></div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></button>)}
+        </div>
+        <div className="fu" style={{display:"grid",gap:16}}>
+          <div className="card">
+            <div className="ctitle">Detalle de actividad</div>
+            {selectedActivity ? <>
+              <div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)",marginBottom:6}}>{selectedActivity.title}</div>
+              <div style={{fontSize:12,color:"var(--t3)",marginBottom:12}}>{selectedActivity.activity_date} · {selectedActivity.record_type} · actor {actorLookup.get(selectedActivity.actor_id)?.name || "sin actor"}</div>
+              <div className="g2" style={{marginBottom:12}}>
+                <div className="stat-chip"><div className="stat-val" style={{color:"var(--t1)"}}>{selectedActivity.participants_count || 0}</div><div className="stat-lbl">Participantes</div></div>
+                <div className="stat-chip"><div className="stat-val" style={{color:sc(selectedActivity.evaluation_score || selectedActivity.nps_score || 0)}}>{selectedActivity.evaluation_score ?? selectedActivity.nps_score ?? "—"}</div><div className="stat-lbl">Evaluación / NPS</div></div>
+              </div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Resumen:</strong> {selectedActivity.qualitative_summary || "Sin resumen"}</div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Tensiones:</strong> {selectedActivity.tensions_text || "Sin tensiones registradas"}</div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Oportunidades:</strong> {selectedActivity.opportunities_text || "Sin oportunidades registradas"}</div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}><strong style={{color:"var(--t1)"}}>Notas del consultor:</strong> {selectedActivity.consultant_notes || "Sin notas"}</div>
+              <div className="div"/>
+              <div className="ctitle-sm">Generar señal interpretativa</div>
+              <div className="frow"><div className="fg"><label className="fl">Dimensión</label><input className="fi" value={composer.signal.dimension} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,dimension:e.target.value}}))}/></div><div className="fg"><label className="fl">Tipo</label><select className="fsel" value={composer.signal.signal_type} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,signal_type:e.target.value}}))}><option value="tension">Tensión</option><option value="opportunity">Oportunidad</option><option value="alert">Alerta interpretativa</option></select></div></div>
+              <div className="frow"><div className="fg"><label className="fl">Severidad</label><select className="fsel" value={composer.signal.severity} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,severity:e.target.value}}))}><option value="green">Verde</option><option value="amber">Ámbar</option><option value="red">Roja</option></select></div><div className="fg"><label className="fl">Confianza</label><input className="fi" value={composer.signal.confidence_score} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,confidence_score:e.target.value}}))}/></div></div>
+              <div className="fg"><label className="fl">Resumen de señal</label><textarea className="fta" value={composer.signal.summary} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,summary:e.target.value}}))}/></div>
+              <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("signal")}>+ Crear señal desde actividad</button>
+              <div className="div"/>
+              <div className="ctitle-sm">Generar alerta</div>
+              <div className="frow"><div className="fg"><label className="fl">Severidad</label><select className="fsel" value={composer.alert.severity} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,severity:e.target.value}}))}><option value="green">Verde</option><option value="amber">Ámbar</option><option value="red">Roja</option></select></div><div className="fg"><label className="fl">Categoría</label><input className="fi" value={composer.alert.category} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,category:e.target.value}}))}/></div></div>
+              <div className="fg"><label className="fl">Título alerta</label><input className="fi" value={composer.alert.title} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,title:e.target.value}}))}/></div>
+              <div className="fg"><label className="fl">Descripción</label><textarea className="fta" value={composer.alert.description} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,description:e.target.value}}))}/></div>
+              <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("alert")}>+ Crear alerta desde actividad</button>
+              <div className="div"/>
+              <div className="ctitle-sm">Generar compromiso / issue</div>
+              <div className="frow"><div className="fg"><label className="fl">Tipo</label><select className="fsel" value={composer.commitment.commitment_type} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,commitment_type:e.target.value}}))}><option value="followup">Follow-up</option><option value="commitment">Compromiso</option><option value="issue">Issue</option><option value="request">Request</option><option value="complaint">Complaint</option></select></div><div className="fg"><label className="fl">Estado</label><select className="fsel" value={composer.commitment.status} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,status:e.target.value}}))}><option value="open">Open</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option></select></div></div>
+              <div className="fg"><label className="fl">Título compromiso</label><input className="fi" value={composer.commitment.title} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,title:e.target.value}}))}/></div>
+              <div className="frow"><div className="fg"><label className="fl">Vencimiento</label><input type="date" className="fi" value={composer.commitment.due_date} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,due_date:e.target.value}}))}/></div><div className="fg"><label className="fl">Visible cliente</label><select className="fsel" value={String(composer.commitment.visible_to_client)} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,visible_to_client:e.target.value === "true"}}))}><option value="true">Sí</option><option value="false">No</option></select></div></div>
+              <div className="fg"><label className="fl">Descripción</label><textarea className="fta" value={composer.commitment.description} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,description:e.target.value}}))}/></div>
+              <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("commitment")}>+ Crear compromiso desde actividad</button>
+            </> : <div className="muted">Selecciona una actividad para ver su detalle.</div>}
+          </div>
+          <div className="card">
+            <div className="ctitle">Nueva actividad manual</div>
+            <div className="frow"><div className="fg"><label className="fl">Tipo de actividad</label><select className="fsel" value={activityForm.record_type} onChange={e=>updateForm("record_type",e.target.value)}><option value="meeting">Meeting</option><option value="workshop">Workshop</option><option value="interview">Interview</option><option value="site_visit">Site visit</option><option value="internal_session">Internal session</option></select></div><div className="fg"><label className="fl">Fecha</label><input type="date" className="fi" value={activityForm.activity_date} onChange={e=>updateForm("activity_date",e.target.value)}/></div></div>
+            <div className="fg"><label className="fl">Título</label><input className="fi" value={activityForm.title} onChange={e=>updateForm("title",e.target.value)}/></div>
+            <div className="frow3"><div className="fg"><label className="fl">Participantes</label><input className="fi" value={activityForm.participants_count} onChange={e=>updateForm("participants_count",e.target.value)}/></div><div className="fg"><label className="fl">Evaluación / NPS</label><input className="fi" value={activityForm.evaluation_score} onChange={e=>updateForm("evaluation_score",e.target.value)}/></div><div className="fg"><label className="fl">Zona</label><select className="fsel" value={activityForm.zone_id} onChange={e=>updateForm("zone_id",e.target.value)}><option value="">Sin zona</option>{(project.zones||[]).map(zone=><option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></div></div>
+            <div className="fg"><label className="fl">Participantes / actor principal</label><select className="fsel" value={activityForm.actor_id} onChange={e=>updateForm("actor_id",e.target.value)}><option value="">Sin actor</option>{(project.actors||[]).map(actor=><option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
+            <div className="fg"><label className="fl">Resumen cualitativo</label><textarea className="fta" value={activityForm.qualitative_summary} onChange={e=>updateForm("qualitative_summary",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Tensiones</label><textarea className="fta" value={activityForm.tensions_text} onChange={e=>updateForm("tensions_text",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Oportunidades</label><textarea className="fta" value={activityForm.opportunities_text} onChange={e=>updateForm("opportunities_text",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Notas del consultor</label><textarea className="fta" value={activityForm.consultant_notes} onChange={e=>updateForm("consultant_notes",e.target.value)}/></div>
+            <button className="btn btn-p btn-sm" onClick={createActivity}>Registrar actividad</button>
+          </div>
+        </div>
+      </div>}
+
       {tab==="actors"&&<div className="card fu"><div className="ctitle">Actores y vínculos</div>{(project.actors||[]).map(actor=><div key={actor.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{actor.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{actor.actor_type} · Influencia {actor.influence_level} · Vinculación {actor.engagement_level}</div></div><span className={`badge ${actor.relationship_status==="Tensionada"?"br":"bb"}`}>{actor.relationship_status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{actor.notes}</div></div>)}</div>}
       {tab==="programs"&&<div className="card fu"><div className="ctitle">Programas del proyecto</div>{(project.programs||[]).map(program=><div key={program.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{program.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{program.program_type} · {program.starts_on} → {program.ends_on}</div></div><span className={`badge ${statusBadgeCls(program.status)}`}>{program.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{program.objective}</div></div>)}</div>}
-      {tab==="alerts"&&<div className="card fu"><div className="ctitle">Alertas del proyecto</div>{(project.alerts||[]).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div></div></div>)}</div>}
-      {tab==="commitments"&&<div className="card fu"><div className="ctitle">Compromisos / issues</div>{(project.commitments||[]).map(item=><div key={item.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)"}}>{item.commitment_type} · vencimiento {item.due_date||"—"}</div></div><span className={`badge ${item.status==="open"?"ba":item.status==="in_progress"?"bb":"bg"}`}>{item.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{item.description}</div></div>)}</div>}
-      {tab==="reports"&&<div className="card fu"><div className="ctitle">Señales e interpretación</div>{(project.signals||[]).map(signal=><div key={signal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{signal.summary}</div><span className={`badge ${signal.severity==="red"?"br":signal.severity==="amber"?"ba":"bg"}`}>{signal.dimension}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:6}}>Confidence {signal.confidence_score||"—"} · visible cliente: {signal.visible_to_client?"sí":"no"}</div></div>)}</div>}
+      {tab==="alerts"&&<div className="card fu"><div className="ctitle">Alertas del proyecto</div>{(project.alerts||[]).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div><div style={{fontSize:11,marginTop:4}}>source_record_id: {alert.source_record_id || "manual"}</div></div></div>)}</div>}
+      {tab==="commitments"&&<div className="card fu"><div className="ctitle">Compromisos / issues</div>{(project.commitments||[]).map(item=><div key={item.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)"}}>{item.commitment_type} · vencimiento {item.due_date||"—"} · source_record_id {item.source_record_id || "manual"}</div></div><span className={`badge ${item.status==="open"?"ba":item.status==="in_progress"?"bb":"bg"}`}>{item.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{item.description}</div></div>)}</div>}
+      {tab==="reports"&&<div className="card fu"><div className="ctitle">Señales e interpretación</div>{(project.signals||[]).map(signal=><div key={signal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{signal.summary}</div><span className={`badge ${signal.severity==="red"?"br":signal.severity==="amber"?"ba":"bg"}`}>{signal.dimension}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:6}}>Confidence {signal.confidence_score||"—"} · visible cliente: {signal.visible_to_client?"sí":"no"} · source_record_id {signal.source_record_id || "manual"}</div></div>)}</div>}
       {tab==="files"&&<div className="card fu"><div className="ctitle">Archivos visibles</div>{(project.files||[]).map((f,i)=><div key={i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div></div>)}</div>}
     </div>
   );
@@ -2006,6 +2341,16 @@ export default function App(){
   const activeClient=isC?selClient:clientData;
 
   function openProject(clientId, projectId){ setSelClientId(clientId); setSelProjectId(projectId); setPage("project"); }
+  function updateProjectRecord(updatedProject){
+    setClients(prev=>prev.map(client=>{
+      const matchesClient = client.id === selClientId || client.projects?.some(item=>item.id===updatedProject.id);
+      if(!matchesClient) return client;
+      return {
+        ...client,
+        projects:(client.projects||[]).map(item=>item.id===updatedProject.id ? updatedProject : item),
+      };
+    }));
+  }
   function navigate(id){
     if(id==="tour"){setShowTour(true);return;}
     if(id==="project"&&!activeProject){setPage("home");return;}
@@ -2016,7 +2361,7 @@ export default function App(){
     if(isC&&!hasClients&&page!=="control")return <div className="page fu"><div className="card"><div className="ctitle">No hay clientes todavía</div><button className="btn btn-g btn-sm" onClick={()=>setPage("control")}>Ir al centro de control</button></div></div>;
     if(isC){
       if(page==="home")return<ProjectPortfolio clients={clients} onOpenProject={openProject} isConsultant={true}/>;
-      if(page==="project"&&activeProject&&selClient)return<ProjectWorkspace client={selClient} project={activeProject} isConsultant={true}/>;
+      if(page==="project"&&activeProject&&selClient)return<ProjectWorkspace client={selClient} project={activeProject} isConsultant={true} onUpdateProject={updateProjectRecord}/>;
       if(page==="control")return<ConsultantPanel clients={clients} setClients={setClients} selId={selClientId} setSelId={setSelClientId} session={session}/>;
       if(page==="rc"&&selClient)return<ModuleRC client={selClient} isConsultant={true} onUpdateStakeholders={stakeholders=>setClients(p=>p.map(c=>c.id===selClientId?{...c,stakeholders}:c))}/>;
       if(page==="do")return<ModuleDO client={selClient}/>;
@@ -2026,7 +2371,7 @@ export default function App(){
     } else {
       if(!clientData)return <div className="page fu"><div className="card">No hay datos de cliente disponibles.</div></div>;
       if(page==="home")return<ProjectPortfolio clients={[clientData]} onOpenProject={openProject} isConsultant={false}/>;
-      if(page==="project"&&activeProject&&clientData)return<ProjectWorkspace client={clientData} project={activeProject} isConsultant={false}/>;
+      if(page==="project"&&activeProject&&clientData)return<ProjectWorkspace client={clientData} project={activeProject} isConsultant={false} onUpdateProject={updateProjectRecord}/>;
       if(page==="rc"&&clientData.modules.rc)return<ModuleRC client={clientData} isConsultant={false}/>;
       if(page==="do"&&clientData.modules.do)return<ModuleDO client={clientData}/>;
       if(page==="esg"&&clientData.modules.esg)return<ModuleESG client={clientData}/>;

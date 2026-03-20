@@ -118,7 +118,7 @@ create table if not exists public.project_zones (
   id                uuid        primary key default gen_random_uuid(),
   project_id         uuid        not null references public.projects(id) on delete cascade,
   name              text        not null,
-  zone_type         text        not null,
+  zone_type         text        not null check (zone_type in ('direct','operational','indirect','regional','other')),
   geometry_json     jsonb,
   notes             text        default '',
   created_at        timestamptz not null default now(),
@@ -131,8 +131,8 @@ create table if not exists public.project_actors (
   zone_id           uuid        references public.project_zones(id) on delete set null,
   name              text        not null,
   actor_type        text,
-  influence_level   text,
-  engagement_level  text,
+  influence_level   text        check (influence_level in ('Baja','Media','Alta','Crítica')),
+  engagement_level  text        check (engagement_level in ('Baja','Media','Alta')),
   relationship_status text,
   latitude          numeric,
   longitude         numeric,
@@ -148,7 +148,7 @@ create table if not exists public.project_programs (
   zone_id           uuid        references public.project_zones(id) on delete set null,
   name              text        not null,
   program_type      text,
-  status            text        not null default 'draft',
+  status            text        not null default 'draft' check (status in ('draft','active','paused','closed')),
   objective         text        default '',
   starts_on         date,
   ends_on           date,
@@ -162,13 +162,13 @@ create table if not exists public.project_activities (
   zone_id           uuid        references public.project_zones(id) on delete set null,
   program_id        uuid        references public.project_programs(id) on delete set null,
   actor_id          uuid        references public.project_actors(id) on delete set null,
-  record_type       text        not null,
+  record_type       text        not null check (record_type in ('meeting','workshop','interview','site_visit','internal_session','survey','other')),
   title             text        not null,
   activity_date     date        not null,
-  participants_count integer,
-  organizations_count integer,
-  nps_score         numeric,
-  evaluation_score  numeric,
+  participants_count integer     check (participants_count is null or participants_count >= 0),
+  organizations_count integer   check (organizations_count is null or organizations_count >= 0),
+  nps_score         numeric      check (nps_score is null or nps_score between -100 and 100),
+  evaluation_score  numeric      check (evaluation_score is null or evaluation_score between 0 and 100),
   qualitative_summary text,
   tensions_text     text,
   opportunities_text text,
@@ -182,6 +182,7 @@ create table if not exists public.project_alerts (
   project_id         uuid        not null references public.projects(id) on delete cascade,
   zone_id           uuid        references public.project_zones(id) on delete set null,
   actor_id          uuid        references public.project_actors(id) on delete set null,
+  source_record_id  uuid        references public.project_activities(id) on delete set null,
   severity          text        not null check (severity in ('green','amber','red')),
   category          text,
   title             text        not null,
@@ -196,9 +197,9 @@ create table if not exists public.project_signals (
   project_id         uuid        not null references public.projects(id) on delete cascade,
   source_record_id  uuid        references public.project_activities(id) on delete set null,
   dimension         text,
-  signal_type       text,
-  severity          text,
-  confidence_score  numeric,
+  signal_type       text        check (signal_type in ('tension','opportunity','alert','insight')),
+  severity          text        check (severity in ('green','amber','red')),
+  confidence_score  numeric     check (confidence_score is null or confidence_score between 0 and 1),
   summary           text        not null,
   visible_to_client boolean     not null default true,
   created_at        timestamptz not null default now()
@@ -208,7 +209,7 @@ create table if not exists public.project_scores (
   id                uuid        primary key default gen_random_uuid(),
   project_id         uuid        not null references public.projects(id) on delete cascade,
   reporting_period_id uuid      references public.reporting_periods(id),
-  overall_score     numeric,
+  overall_score     numeric     check (overall_score is null or overall_score between 0 and 100),
   status_label      text,
   dimension_scores_json jsonb,
   method_notes      text,
@@ -231,6 +232,24 @@ create table if not exists public.project_commitments (
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
+
+
+create index if not exists idx_projects_client_id on public.projects(client_id);
+create index if not exists idx_project_zones_project_id on public.project_zones(project_id);
+create index if not exists idx_project_actors_project_id on public.project_actors(project_id);
+create index if not exists idx_project_actors_zone_id on public.project_actors(zone_id);
+create index if not exists idx_project_programs_project_id on public.project_programs(project_id);
+create index if not exists idx_project_programs_zone_id on public.project_programs(zone_id);
+create index if not exists idx_project_activities_project_id on public.project_activities(project_id);
+create index if not exists idx_project_activities_date on public.project_activities(project_id, activity_date desc);
+create index if not exists idx_project_alerts_project_id on public.project_alerts(project_id);
+create index if not exists idx_project_alerts_zone_id on public.project_alerts(zone_id);
+create index if not exists idx_project_alerts_source_record_id on public.project_alerts(source_record_id);
+create index if not exists idx_project_signals_project_id on public.project_signals(project_id);
+create index if not exists idx_project_signals_source_record_id on public.project_signals(source_record_id);
+create index if not exists idx_project_scores_project_id on public.project_scores(project_id, updated_at desc);
+create index if not exists idx_project_commitments_project_id on public.project_commitments(project_id);
+create index if not exists idx_project_commitments_source_record_id on public.project_commitments(source_record_id);
 
 -- ============================================================
 -- 4. CLIENT USER ACCESS
