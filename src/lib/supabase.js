@@ -68,6 +68,10 @@ function singleResult(data) {
   return Array.isArray(data) ? (data[0] || null) : (data || null);
 }
 
+function isUuid(value) {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function fetchProjectWorkspace(projectId) {
   if (!supabase || !projectId) return null;
 
@@ -115,7 +119,9 @@ export async function fetchProjectWorkspace(projectId) {
 
 export async function insertProjectRecord(table, payload) {
   if (!supabase) return null;
-  const { data, error } = await supabase.from(table).insert(payload).select().limit(1);
+  const sanitizedPayload = { ...payload };
+  if (!isUuid(sanitizedPayload.id)) delete sanitizedPayload.id;
+  const { data, error } = await supabase.from(table).insert(sanitizedPayload).select().limit(1);
   if (error) throw error;
   return singleResult(data);
 }

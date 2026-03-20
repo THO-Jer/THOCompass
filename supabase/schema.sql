@@ -118,7 +118,7 @@ create table if not exists public.project_zones (
   id                uuid        primary key default gen_random_uuid(),
   project_id         uuid        not null references public.projects(id) on delete cascade,
   name              text        not null,
-  zone_type         text        not null check (zone_type in ('direct','operational','indirect','regional','other')),
+  zone_type         text        not null check (zone_type in ('direct','indirect','operational','logistics','regional','other')),
   geometry_json     jsonb,
   notes             text        default '',
   created_at        timestamptz not null default now(),
@@ -133,9 +133,10 @@ create table if not exists public.project_actors (
   actor_type        text,
   influence_level   text        check (influence_level in ('Baja','Media','Alta','Crítica')),
   engagement_level  text        check (engagement_level in ('Baja','Media','Alta')),
-  relationship_status text,
+  relationship_status text      check (relationship_status in ('colaborativo','estable','fragil','tenso','critico')),
   latitude          numeric,
   longitude         numeric,
+  visible_to_client boolean     not null default true,
   notes             text        default '',
   last_interaction_at timestamptz,
   created_at        timestamptz not null default now(),
@@ -150,6 +151,7 @@ create table if not exists public.project_programs (
   program_type      text,
   status            text        not null default 'draft' check (status in ('draft','active','paused','closed')),
   objective         text        default '',
+  visible_to_client boolean     not null default true,
   starts_on         date,
   ends_on           date,
   created_at        timestamptz not null default now(),
@@ -162,7 +164,7 @@ create table if not exists public.project_activities (
   zone_id           uuid        references public.project_zones(id) on delete set null,
   program_id        uuid        references public.project_programs(id) on delete set null,
   actor_id          uuid        references public.project_actors(id) on delete set null,
-  record_type       text        not null check (record_type in ('meeting','workshop','interview','site_visit','internal_session','survey','other')),
+  record_type       text        not null check (record_type in ('meeting','workshop','interview','site_visit','internal_session','survey','incident','other')),
   title             text        not null,
   activity_date     date        not null,
   participants_count integer     check (participants_count is null or participants_count >= 0),
@@ -173,8 +175,10 @@ create table if not exists public.project_activities (
   tensions_text     text,
   opportunities_text text,
   consultant_notes  text,
+  visible_to_client boolean     not null default true,
   created_by        uuid        references public.user_profiles(id),
-  created_at        timestamptz not null default now()
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
 );
 
 create table if not exists public.project_alerts (
@@ -189,7 +193,8 @@ create table if not exists public.project_alerts (
   description       text        default '',
   visible_to_client boolean     not null default true,
   resolved          boolean     not null default false,
-  created_at        timestamptz not null default now()
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
 );
 
 create table if not exists public.project_signals (
@@ -202,17 +207,19 @@ create table if not exists public.project_signals (
   confidence_score  numeric     check (confidence_score is null or confidence_score between 0 and 1),
   summary           text        not null,
   visible_to_client boolean     not null default true,
-  created_at        timestamptz not null default now()
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
 );
 
 create table if not exists public.project_scores (
   id                uuid        primary key default gen_random_uuid(),
   project_id         uuid        not null references public.projects(id) on delete cascade,
-  reporting_period_id uuid      references public.reporting_periods(id),
   overall_score     numeric     check (overall_score is null or overall_score between 0 and 100),
   status_label      text,
   dimension_scores_json jsonb,
+  score_drivers_json jsonb,
   method_notes      text,
+  created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
 
@@ -238,18 +245,29 @@ create index if not exists idx_projects_client_id on public.projects(client_id);
 create index if not exists idx_project_zones_project_id on public.project_zones(project_id);
 create index if not exists idx_project_actors_project_id on public.project_actors(project_id);
 create index if not exists idx_project_actors_zone_id on public.project_actors(zone_id);
+create index if not exists idx_project_actors_visible_to_client on public.project_actors(visible_to_client);
 create index if not exists idx_project_programs_project_id on public.project_programs(project_id);
 create index if not exists idx_project_programs_zone_id on public.project_programs(zone_id);
+create index if not exists idx_project_programs_status on public.project_programs(status);
 create index if not exists idx_project_activities_project_id on public.project_activities(project_id);
 create index if not exists idx_project_activities_date on public.project_activities(project_id, activity_date desc);
+create index if not exists idx_project_activities_zone_id on public.project_activities(zone_id);
+create index if not exists idx_project_activities_program_id on public.project_activities(program_id);
+create index if not exists idx_project_activities_actor_id on public.project_activities(actor_id);
+create index if not exists idx_project_activities_visible_to_client on public.project_activities(visible_to_client);
 create index if not exists idx_project_alerts_project_id on public.project_alerts(project_id);
 create index if not exists idx_project_alerts_zone_id on public.project_alerts(zone_id);
+create index if not exists idx_project_alerts_actor_id on public.project_alerts(actor_id);
 create index if not exists idx_project_alerts_source_record_id on public.project_alerts(source_record_id);
+create index if not exists idx_project_alerts_resolved on public.project_alerts(resolved);
 create index if not exists idx_project_signals_project_id on public.project_signals(project_id);
 create index if not exists idx_project_signals_source_record_id on public.project_signals(source_record_id);
 create index if not exists idx_project_scores_project_id on public.project_scores(project_id, updated_at desc);
 create index if not exists idx_project_commitments_project_id on public.project_commitments(project_id);
 create index if not exists idx_project_commitments_source_record_id on public.project_commitments(source_record_id);
+create index if not exists idx_project_commitments_zone_id on public.project_commitments(zone_id);
+create index if not exists idx_project_commitments_actor_id on public.project_commitments(actor_id);
+create index if not exists idx_project_commitments_status on public.project_commitments(status);
 
 -- ============================================================
 -- 4. CLIENT USER ACCESS
@@ -391,6 +409,7 @@ create table if not exists public.client_events (
 create table if not exists public.client_files (
   id              uuid        primary key default gen_random_uuid(),
   client_id       uuid        not null references public.clients(id) on delete cascade,
+  project_id      uuid        references public.projects(id) on delete set null,
   module_key      text        not null check (module_key in ('rc','do','esg')),
   storage_bucket  text        not null,
   storage_path    text        not null,
@@ -709,6 +728,7 @@ create index if not exists idx_recs_client on public.client_recommendations (cli
 create index if not exists idx_events_client on public.client_events (client_id);
 create index if not exists idx_events_date on public.client_events (event_date);
 create index if not exists idx_files_client on public.client_files (client_id);
+create index if not exists idx_client_files_project_id on public.client_files (project_id);
 create index if not exists idx_msgs_client on public.client_messages (client_id);
 create index if not exists idx_msgs_created on public.client_messages (created_at);
 create index if not exists idx_period_year_quarter on public.reporting_periods (year, quarter);

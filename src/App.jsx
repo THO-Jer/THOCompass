@@ -1533,6 +1533,7 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
       overall_score: summary.overallScore,
       status_label: summary.statusLabel,
       dimension_scores_json: summary.dimensionScores,
+      score_drivers_json: summary.scoreDrivers,
       method_notes: "Score demo explicable basado en alertas, compromisos, evaluaciones y señales.",
       updated_at: new Date().toISOString(),
     }).then((scoreRow)=>{
