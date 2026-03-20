@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
-import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo } from "./lib/supabase";
+import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo, fetchProjectWorkspace, insertProjectRecord, upsertProjectScore } from "./lib/supabase";
 import ApprovalPanel from "./components/ApprovalPanel";
 import PendingAccess from "./components/PendingAccess";
 import { useAuthGuard, fetchPendingUsers, fetchApprovedUsers, fetchClients, approveUser, disableUser, reEnableUser } from "./hooks/useAuthGuard";
@@ -1303,12 +1303,20 @@ function projectTabs(project){
 function clampScore(value){ return Math.max(0, Math.min(100, Math.round(value))); }
 function labelizeDimension(key){ return key.replaceAll("_"," ").replace(/(^|\s)\S/g, c=>c.toUpperCase()); }
 function severityWeight(severity){ return severity==="red"?12:severity==="amber"?6:severity==="green"?-2:0; }
+function getTimelineKindMeta(kind){
+  if(kind==="Actividad") return { icon:"📝", badgeCls:"bb", borderColor:brand.blue };
+  if(kind==="Alerta") return { icon:"⚠", badgeCls:"br", borderColor:brand.red };
+  if(kind==="Compromiso") return { icon:"✓", badgeCls:"ba", borderColor:brand.amber };
+  if(kind==="Señal") return { icon:"✦", badgeCls:"bg", borderColor:brand.green };
+  return { icon:"•", badgeCls:"bb", borderColor:"var(--b2)" };
+}
 function buildProjectSummary(project){
   const activities=[...(project.activities||[])];
   const alerts=[...(project.alerts||[])];
   const commitments=[...(project.commitments||[])];
   const signals=[...(project.signals||[])];
   const programs=[...(project.programs||[])];
+  const zones=[...(project.zones||[])];
   const openAlerts=alerts.filter(alert=>!alert.resolved);
   const openCommitments=commitments.filter(item=>!["resolved","closed","rejected"].includes(item.status));
   const activePrograms=programs.filter(program=>program.status==="active");
@@ -1354,6 +1362,43 @@ function buildProjectSummary(project){
     + recentSignals.reduce((sum,signal)=>sum+(signal.signal_type==="opportunity"?3:(signal.severity==="red"?-4:signal.severity==="amber"?-2:1)),0);
   const overallScore=clampScore(overallBase);
   const statusLabel=overallScore>=75?"Sólido":overallScore>=63?"En atención":overallScore>=50?"Bajo vigilancia":"Crítico";
+  const scoreDrivers=[
+    {label:"Alertas activas", value:openAlerts.length, impact:-openAlerts.reduce((sum,alert)=>sum+severityWeight(alert.severity),0), detail:openAlerts.map(alert=>`${alert.severity} · ${alert.title}`)},
+    {label:"Compromisos abiertos", value:openCommitments.length, impact:-openCommitments.reduce((sum,item)=>sum+(item.status==="in_progress"?4:7),0), detail:openCommitments.map(item=>`${item.status} · ${item.title}`)},
+    {label:"Evaluaciones", value:evaluationValues.length?Math.round(avgEvaluation):"Sin dato", impact:Math.round(avgEvaluation-60), detail:recentActivities.slice(0,4).map(activity=>`${activity.title} · ${activity.evaluation_score ?? activity.nps_score ?? "sin score"}`)},
+    {label:"Señales", value:recentSignals.length, impact:recentSignals.reduce((sum,signal)=>sum+(signal.signal_type==="opportunity"?3:(signal.severity==="red"?-4:signal.severity==="amber"?-2:1)),0), detail:recentSignals.slice(0,4).map(signal=>`${signal.signal_type || "insight"} · ${signal.summary}`)},
+  ];
+  const zoneSummaries=zones.map(zone=>{
+    const zoneActivities=activities.filter(item=>item.zone_id===zone.id);
+    const zoneAlerts=alerts.filter(item=>item.zone_id===zone.id && !item.resolved);
+    const zoneCommitments=commitments.filter(item=>item.zone_id===zone.id && !["resolved","closed","rejected"].includes(item.status));
+    const zoneSignals=signals.filter(item=>{
+      if(item.source_record_id) return zoneActivities.some(activity=>activity.id===item.source_record_id);
+      return false;
+    });
+    const localBase=(zoneActivities.reduce((sum,activity)=>sum+(activity.evaluation_score ?? activity.nps_score ?? 60),0)/(zoneActivities.length||1))
+      - zoneAlerts.reduce((sum,alert)=>sum+severityWeight(alert.severity),0)
+      - zoneCommitments.length*6
+      + zoneSignals.reduce((sum,signal)=>sum+(signal.signal_type==="opportunity"?3:(signal.severity==="red"?-4:signal.severity==="amber"?-2:1)),0);
+    return {
+      zoneId:zone.id,
+      score:clampScore(zoneActivities.length ? localBase : 60 - zoneAlerts.length*8),
+      alerts:zoneAlerts,
+      commitments:zoneCommitments,
+      activities:zoneActivities,
+      signals:zoneSignals,
+    };
+  });
+  const activityIds=new Set(activities.map(activity=>activity.id));
+  const zoneIds=new Set(zones.map(zone=>zone.id));
+  const actorIds=new Set((project.actors||[]).map(actor=>actor.id));
+  const consistencyIssues=[
+    ...alerts.filter(item=>item.source_record_id && !activityIds.has(item.source_record_id)).map(item=>`Alerta sin actividad fuente válida: ${item.title}`),
+    ...signals.filter(item=>item.source_record_id && !activityIds.has(item.source_record_id)).map(item=>`Señal sin actividad fuente válida: ${item.summary}`),
+    ...commitments.filter(item=>item.source_record_id && !activityIds.has(item.source_record_id)).map(item=>`Compromiso sin actividad fuente válida: ${item.title}`),
+    ...activities.filter(item=>item.zone_id && !zoneIds.has(item.zone_id)).map(item=>`Actividad con zona huérfana: ${item.title}`),
+    ...alerts.filter(item=>item.actor_id && !actorIds.has(item.actor_id)).map(item=>`Alerta con actor huérfano: ${item.title}`),
+  ];
 
   return {
     overallScore,
@@ -1364,6 +1409,9 @@ function buildProjectSummary(project){
     recentActivities,
     recentSignals,
     activePrograms,
+    scoreDrivers,
+    zoneSummaries,
+    consistencyIssues,
     timeline:[
       ...activities.map(item=>({id:`activity-${item.id}`,kind:"Actividad",date:item.activity_date,title:item.title,desc:item.qualitative_summary || item.consultant_notes || "Sin resumen cualitativo.",color:moduleAccent(project.module_key),sourceId:item.id,meta:`${item.record_type} · ${item.participants_count||0} participantes`})),
       ...alerts.map(item=>({id:`alert-${item.id}`,kind:"Alerta",date:item.created_at,title:item.title,desc:item.description,color:item.severity==="red"?brand.red:item.severity==="amber"?brand.amber:brand.green,sourceId:item.source_record_id,meta:`${item.category || "sin categoría"} · ${item.resolved?"resuelta":"activa"}`})),
@@ -1409,6 +1457,8 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
   const [selectedActivityId,setSelectedActivityId]=useState(project.activities?.[0]?.id || null);
   const [selectedZoneId,setSelectedZoneId]=useState(project.zones?.[0]?.id || "all");
   const [territoryFilter,setTerritoryFilter]=useState("all");
+  const [syncMsg,setSyncMsg]=useState(isSupabaseConfigured ? "Sincronizando con Supabase…" : "Modo demo local");
+  const [saving,setSaving]=useState(false);
   const [activityForm,setActivityForm]=useState({
     record_type:"meeting",
     activity_date:new Date().toISOString().slice(0,10),
@@ -1421,6 +1471,9 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
     consultant_notes:"",
     zone_id:project.zones?.[0]?.id || "",
     actor_id:project.actors?.[0]?.id || "",
+    auto_signal:true,
+    auto_alert:false,
+    auto_commitment:false,
   });
   const [composer,setComposer]=useState({
     signal:{dimension:"confianza",signal_type:"tension",severity:"amber",summary:"",confidence_score:"0.75",visible_to_client:true},
@@ -1434,6 +1487,7 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
   const zoneLookup=new Map((project.zones||[]).map(zone=>[zone.id, zone]));
   const actorLookup=new Map((project.actors||[]).map(actor=>[actor.id, actor]));
   const selectedZone = selectedZoneId === "all" ? null : zoneLookup.get(selectedZoneId) || null;
+  const selectedZoneSummary = summary.zoneSummaries.find(item=>item.zoneId===selectedZoneId) || null;
   const visibleZones=(project.zones||[]).filter(zone=>territoryFilter==="all" || zone.zone_type===territoryFilter);
   const visibleZoneIds=new Set(visibleZones.map(zone=>zone.id));
   const territoryActors=(project.actors||[]).filter(actor=>territoryFilter==="all" ? true : visibleZoneIds.has(actor.zone_id));
@@ -1452,108 +1506,168 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
     setSelectedZoneId(firstZone);
   }, [project.zones, selectedZoneId]);
 
+  useEffect(()=>{
+    let cancelled=false;
+    async function syncWorkspace(){
+      if(!isSupabaseConfigured){
+        setSyncMsg("Modo demo local");
+        return;
+      }
+      try{
+        const remoteProject = await fetchProjectWorkspace(project.id);
+        if(cancelled || !remoteProject) return;
+        onUpdateProject?.(prevProject=>({...prevProject, ...remoteProject}));
+        setSyncMsg("Fuente de verdad: Supabase");
+      }catch(error){
+        if(cancelled) return;
+        setSyncMsg(`Supabase no disponible (${error.message}). Usando fallback local.`);
+      }
+    }
+    syncWorkspace();
+    return ()=>{ cancelled=true; };
+  }, [project.id]);
+
+  useEffect(()=>{
+    if(!isSupabaseConfigured) return;
+    upsertProjectScore(project.id, {
+      overall_score: summary.overallScore,
+      status_label: summary.statusLabel,
+      dimension_scores_json: summary.dimensionScores,
+      method_notes: "Score demo explicable basado en alertas, compromisos, evaluaciones y señales.",
+      updated_at: new Date().toISOString(),
+    }).then((scoreRow)=>{
+      if(scoreRow) onUpdateProject?.(prevProject=>({...prevProject, scores: scoreRow}));
+    }).catch(()=>{});
+  }, [project.id, summary.overallScore, summary.statusLabel, JSON.stringify(summary.dimensionScores)]);
+
   function updateForm(field, value){
     setActivityForm(prev=>({...prev,[field]:value}));
   }
 
   function patchProject(patch){
-    onUpdateProject?.({
-      ...project,
+    onUpdateProject?.(prevProject=>({
+      ...prevProject,
       ...patch,
-    });
-  }
-
-  function createActivity(){
-    if(!activityForm.title.trim() || !activityForm.activity_date) return;
-    const nextId=`activity-${Date.now()}`;
-    const newActivity={
-      id:nextId,
-      project_id:project.id,
-      zone_id:activityForm.zone_id || null,
-      actor_id:activityForm.actor_id || null,
-      record_type:activityForm.record_type,
-      title:activityForm.title.trim(),
-      activity_date:activityForm.activity_date,
-      participants_count:activityForm.participants_count ? Number(activityForm.participants_count) : null,
-      evaluation_score:activityForm.evaluation_score ? Number(activityForm.evaluation_score) : null,
-      qualitative_summary:activityForm.qualitative_summary.trim(),
-      tensions_text:activityForm.tensions_text.trim(),
-      opportunities_text:activityForm.opportunities_text.trim(),
-      consultant_notes:activityForm.consultant_notes.trim(),
-      created_at:new Date().toISOString(),
-    };
-    patchProject({activities:[newActivity,...(project.activities||[])]});
-    setSelectedActivityId(nextId);
-    setActivityForm(prev=>({
-      ...prev,
-      title:"",
-      participants_count:"",
-      evaluation_score:"",
-      qualitative_summary:"",
-      tensions_text:"",
-      opportunities_text:"",
-      consultant_notes:"",
     }));
   }
 
-  function createLinkedRecord(kind){
-    if(!selectedActivity) return;
+  async function persistRecord(table, payload, fallback){
+    if(!isSupabaseConfigured) return fallback;
+    return insertProjectRecord(table, payload);
+  }
+
+  async function createLinkedRecord(kind, sourceActivityOverride){
+    const sourceActivity=sourceActivityOverride || selectedActivity;
+    if(!sourceActivity) return null;
     if(kind==="signal"){
-      if(!composer.signal.summary.trim()) return;
-      const newSignal={
+      const summaryText=(composer.signal.summary || sourceActivity.opportunities_text || sourceActivity.tensions_text || sourceActivity.title).trim();
+      if(!summaryText) return null;
+      const draft={
         id:`signal-${Date.now()}`,
         project_id:project.id,
-        source_record_id:selectedActivity.id,
+        source_record_id:sourceActivity.id,
         dimension:composer.signal.dimension,
         signal_type:composer.signal.signal_type,
         severity:composer.signal.severity,
         confidence_score:Number(composer.signal.confidence_score || 0),
-        summary:composer.signal.summary.trim(),
+        summary:summaryText,
         visible_to_client:composer.signal.visible_to_client,
         created_at:new Date().toISOString().slice(0,10),
       };
-      patchProject({signals:[newSignal,...(project.signals||[])]});
+      const saved=await persistRecord("project_signals", draft, draft);
+      patchProject({signals:[saved,...(project.signals||[])]});
       setComposer(prev=>({...prev,signal:{...prev.signal,summary:""}}));
-      return;
+      return saved;
     }
     if(kind==="alert"){
-      if(!composer.alert.title.trim()) return;
-      const newAlert={
+      const draft={
         id:`alert-${Date.now()}`,
         project_id:project.id,
-        source_record_id:selectedActivity.id,
-        zone_id:selectedActivity.zone_id || null,
-        actor_id:selectedActivity.actor_id || null,
+        source_record_id:sourceActivity.id,
+        zone_id:sourceActivity.zone_id || null,
+        actor_id:sourceActivity.actor_id || null,
         severity:composer.alert.severity,
         category:composer.alert.category.trim(),
-        title:composer.alert.title.trim(),
-        description:composer.alert.description.trim(),
+        title:(composer.alert.title || `Seguimiento: ${sourceActivity.title}`).trim(),
+        description:(composer.alert.description || sourceActivity.tensions_text || sourceActivity.qualitative_summary || "").trim(),
         visible_to_client:composer.alert.visible_to_client,
         resolved:false,
         created_at:new Date().toISOString().slice(0,10),
       };
-      patchProject({alerts:[newAlert,...(project.alerts||[])]});
+      const saved=await persistRecord("project_alerts", draft, draft);
+      patchProject({alerts:[saved,...(project.alerts||[])]});
       setComposer(prev=>({...prev,alert:{...prev.alert,title:"",description:""}}));
-      return;
+      return saved;
     }
     if(kind==="commitment"){
-      if(!composer.commitment.title.trim()) return;
-      const newCommitment={
+      const draft={
         id:`commitment-${Date.now()}`,
         project_id:project.id,
-        source_record_id:selectedActivity.id,
-        zone_id:selectedActivity.zone_id || null,
-        actor_id:selectedActivity.actor_id || null,
-        title:composer.commitment.title.trim(),
-        description:composer.commitment.description.trim(),
+        source_record_id:sourceActivity.id,
+        zone_id:sourceActivity.zone_id || null,
+        actor_id:sourceActivity.actor_id || null,
+        title:(composer.commitment.title || `Acción derivada: ${sourceActivity.title}`).trim(),
+        description:(composer.commitment.description || sourceActivity.opportunities_text || sourceActivity.consultant_notes || "").trim(),
         commitment_type:composer.commitment.commitment_type,
         status:composer.commitment.status,
         due_date:composer.commitment.due_date || null,
         visible_to_client:composer.commitment.visible_to_client,
         created_at:new Date().toISOString().slice(0,10),
       };
-      patchProject({commitments:[newCommitment,...(project.commitments||[])]});
+      const saved=await persistRecord("project_commitments", draft, draft);
+      patchProject({commitments:[saved,...(project.commitments||[])]});
       setComposer(prev=>({...prev,commitment:{...prev.commitment,title:"",description:"",due_date:""}}));
+      return saved;
+    }
+    return null;
+  }
+
+  async function createActivity(){
+    if(!activityForm.title.trim() || !activityForm.activity_date) return;
+    setSaving(true);
+    try{
+      const draft={
+        id:`activity-${Date.now()}`,
+        project_id:project.id,
+        zone_id:activityForm.zone_id || null,
+        actor_id:activityForm.actor_id || null,
+        record_type:activityForm.record_type,
+        title:activityForm.title.trim(),
+        activity_date:activityForm.activity_date,
+        participants_count:activityForm.participants_count ? Number(activityForm.participants_count) : null,
+        evaluation_score:activityForm.evaluation_score ? Number(activityForm.evaluation_score) : null,
+        qualitative_summary:activityForm.qualitative_summary.trim(),
+        tensions_text:activityForm.tensions_text.trim(),
+        opportunities_text:activityForm.opportunities_text.trim(),
+        consultant_notes:activityForm.consultant_notes.trim(),
+        created_at:new Date().toISOString(),
+      };
+      const savedActivity=await persistRecord("project_activities", draft, draft);
+      patchProject({activities:[savedActivity,...(project.activities||[])]});
+      setSelectedActivityId(savedActivity.id);
+
+      if(activityForm.auto_signal){
+        setComposer(prev=>({...prev,signal:{...prev.signal,summary:prev.signal.summary || draft.opportunities_text || draft.tensions_text || draft.qualitative_summary}}));
+        await createLinkedRecord("signal", savedActivity);
+      }
+      if(activityForm.auto_alert) await createLinkedRecord("alert", savedActivity);
+      if(activityForm.auto_commitment) await createLinkedRecord("commitment", savedActivity);
+
+      setActivityForm(prev=>({
+        ...prev,
+        title:"",
+        participants_count:"",
+        evaluation_score:"",
+        qualitative_summary:"",
+        tensions_text:"",
+        opportunities_text:"",
+        consultant_notes:"",
+      }));
+      setSyncMsg(isSupabaseConfigured ? "Cambios persistidos en Supabase" : "Cambios guardados en demo local");
+    }catch(error){
+      setSyncMsg(`Error al guardar: ${error.message}`);
+    }finally{
+      setSaving(false);
     }
   }
 
@@ -1564,8 +1678,8 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
       <div className="ph">
         <div className="ph-eye">{client.logo} {client.name} · {MOD[project.module_key]?.label}</div>
         <div className="ph-title">{project.name}</div>
-        <div className="ph-row"><span className={`badge ${statusBadgeCls(project.status)}`}>{project.status}</span><span className="mod-tag" style={{color:moduleAccent(project.module_key),borderColor:moduleAccent(project.module_key)}}>{project.project_type}</span><span style={{fontSize:12,color:"var(--t3)"}}>{project.starts_on} → {project.ends_on}</span></div>
-        <div className="ph-desc muted">Workspace MVP del proyecto: actividades, señales, alertas, compromisos, score y lectura territorial nacen desde el propio proyecto.</div>
+        <div className="ph-row"><span className={`badge ${statusBadgeCls(project.status)}`}>{project.status}</span><span className="mod-tag" style={{color:moduleAccent(project.module_key),borderColor:moduleAccent(project.module_key)}}>{project.project_type}</span><span style={{fontSize:12,color:"var(--t3)"}}>{project.starts_on} → {project.ends_on}</span><span className="badge bb">{syncMsg}</span></div>
+        <div className="ph-desc muted">El sistema registra lo que pasa en el proyecto y te muestra su impacto inmediato en score, señales, alertas, compromisos y territorio.</div>
       </div>
       <div className="tabs" style={{flexWrap:"wrap"}}>{tabs.map(([id,label])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{label}</button>)}</div>
 
@@ -1577,39 +1691,28 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
             <div className="hero-desc">{project.description}</div>
             <div className="hero-tags">{summary.recentSignals.slice(0,4).map(signal=><span key={signal.id} className="mod-tag" style={{color:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green,borderColor:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green}}>{signal.summary}</span>)}</div>
           </div>
-          <div style={{textAlign:"center"}}><ScoreRing val={projectScore} size={128} color={moduleAccent(project.module_key)}/><div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Score recalculado desde actividad + alertas + compromisos + señales</div></div>
+          <div style={{textAlign:"center"}}><ScoreRing val={projectScore} size={128} color={moduleAccent(project.module_key)}/><div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Score explicado por actividad + alertas + compromisos + señales</div></div>
         </div>
         <div className="g4 fu">
           {[["Alertas activas",summary.openAlerts.length,summary.openAlerts.length?brand.amber:"var(--t1)"],["Compromisos abiertos",summary.openCommitments.length,summary.openCommitments.length?brand.blue:"var(--t1)"],["Actividades",(project.activities||[]).length,"var(--t1)"],["Programas activos",summary.activePrograms.length,summary.activePrograms.length?brand.green:"var(--t1)"]].map(([l,v,c])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:c}}>{v}</div><div className="stat-lbl">{l}</div></div>)}
         </div>
         <div className="g2">
           <div className="card fu">
-            <div className="ctitle">Dimensiones o sub-scores</div>
-            {dimensions.map(([label,val])=><Prog key={label} label={labelizeDimension(label)} val={val} color={moduleAccent(project.module_key)}/>) }
-            <div style={{fontSize:12,color:"var(--t3)",marginTop:12}}>Reglas demo: alertas rojas y compromisos abiertos bajan score; evaluación/NPS y señales de oportunidad lo suben.</div>
+            <div className="ctitle">Breakdown por dimensión</div>
+            {dimensions.map(([label,val])=><Prog key={label} label={labelizeDimension(label)} val={val} color={moduleAccent(project.module_key)}/>)}
           </div>
           <div className="card fu">
-            <div className="ctitle">Señales interpretativas recientes</div>
-            {summary.recentSignals.slice(0,5).map(signal=><div key={signal.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{signal.summary}</div><span className={`badge ${signal.severity==="red"?"br":signal.severity==="amber"?"ba":"bg"}`}>{labelizeDimension(signal.dimension||"riesgos")}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>Fuente: {signal.source_record_id || "manual"} · Confianza {signal.confidence_score ?? "—"}</div></div>)}
+            <div className="ctitle">Qué está afectando el score</div>
+            {summary.scoreDrivers.map(driver=><div key={driver.label} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{driver.label}</div><div className="mono" style={{color:driver.impact>=0?brand.green:brand.red}}>{driver.impact>=0?"+":""}{driver.impact}</div></div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>Valor: {driver.value}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:4}}>{driver.detail.join(" · ") || "Sin detalle aún."}</div></div>)}
           </div>
         </div>
         <div className="g2">
-          <div className="card fu">
-            <div className="ctitle">Últimas actividades</div>
-            {summary.recentActivities.slice(0,5).map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)",margin:"4px 0"}}>{item.activity_date} · {item.record_type} · {item.participants_count || 0} participantes</div><div style={{fontSize:13,color:"var(--t2)"}}>{item.qualitative_summary || item.consultant_notes}</div></div>)}
-          </div>
-          <div className="card fu">
-            <div className="ctitle">Programas activos</div>
-            {summary.activePrograms.length ? summary.activePrograms.map(program=><div key={program.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{program.name}</div><span className={`badge ${statusBadgeCls(program.status)}`}>{program.status}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{program.starts_on} → {program.ends_on}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{program.objective}</div></div>) : <div className="muted">No hay programas activos.</div>}
-          </div>
-        </div>
-        <div className="g2">
-          <div className="card fu"><div className="ctitle">Alertas activas</div>{summary.openAlerts.map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div><div style={{fontSize:11,marginTop:4}}>Zona {zoneLookup.get(alert.zone_id)?.name || "sin zona"} · fuente {alert.source_record_id || "manual"}</div></div></div>)}</div>
-          <div className="card fu"><div className="ctitle">Compromisos abiertos</div>{summary.openCommitments.map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)"}}>{item.commitment_type} · vence {item.due_date || "—"} · fuente {item.source_record_id || "manual"}</div></div><span className={`badge ${item.status==="open"?"ba":item.status==="in_progress"?"bb":"bg"}`}>{item.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{item.description}</div></div>)}</div>
+          <div className="card fu"><div className="ctitle">Últimas actividades</div>{summary.recentActivities.slice(0,5).map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)",margin:"4px 0"}}>{item.activity_date} · {item.record_type} · {item.participants_count || 0} participantes</div><div style={{fontSize:13,color:"var(--t2)"}}>{item.qualitative_summary || item.consultant_notes}</div></div>)}</div>
+          <div className="card fu"><div className="ctitle">Consistencia de relaciones</div>{summary.consistencyIssues.length ? summary.consistencyIssues.map((issue,idx)=><div key={idx} className="alert al-r">{issue}</div>) : <div className="alert al-g">No se detectaron entidades huérfanas ni `source_record_id` inválidos.</div>}</div>
         </div>
         <div className="card fu">
           <div className="ctitle">Timeline unificado del proyecto</div>
-          {summary.timeline.map(item=><div key={item.id} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{width:10,height:10,borderRadius:"50%",background:item.color,marginTop:6,flexShrink:0}}/><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className="badge bb">{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span>{item.sourceId&&<span className="mono muted" style={{fontSize:11}}>source_record_id: {item.sourceId}</span>}</div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></div>)}
+          {summary.timeline.map(item=>{ const kindMeta=getTimelineKindMeta(item.kind); return <div key={item.id} style={{display:"flex",gap:12,padding:"12px 14px",borderBottom:"1px solid var(--b1)",borderLeft:`4px solid ${kindMeta.borderColor}`,borderRadius:10,marginBottom:8,background:"var(--s2)"}}><div style={{fontSize:20,lineHeight:1}}>{kindMeta.icon}</div><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className={`badge ${kindMeta.badgeCls}`}>{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span>{item.sourceId&&<span className="mono muted" style={{fontSize:11}}>source_record_id: {item.sourceId}</span>}</div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></div>;})}
         </div>
       </>}
 
@@ -1617,34 +1720,34 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
         <div className="card fu">
           <div className="sec-hdr"><div className="ctitle mb0">Territorio RC</div><select className="fsel" style={{maxWidth:180}} value={territoryFilter} onChange={e=>setTerritoryFilter(e.target.value)}><option value="all">Todas las zonas</option><option value="direct">Influencia directa</option><option value="operational">Operación</option><option value="indirect">Indirecta</option></select></div>
           <div style={{position:"relative",height:340,borderRadius:16,border:"1px solid var(--b1)",background:"linear-gradient(180deg,var(--s2),var(--s3))",overflow:"hidden"}}>
-            {visibleZones.map((zone,idx)=><button key={zone.id} onClick={()=>setSelectedZoneId(zone.id)} style={{position:"absolute",left:`${24 + (idx%2)*190}px`,top:`${36 + Math.floor(idx/2)*120}px`,width:160,height:92,borderRadius:24,background:selectedZoneId===zone.id?`${moduleAccent(project.module_key)}33`:`${moduleAccent(project.module_key)}18`,border:`1px solid ${selectedZoneId===zone.id?moduleAccent(project.module_key):`${moduleAccent(project.module_key)}55`}`,padding:16,textAlign:"left",cursor:"pointer",color:"var(--t1)"}}><div style={{fontFamily:"'Fraunces',serif",fontSize:18}}>{zone.name}</div><div className="mono muted" style={{fontSize:11,marginTop:4}}>{zone.zone_type}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:10}}>{(project.alerts||[]).filter(alert=>alert.zone_id===zone.id && !alert.resolved).length} alertas · {(project.actors||[]).filter(actor=>actor.zone_id===zone.id).length} actores</div></button>)}
+            {visibleZones.map((zone,idx)=>{ const zoneSummary=summary.zoneSummaries.find(item=>item.zoneId===zone.id); return <button key={zone.id} onClick={()=>setSelectedZoneId(zone.id)} style={{position:"absolute",left:`${24 + (idx%2)*190}px`,top:`${36 + Math.floor(idx/2)*120}px`,width:160,height:92,borderRadius:24,background:selectedZoneId===zone.id?`${moduleAccent(project.module_key)}33`:`${moduleAccent(project.module_key)}18`,border:`1px solid ${selectedZoneId===zone.id?moduleAccent(project.module_key):`${moduleAccent(project.module_key)}55`}`,padding:16,textAlign:"left",cursor:"pointer",color:"var(--t1)"}}><div style={{fontFamily:"'Fraunces',serif",fontSize:18}}>{zone.name}</div><div className="mono muted" style={{fontSize:11,marginTop:4}}>{zone.zone_type}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:10}}>Score local {zoneSummary?.score ?? "—"} · {zoneSummary?.alerts.length || 0} alertas</div></button>;})}
             {territoryActors.map((actor,idx)=><div key={actor.id} style={{position:"absolute",left:`${78 + (idx%3)*126}px`,top:`${84 + (idx%2)*138}px`,padding:"6px 10px",borderRadius:16,background:"var(--s1)",border:`1px solid ${actor.relationship_status==="Tensionada"?brand.red:brand.blue}55`,fontSize:12,color:"var(--t1)"}}>{actor.name}</div>)}
           </div>
         </div>
         <div className="card fu">
           <div className="ctitle">Detalle territorial</div>
           {selectedZone ? <>
-            <div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)",marginBottom:6}}>{selectedZone.name}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:10}}><div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)"}}>{selectedZone.name}</div><div className="stat-chip" style={{minWidth:110}}><div className="stat-val" style={{color:sc(selectedZoneSummary?.score || 0)}}>{selectedZoneSummary?.score ?? "—"}</div><div className="stat-lbl">Score local</div></div></div>
             <div className="badge bb" style={{marginBottom:12}}>{selectedZone.zone_type}</div>
             <div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}>{selectedZone.notes}</div>
-            <div className="ctitle-sm">Actores asociados</div>
+            <div className="ctitle-sm">Alertas</div>
+            {(selectedZoneSummary?.alerts || []).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div></div></div>)}
+            <div className="ctitle-sm" style={{marginTop:16}}>Actores</div>
             {(project.actors||[]).filter(actor=>actor.zone_id===selectedZone.id).map(actor=><div key={actor.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{actor.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{actor.actor_type} · Influencia {actor.influence_level}</div></div><span className={`badge ${actor.relationship_status==="Tensionada"?"br":"bb"}`}>{actor.relationship_status}</span></div></div>)}
-            <div className="ctitle-sm" style={{marginTop:16}}>Alertas en la zona</div>
-            {(project.alerts||[]).filter(alert=>alert.zone_id===selectedZone.id).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div></div></div>)}
-            <div className="ctitle-sm" style={{marginTop:16}}>Programas y cobertura</div>
+            <div className="ctitle-sm" style={{marginTop:16}}>Programas</div>
             {(project.programs||[]).filter(program=>program.zone_id===selectedZone.id).map(program=><div key={program.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{program.name}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{program.objective}</div></div>)}
-          </> : <div className="muted">Selecciona una zona para ver actores, alertas y programas asociados.</div>}
+          </> : <div className="muted">Selecciona una zona para ver score local, alertas, actores y programas.</div>}
         </div>
       </div>}
 
       {tab==="activity"&&<div className="g2">
         <div className="card fu">
-          <div className="ctitle">Listado de actividades + timeline</div>
-          {summary.timeline.map(item=><button key={item.id} onClick={()=>item.kind==="Actividad" && setSelectedActivityId(item.sourceId)} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid var(--b1)",background:"transparent",borderLeft:"none",borderRight:"none",borderTop:"none",width:"100%",textAlign:"left",cursor:item.kind==="Actividad"?"pointer":"default"}}><div style={{width:10,height:10,borderRadius:"50%",background:item.color,marginTop:6,flexShrink:0}}/><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className="badge bb">{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span></div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></button>)}
+          <div className="ctitle">Timeline operativo</div>
+          {summary.timeline.map(item=>{ const kindMeta=getTimelineKindMeta(item.kind); return <button key={item.id} onClick={()=>item.kind==="Actividad" && setSelectedActivityId(item.sourceId)} style={{display:"flex",gap:12,padding:"12px 14px",marginBottom:8,border:`1px solid ${kindMeta.borderColor}44`,borderLeft:`4px solid ${kindMeta.borderColor}`,borderRadius:12,background:"var(--s2)",width:"100%",textAlign:"left",cursor:item.kind==="Actividad"?"pointer":"default"}}><div style={{fontSize:20,lineHeight:1}}>{kindMeta.icon}</div><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className={`badge ${kindMeta.badgeCls}`}>{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span></div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></button>;})}
         </div>
         <div className="fu" style={{display:"grid",gap:16}}>
           <div className="card">
-            <div className="ctitle">Detalle de actividad</div>
+            <div className="ctitle">Detalle de actividad e impacto</div>
             {selectedActivity ? <>
               <div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)",marginBottom:6}}>{selectedActivity.title}</div>
               <div style={{fontSize:12,color:"var(--t3)",marginBottom:12}}>{selectedActivity.activity_date} · {selectedActivity.record_type} · actor {actorLookup.get(selectedActivity.actor_id)?.name || "sin actor"}</div>
@@ -1656,38 +1759,29 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
               <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Tensiones:</strong> {selectedActivity.tensions_text || "Sin tensiones registradas"}</div>
               <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Oportunidades:</strong> {selectedActivity.opportunities_text || "Sin oportunidades registradas"}</div>
               <div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}><strong style={{color:"var(--t1)"}}>Notas del consultor:</strong> {selectedActivity.consultant_notes || "Sin notas"}</div>
-              <div className="div"/>
-              <div className="ctitle-sm">Generar señal interpretativa</div>
-              <div className="frow"><div className="fg"><label className="fl">Dimensión</label><input className="fi" value={composer.signal.dimension} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,dimension:e.target.value}}))}/></div><div className="fg"><label className="fl">Tipo</label><select className="fsel" value={composer.signal.signal_type} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,signal_type:e.target.value}}))}><option value="tension">Tensión</option><option value="opportunity">Oportunidad</option><option value="alert">Alerta interpretativa</option></select></div></div>
-              <div className="frow"><div className="fg"><label className="fl">Severidad</label><select className="fsel" value={composer.signal.severity} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,severity:e.target.value}}))}><option value="green">Verde</option><option value="amber">Ámbar</option><option value="red">Roja</option></select></div><div className="fg"><label className="fl">Confianza</label><input className="fi" value={composer.signal.confidence_score} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,confidence_score:e.target.value}}))}/></div></div>
-              <div className="fg"><label className="fl">Resumen de señal</label><textarea className="fta" value={composer.signal.summary} onChange={e=>setComposer(prev=>({...prev,signal:{...prev.signal,summary:e.target.value}}))}/></div>
-              <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("signal")}>+ Crear señal desde actividad</button>
-              <div className="div"/>
-              <div className="ctitle-sm">Generar alerta</div>
-              <div className="frow"><div className="fg"><label className="fl">Severidad</label><select className="fsel" value={composer.alert.severity} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,severity:e.target.value}}))}><option value="green">Verde</option><option value="amber">Ámbar</option><option value="red">Roja</option></select></div><div className="fg"><label className="fl">Categoría</label><input className="fi" value={composer.alert.category} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,category:e.target.value}}))}/></div></div>
-              <div className="fg"><label className="fl">Título alerta</label><input className="fi" value={composer.alert.title} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,title:e.target.value}}))}/></div>
-              <div className="fg"><label className="fl">Descripción</label><textarea className="fta" value={composer.alert.description} onChange={e=>setComposer(prev=>({...prev,alert:{...prev.alert,description:e.target.value}}))}/></div>
-              <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("alert")}>+ Crear alerta desde actividad</button>
-              <div className="div"/>
-              <div className="ctitle-sm">Generar compromiso / issue</div>
-              <div className="frow"><div className="fg"><label className="fl">Tipo</label><select className="fsel" value={composer.commitment.commitment_type} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,commitment_type:e.target.value}}))}><option value="followup">Follow-up</option><option value="commitment">Compromiso</option><option value="issue">Issue</option><option value="request">Request</option><option value="complaint">Complaint</option></select></div><div className="fg"><label className="fl">Estado</label><select className="fsel" value={composer.commitment.status} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,status:e.target.value}}))}><option value="open">Open</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option></select></div></div>
-              <div className="fg"><label className="fl">Título compromiso</label><input className="fi" value={composer.commitment.title} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,title:e.target.value}}))}/></div>
-              <div className="frow"><div className="fg"><label className="fl">Vencimiento</label><input type="date" className="fi" value={composer.commitment.due_date} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,due_date:e.target.value}}))}/></div><div className="fg"><label className="fl">Visible cliente</label><select className="fsel" value={String(composer.commitment.visible_to_client)} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,visible_to_client:e.target.value === "true"}}))}><option value="true">Sí</option><option value="false">No</option></select></div></div>
-              <div className="fg"><label className="fl">Descripción</label><textarea className="fta" value={composer.commitment.description} onChange={e=>setComposer(prev=>({...prev,commitment:{...prev.commitment,description:e.target.value}}))}/></div>
-              <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("commitment")}>+ Crear compromiso desde actividad</button>
+              <div className="btn-row" style={{marginTop:0}}>
+                <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("signal")}>Crear señal</button>
+                <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("alert")}>Crear alerta</button>
+                <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("commitment")}>Crear compromiso</button>
+              </div>
             </> : <div className="muted">Selecciona una actividad para ver su detalle.</div>}
           </div>
           <div className="card">
-            <div className="ctitle">Nueva actividad manual</div>
+            <div className="ctitle">Registrar actividad y ver impacto</div>
             <div className="frow"><div className="fg"><label className="fl">Tipo de actividad</label><select className="fsel" value={activityForm.record_type} onChange={e=>updateForm("record_type",e.target.value)}><option value="meeting">Meeting</option><option value="workshop">Workshop</option><option value="interview">Interview</option><option value="site_visit">Site visit</option><option value="internal_session">Internal session</option></select></div><div className="fg"><label className="fl">Fecha</label><input type="date" className="fi" value={activityForm.activity_date} onChange={e=>updateForm("activity_date",e.target.value)}/></div></div>
             <div className="fg"><label className="fl">Título</label><input className="fi" value={activityForm.title} onChange={e=>updateForm("title",e.target.value)}/></div>
             <div className="frow3"><div className="fg"><label className="fl">Participantes</label><input className="fi" value={activityForm.participants_count} onChange={e=>updateForm("participants_count",e.target.value)}/></div><div className="fg"><label className="fl">Evaluación / NPS</label><input className="fi" value={activityForm.evaluation_score} onChange={e=>updateForm("evaluation_score",e.target.value)}/></div><div className="fg"><label className="fl">Zona</label><select className="fsel" value={activityForm.zone_id} onChange={e=>updateForm("zone_id",e.target.value)}><option value="">Sin zona</option>{(project.zones||[]).map(zone=><option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></div></div>
-            <div className="fg"><label className="fl">Participantes / actor principal</label><select className="fsel" value={activityForm.actor_id} onChange={e=>updateForm("actor_id",e.target.value)}><option value="">Sin actor</option>{(project.actors||[]).map(actor=><option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
+            <div className="fg"><label className="fl">Actor principal</label><select className="fsel" value={activityForm.actor_id} onChange={e=>updateForm("actor_id",e.target.value)}><option value="">Sin actor</option>{(project.actors||[]).map(actor=><option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
             <div className="fg"><label className="fl">Resumen cualitativo</label><textarea className="fta" value={activityForm.qualitative_summary} onChange={e=>updateForm("qualitative_summary",e.target.value)}/></div>
             <div className="fg"><label className="fl">Tensiones</label><textarea className="fta" value={activityForm.tensions_text} onChange={e=>updateForm("tensions_text",e.target.value)}/></div>
             <div className="fg"><label className="fl">Oportunidades</label><textarea className="fta" value={activityForm.opportunities_text} onChange={e=>updateForm("opportunities_text",e.target.value)}/></div>
             <div className="fg"><label className="fl">Notas del consultor</label><textarea className="fta" value={activityForm.consultant_notes} onChange={e=>updateForm("consultant_notes",e.target.value)}/></div>
-            <button className="btn btn-p btn-sm" onClick={createActivity}>Registrar actividad</button>
+            <div className="frow3">
+              <label className="stat-chip" style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={activityForm.auto_signal} onChange={e=>updateForm("auto_signal",e.target.checked)}/><span>Crear señal automática</span></label>
+              <label className="stat-chip" style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={activityForm.auto_alert} onChange={e=>updateForm("auto_alert",e.target.checked)}/><span>Crear alerta automática</span></label>
+              <label className="stat-chip" style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={activityForm.auto_commitment} onChange={e=>updateForm("auto_commitment",e.target.checked)}/><span>Crear compromiso automático</span></label>
+            </div>
+            <button className="btn btn-p btn-sm" onClick={createActivity} disabled={saving}>{saving?"Guardando…":"Registrar actividad y aplicar impacto"}</button>
           </div>
         </div>
       </div>}
@@ -2343,11 +2437,18 @@ export default function App(){
   function openProject(clientId, projectId){ setSelClientId(clientId); setSelProjectId(projectId); setPage("project"); }
   function updateProjectRecord(updatedProject){
     setClients(prev=>prev.map(client=>{
-      const matchesClient = client.id === selClientId || client.projects?.some(item=>item.id===updatedProject.id);
+      const targetProject = typeof updatedProject === "function"
+        ? client.projects?.find(item=>item.id===selProjectId)
+        : updatedProject;
+      if(!targetProject) return client;
+      const nextProject = typeof updatedProject === "function"
+        ? updatedProject(targetProject)
+        : updatedProject;
+      const matchesClient = client.id === selClientId || client.projects?.some(item=>item.id===nextProject.id);
       if(!matchesClient) return client;
       return {
         ...client,
-        projects:(client.projects||[]).map(item=>item.id===updatedProject.id ? updatedProject : item),
+        projects:(client.projects||[]).map(item=>item.id===nextProject.id ? nextProject : item),
       };
     }));
   }

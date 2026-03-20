@@ -52,3 +52,104 @@ export function getAuthDebugInfo() {
     redirectUrl: getOAuthRedirectUrl() || "(sin redirect)",
   };
 }
+
+const PROJECT_TABLES = {
+  zones: "project_zones",
+  actors: "project_actors",
+  programs: "project_programs",
+  activities: "project_activities",
+  alerts: "project_alerts",
+  signals: "project_signals",
+  commitments: "project_commitments",
+  scores: "project_scores",
+};
+
+function singleResult(data) {
+  return Array.isArray(data) ? (data[0] || null) : (data || null);
+}
+
+export async function fetchProjectWorkspace(projectId) {
+  if (!supabase || !projectId) return null;
+
+  const [
+    projectRes,
+    zonesRes,
+    actorsRes,
+    programsRes,
+    activitiesRes,
+    alertsRes,
+    signalsRes,
+    commitmentsRes,
+    scoresRes,
+  ] = await Promise.all([
+    supabase.from("projects").select("*").eq("id", projectId).limit(1),
+    supabase.from(PROJECT_TABLES.zones).select("*").eq("project_id", projectId).order("created_at", { ascending: true }),
+    supabase.from(PROJECT_TABLES.actors).select("*").eq("project_id", projectId).order("created_at", { ascending: true }),
+    supabase.from(PROJECT_TABLES.programs).select("*").eq("project_id", projectId).order("created_at", { ascending: true }),
+    supabase.from(PROJECT_TABLES.activities).select("*").eq("project_id", projectId).order("activity_date", { ascending: false }),
+    supabase.from(PROJECT_TABLES.alerts).select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
+    supabase.from(PROJECT_TABLES.signals).select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
+    supabase.from(PROJECT_TABLES.commitments).select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
+    supabase.from(PROJECT_TABLES.scores).select("*").eq("project_id", projectId).order("updated_at", { ascending: false }).limit(1),
+  ]);
+
+  const responses = [projectRes, zonesRes, actorsRes, programsRes, activitiesRes, alertsRes, signalsRes, commitmentsRes, scoresRes];
+  const firstError = responses.find((response) => response.error)?.error;
+  if (firstError) throw firstError;
+
+  const project = singleResult(projectRes.data);
+  if (!project) return null;
+
+  return {
+    ...project,
+    zones: zonesRes.data || [],
+    actors: actorsRes.data || [],
+    programs: programsRes.data || [],
+    activities: activitiesRes.data || [],
+    alerts: alertsRes.data || [],
+    signals: signalsRes.data || [],
+    commitments: commitmentsRes.data || [],
+    scores: singleResult(scoresRes.data),
+  };
+}
+
+export async function insertProjectRecord(table, payload) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from(table).insert(payload).select().limit(1);
+  if (error) throw error;
+  return singleResult(data);
+}
+
+export async function upsertProjectScore(projectId, scorePayload) {
+  if (!supabase || !projectId) return null;
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from(PROJECT_TABLES.scores)
+    .select("id")
+    .eq("project_id", projectId)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (existingError) throw existingError;
+
+  const existing = singleResult(existingRows);
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from(PROJECT_TABLES.scores)
+      .update(scorePayload)
+      .eq("id", existing.id)
+      .select()
+      .limit(1);
+    if (error) throw error;
+    return singleResult(data);
+  }
+
+  const { data, error } = await supabase
+    .from(PROJECT_TABLES.scores)
+    .insert({ project_id: projectId, ...scorePayload })
+    .select()
+    .limit(1);
+
+  if (error) throw error;
+  return singleResult(data);
+}
