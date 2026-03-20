@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
-import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo, fetchProjectWorkspace, insertProjectRecord, upsertProjectScore } from "./lib/supabase";
+import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo, fetchProjectWorkspace, insertProjectRecord, upsertProjectScore, fetchClientFiles, insertClientFile } from "./lib/supabase";
 import ApprovalPanel from "./components/ApprovalPanel";
 import PendingAccess from "./components/PendingAccess";
 import { useAuthGuard, fetchPendingUsers, fetchApprovedUsers, fetchClients, approveUser, disableUser, reEnableUser } from "./hooks/useAuthGuard";
@@ -1792,7 +1792,7 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
       {tab==="alerts"&&<div className="card fu"><div className="ctitle">Alertas del proyecto</div>{(project.alerts||[]).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div><div style={{fontSize:11,marginTop:4}}>source_record_id: {alert.source_record_id || "manual"}</div></div></div>)}</div>}
       {tab==="commitments"&&<div className="card fu"><div className="ctitle">Compromisos / issues</div>{(project.commitments||[]).map(item=><div key={item.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)"}}>{item.commitment_type} · vencimiento {item.due_date||"—"} · source_record_id {item.source_record_id || "manual"}</div></div><span className={`badge ${item.status==="open"?"ba":item.status==="in_progress"?"bb":"bg"}`}>{item.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{item.description}</div></div>)}</div>}
       {tab==="reports"&&<div className="card fu"><div className="ctitle">Señales e interpretación</div>{(project.signals||[]).map(signal=><div key={signal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{signal.summary}</div><span className={`badge ${signal.severity==="red"?"br":signal.severity==="amber"?"ba":"bg"}`}>{signal.dimension}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:6}}>Confidence {signal.confidence_score||"—"} · visible cliente: {signal.visible_to_client?"sí":"no"} · source_record_id {signal.source_record_id || "manual"}</div></div>)}</div>}
-      {tab==="files"&&<div className="card fu"><div className="ctitle">Archivos visibles</div>{(project.files||[]).map((f,i)=><div key={i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div></div>)}</div>}
+      {tab==="files"&&<div className="card fu"><div className="ctitle">Archivos visibles</div>{(project.files||[]).map((f,i)=><div key={f.id || i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score} · {f.scope_label || (f.project_id ? "Proyecto" : "Cliente")}</div></div></div>)}</div>}
     </div>
   );
 }
@@ -2051,6 +2051,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
   const [weights,setWeights]=useState(null);
   const [saved,setSaved]=useState(false);
   const [uploadModule,setUploadModule]=useState("RC");
+  const [uploadProjectScope,setUploadProjectScope]=useState("client");
   const [newUserMail,setNewUserMail]=useState("");
   const [uploadMsg,setUploadMsg]=useState("");
   const [approvalPendingUsers,setApprovalPendingUsers]=useState([]);
@@ -2059,8 +2060,28 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
   const [approvalMsg,setApprovalMsg]=useState("");
   const [approvalLoaded,setApprovalLoaded]=useState(false);
   const client=clients.find(c=>c.id===selId);
+  const uploadProjectId=uploadProjectScope==="client" ? null : uploadProjectScope;
 
   useEffect(()=>{ if(client) setWeights({...client.weights}); },[selId,client]);
+  useEffect(()=>{ setUploadProjectScope("client"); },[selId]);
+
+  useEffect(()=>{
+    let active=true;
+    async function loadClientFiles(){
+      if(!client) return;
+      if(!supabase) return;
+      try{
+        const files = await fetchClientFiles(String(client.id));
+        if(!active) return;
+        setClients(prev=>prev.map(entry=>entry.id===client.id?{...entry,files}:entry));
+      }catch(error){
+        if(!active) return;
+        setUploadMsg(`No se pudo recargar client_files: ${error.message}`);
+      }
+    }
+    loadClientFiles();
+    return ()=>{ active=false; };
+  }, [selId, client?.id]);
 
 
   useEffect(()=>{
@@ -2207,7 +2228,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
     const bucket = moduleKeyToBucket(moduleKey);
     const created = [];
     for (const file of uploadedFiles) {
-      let storagePath = `${client.id || selId}/${Date.now()}-${file.name}`;
+      let storagePath = `${client.id || selId}/${uploadProjectId || "client"}/${Date.now()}-${file.name}`;
       if (supabase && file.raw) {
         const { error } = await supabase.storage.from(bucket).upload(storagePath, file.raw, { upsert: false });
         if (error) {
@@ -2215,7 +2236,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
           continue;
         }
       }
-      created.push({
+      const draft={
         name:file.name,
         type:file.type,
         date:`${d.getDate()} Mar 2025`,
@@ -2224,11 +2245,36 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
         status:supabase ? "uploaded" : "local-only",
         storage_bucket:bucket,
         storage_path:storagePath,
-      });
+        project_id:uploadProjectId,
+        scope:uploadProjectId ? "project" : "client",
+        scope_label:uploadProjectId ? "Proyecto" : "Cliente",
+      };
+      if (supabase) {
+        try {
+          const saved = await insertClientFile({
+            client_id:String(client.id),
+            project_id:uploadProjectId,
+            module_key:moduleKey,
+            storage_bucket:bucket,
+            storage_path:storagePath,
+            original_name:file.name,
+            mime_type:file.raw?.type || file.type || null,
+            size_bytes:file.raw?.size || null,
+            ai_score:70,
+            status:"uploaded",
+          });
+          created.push(saved || draft);
+        } catch (error) {
+          setUploadMsg(`Error guardando metadata de ${file.name}: ${error.message}`);
+          continue;
+        }
+      } else {
+        created.push(draft);
+      }
     }
     if (created.length) {
       setClients(p=>p.map(c=>c.id===selId?{...c,files:[...created,...c.files]}:c));
-      setUploadMsg(`${created.length} archivo(s) cargado(s) correctamente en ${bucket}.`);
+      setUploadMsg(`${created.length} archivo(s) cargado(s) correctamente en ${bucket} para alcance ${uploadProjectId ? "proyecto" : "cliente"}.`);
     }
   }
   function addClient(){
@@ -2294,7 +2340,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
 
       {tab==="approvals"&&<div className="card fu"><div className="ctitle">Aprobación y acceso de usuarios cliente</div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}>Aprueba usuarios nuevos, asígnalos a una empresa y reactiva/desactiva accesos sin salir del Centro de Control.</div>{approvalLoaded&&<ApprovalPanel pendingUsers={approvalPendingUsers} approvedUsers={approvalApprovedUsers} clients={approvalClients} onApprove={handleApproveUser} onDisable={handleDisableUser} onReEnable={handleReEnableUser} statusMessage={approvalMsg} isUsingMocks={!supabase}/>}</div>}
 
-      {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos desde tu disco local al bucket del módulo seleccionado. Próxima iteración: selector embebido de archivos ya existentes en Storage.</div>{uploadMsg&&<div className="alert al-b">{uploadMsg}</div>}<div className="btn-row"><button className="btn btn-g btn-sm" onClick={()=>setUploadMsg(`Abrir selector de Storage para bucket ${moduleKeyToBucket(uploadModule.toLowerCase())} (pendiente de interfaz dedicada).`)}>Abrir archivos desde Storage</button></div><FileUpload onApply={applyFile}/></div>}
+      {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select><span className="muted" style={{fontSize:12}}>Alcance:</span><select className="fsel" style={{maxWidth:320}} value={uploadProjectScope} onChange={e=>setUploadProjectScope(e.target.value)}><option value="client">Cliente general</option>{(client.projects||[]).map(project=><option key={project.id} value={project.id}>Proyecto · {project.name}</option>)}</select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos desde tu disco local al bucket del módulo seleccionado. Puedes guardarlos a nivel cliente general o ligados a un proyecto específico vía `project_id`.</div>{uploadMsg&&<div className="alert al-b">{uploadMsg}</div>}<div className="btn-row"><button className="btn btn-g btn-sm" onClick={()=>setUploadMsg(`Abrir selector de Storage para bucket ${moduleKeyToBucket(uploadModule.toLowerCase())} (pendiente de interfaz dedicada).`)}>Abrir archivos desde Storage</button></div><FileUpload onApply={applyFile}/></div>}
 
       {tab==="heatmap"&&<div className="card fu"><div className="ctitle">Mapa de calor de riesgos — {client.name}</div><div className="alert al-b">ℹ️ El mapa se recalcula por módulos activos. Si solo hay RC, no se muestran dimensiones ambientales.</div><RiskHeatmap client={client}/></div>}
 
@@ -2303,7 +2349,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
       {tab==="admin"&&<div className="fu"><div className="card" style={{marginBottom:16}}><div className="ctitle">Gestión de módulos por cliente</div>{clients.map(c=><div key={c.id} className="client-admin-row"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div><div style={{fontSize:14,fontFamily:"'Fraunces',serif",color:"var(--t1)"}}>{c.logo} {c.name}</div><div style={{fontSize:11,color:"var(--t3)",fontFamily:"'JetBrains Mono',monospace"}}>{c.industry} · {c.period}</div></div><span className={`badge ${c.published?"bg":"ba"}`}>{c.published?"Publicado":"Borrador"}</span></div><div style={{display:"flex",gap:20}}>{Object.entries(MOD).map(([key,m])=><div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><label className="tgl"><input type="checkbox" checked={c.modules[key]} onChange={()=>{setSelId(c.id);toggleMod(key);}}/><div className="tgl-sl"/></label><span style={{fontSize:11,color:c.modules[key]?m.color:"var(--t4)"}}>{m.short}</span></div>)}</div></div>)}</div><div className="card"><div className="ctitle">Usuarios y accesos</div><div className="alert al-b">Esta lista es por cliente. Cliente activo: {client.name}.</div><table className="tbl"><thead><tr><th>Email</th><th>Empresa</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>{[[session?.email || "Sin email","THO Consultora",session?.role === "super_consultant" ? "Super Admin" : "Consultora",session?.approvalStatus || "Activo"],...(client.authorized_users||[]).map(e=>[e,client.name,"Cliente","Activo"])].map(([e,emp,r,s],i)=><tr key={i}><td style={{color:"var(--t1)"}}>{e}</td><td>{emp}</td><td><span className={`badge ${r.includes("Admin")?"bb":"bg"}`}>{r}</span></td><td><span className="badge bg">{s}</span></td><td>{emp!=="THO Consultora"&&<button className="btn btn-d btn-sm" onClick={()=>setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:(c.authorized_users||[]).filter(m=>m!==e)}:c))}>Quitar</button>}</td></tr>)}</tbody></table><div style={{display:"flex",gap:8,marginTop:12}}><input className="fi" placeholder="nuevo.mail@empresa.cl" value={newUserMail} onChange={e=>setNewUserMail(e.target.value)}/><button className="btn btn-g btn-sm" onClick={()=>{if(!newUserMail.includes('@'))return;setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:[...(c.authorized_users||[]),newUserMail]}:c));setNewUserMail("");}}>+ Invitar usuario</button></div></div></div>}
 
       {tab==="messages"&&<div className="card fu"><div className="ctitle">Mensajes de {client.name}</div><Messages messages={client.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div>}
-      {tab==="files"&&<div className="card fu"><div className="sec-hdr"><div className="ctitle mb0">Historial de archivos</div><span className="badge bb">{client.files.length} archivos</span></div>{client.files.map((f,i)=><div key={i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div></div>)}</div>}
+      {tab==="files"&&<div className="card fu"><div className="sec-hdr"><div className="ctitle mb0">Historial de archivos</div><span className="badge bb">{client.files.length} archivos</span></div>{client.files.map((f,i)=><div key={f.id || i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score} · {f.scope_label || (f.project_id ? "Proyecto" : "Cliente")}</div></div></div>)}</div>}
     </div>
   );
 }

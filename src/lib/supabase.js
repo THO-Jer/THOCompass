@@ -64,6 +64,8 @@ const PROJECT_TABLES = {
   scores: "project_scores",
 };
 
+const FILE_TABLE = "client_files";
+
 function singleResult(data) {
   return Array.isArray(data) ? (data[0] || null) : (data || null);
 }
@@ -72,11 +74,28 @@ function isUuid(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function normalizeClientFile(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    name: row.original_name || row.name,
+    type: row.mime_type?.includes("pdf") ? "pdf" : row.mime_type?.includes("sheet") ? "excel" : row.mime_type?.includes("word") ? "doc" : row.type || "file",
+    module: (row.module_key || row.module || "rc").toUpperCase(),
+    date: row.created_at || row.date,
+    scope: row.project_id ? "project" : "client",
+    scope_label: row.project_id ? "Proyecto" : "Cliente",
+  };
+}
+
 export async function fetchProjectWorkspace(projectId) {
   if (!supabase || !projectId) return null;
 
+  const projectRes = await supabase.from("projects").select("*").eq("id", projectId).limit(1);
+  if (projectRes.error) throw projectRes.error;
+  const project = singleResult(projectRes.data);
+  if (!project) return null;
+
   const [
-    projectRes,
     zonesRes,
     actorsRes,
     programsRes,
@@ -85,8 +104,8 @@ export async function fetchProjectWorkspace(projectId) {
     signalsRes,
     commitmentsRes,
     scoresRes,
+    filesRes,
   ] = await Promise.all([
-    supabase.from("projects").select("*").eq("id", projectId).limit(1),
     supabase.from(PROJECT_TABLES.zones).select("*").eq("project_id", projectId).order("created_at", { ascending: true }),
     supabase.from(PROJECT_TABLES.actors).select("*").eq("project_id", projectId).order("created_at", { ascending: true }),
     supabase.from(PROJECT_TABLES.programs).select("*").eq("project_id", projectId).order("created_at", { ascending: true }),
@@ -95,14 +114,12 @@ export async function fetchProjectWorkspace(projectId) {
     supabase.from(PROJECT_TABLES.signals).select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
     supabase.from(PROJECT_TABLES.commitments).select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
     supabase.from(PROJECT_TABLES.scores).select("*").eq("project_id", projectId).order("updated_at", { ascending: false }).limit(1),
+    supabase.from(FILE_TABLE).select("*").eq("client_id", project.client_id).or(`project_id.eq.${projectId},project_id.is.null`).order("created_at", { ascending: false }),
   ]);
 
-  const responses = [projectRes, zonesRes, actorsRes, programsRes, activitiesRes, alertsRes, signalsRes, commitmentsRes, scoresRes];
+  const responses = [zonesRes, actorsRes, programsRes, activitiesRes, alertsRes, signalsRes, commitmentsRes, scoresRes, filesRes];
   const firstError = responses.find((response) => response.error)?.error;
   if (firstError) throw firstError;
-
-  const project = singleResult(projectRes.data);
-  if (!project) return null;
 
   return {
     ...project,
@@ -114,6 +131,7 @@ export async function fetchProjectWorkspace(projectId) {
     signals: signalsRes.data || [],
     commitments: commitmentsRes.data || [],
     scores: singleResult(scoresRes.data),
+    files: (filesRes.data || []).map(normalizeClientFile),
   };
 }
 
@@ -156,6 +174,23 @@ export async function upsertProjectScore(projectId, scorePayload) {
     .select()
     .limit(1);
 
+  if (error) throw error;
+  return singleResult(data);
+}
+
+export async function fetchClientFiles(clientId, projectId = null) {
+  if (!supabase || !clientId) return [];
+  let query = supabase.from(FILE_TABLE).select("*").eq("client_id", clientId);
+  if (projectId) query = query.or(`project_id.eq.${projectId},project_id.is.null`);
+  return query.order("created_at", { ascending: false }).then(({ data, error }) => {
+    if (error) throw error;
+    return (data || []).map(normalizeClientFile);
+  });
+}
+
+export async function insertClientFile(payload) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from(FILE_TABLE).insert(payload).select().limit(1);
   if (error) throw error;
   return singleResult(data);
 }
