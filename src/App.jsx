@@ -1307,6 +1307,17 @@ function ensureUuidOrThrow(value, label){
   if(value == null || value === "") return;
   if(!isUuid(String(value))) throw new Error(`${label} inválido para Supabase: ${value}`);
 }
+function findMatchingRemoteClient(localClient, remoteClients){
+  if(!localClient) return null;
+  return remoteClients.find(remoteClient=>remoteClient.name?.trim().toLowerCase() === localClient.name?.trim().toLowerCase()) || null;
+}
+function findMatchingRemoteProject(localProject, remoteProjects){
+  if(!localProject || !remoteProjects?.length) return remoteProjects?.[0] || null;
+  const exactName = remoteProjects.find(project=>project.name?.trim().toLowerCase() === localProject.name?.trim().toLowerCase());
+  if(exactName) return exactName;
+  const byModule = remoteProjects.find(project=>project.module_key === localProject.module_key && project.project_type === localProject.project_type);
+  return byModule || remoteProjects[0] || null;
+}
 function getTimelineKindMeta(kind){
   if(kind==="Actividad") return { icon:"📝", badgeCls:"bb", borderColor:brand.blue };
   if(kind==="Alerta") return { icon:"⚠", badgeCls:"br", borderColor:brand.red };
@@ -2445,18 +2456,29 @@ export default function App(){
   const activeProjects=activeClientForProjects?.projects || [];
   const activeProject=activeProjects.find(p=>p.id===selProjectId) || activeProjects[0] || null;
   const hasClients=clients.length>0;
+  const localSelectedClientRef = useRef(null);
+  const localSelectedProjectRef = useRef(null);
+
+  useEffect(()=>{
+    const localSelectedClient = (isC ? selClient : clientData) || clients[0] || null;
+    localSelectedClientRef.current = localSelectedClient;
+    localSelectedProjectRef.current = localSelectedClient?.projects?.find(project=>project.id===selProjectId) || localSelectedClient?.projects?.[0] || null;
+  }, [isC, selClient, clientData, clients, selProjectId]);
 
   useEffect(()=>{
     let active = true;
     async function loadRemoteClients(){
       if(!isSupabaseConfigured || !session) return;
       try{
+        const localSelectedClient = localSelectedClientRef.current;
+        const localSelectedProject = localSelectedProjectRef.current;
         const remoteClients = await fetchWorkspaceClients();
         if(!active || !remoteClients.length) return;
+        const matchedRemoteClient = findMatchingRemoteClient(localSelectedClient, remoteClients) || remoteClients[0];
+        const matchedRemoteProject = findMatchingRemoteProject(localSelectedProject, matchedRemoteClient?.projects || []);
         setClients(remoteClients);
-        setSelClientId(prev=>remoteClients.some(client=>client.id===prev) ? prev : remoteClients[0].id);
-        const firstProjects = remoteClients[0]?.projects || [];
-        if(firstProjects.length) setSelProjectId(prev=>remoteClients.some(client=>client.projects?.some(project=>project.id===prev)) ? prev : firstProjects[0].id);
+        setSelClientId(matchedRemoteClient?.id || remoteClients[0].id);
+        setSelProjectId(matchedRemoteProject?.id || null);
       }catch(error){
         if(!active) return;
         setAuthMsg(`Supabase activo, pero no se pudieron cargar clientes/proyectos remotos: ${error.message}`);
