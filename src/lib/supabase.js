@@ -70,7 +70,7 @@ function singleResult(data) {
   return Array.isArray(data) ? (data[0] || null) : (data || null);
 }
 
-function isUuid(value) {
+export function isUuid(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
@@ -133,6 +133,50 @@ export async function fetchProjectWorkspace(projectId) {
     scores: singleResult(scoresRes.data),
     files: (filesRes.data || []).map(normalizeClientFile),
   };
+}
+
+export async function fetchWorkspaceClients() {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("clients")
+    .select(`
+      id,
+      name,
+      industry,
+      contact,
+      email,
+      logo,
+      published,
+      internal_notes,
+      projects (
+        id,
+        client_id,
+        name,
+        module_key,
+        project_type,
+        description,
+        status,
+        starts_on,
+        ends_on
+      )
+    `)
+    .order("name");
+
+  if (error) throw error;
+
+  return (data || []).map((client) => ({
+    ...client,
+    logo: client.logo || "🧭",
+    modules: {
+      rc: (client.projects || []).some((project) => project.module_key === "rc"),
+      do: (client.projects || []).some((project) => project.module_key === "do"),
+      esg: (client.projects || []).some((project) => project.module_key === "esg"),
+    },
+    projects: client.projects || [],
+    files: [],
+    messages: [],
+    weights: { rc: 40, do: 35, esg: 25 },
+  }));
 }
 
 export async function insertProjectRecord(table, payload) {

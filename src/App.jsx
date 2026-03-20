@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
-import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo, fetchProjectWorkspace, insertProjectRecord, upsertProjectScore, fetchClientFiles, insertClientFile } from "./lib/supabase";
+import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo, fetchProjectWorkspace, insertProjectRecord, upsertProjectScore, fetchClientFiles, insertClientFile, fetchWorkspaceClients, isUuid } from "./lib/supabase";
 import ApprovalPanel from "./components/ApprovalPanel";
 import PendingAccess from "./components/PendingAccess";
 import { useAuthGuard, fetchPendingUsers, fetchApprovedUsers, fetchClients, approveUser, disableUser, reEnableUser } from "./hooks/useAuthGuard";
@@ -1303,6 +1303,10 @@ function projectTabs(project){
 function clampScore(value){ return Math.max(0, Math.min(100, Math.round(value))); }
 function labelizeDimension(key){ return key.replaceAll("_"," ").replace(/(^|\s)\S/g, c=>c.toUpperCase()); }
 function severityWeight(severity){ return severity==="red"?12:severity==="amber"?6:severity==="green"?-2:0; }
+function ensureUuidOrThrow(value, label){
+  if(value == null || value === "") return;
+  if(!isUuid(String(value))) throw new Error(`${label} inválido para Supabase: ${value}`);
+}
 function getTimelineKindMeta(kind){
   if(kind==="Actividad") return { icon:"📝", badgeCls:"bb", borderColor:brand.blue };
   if(kind==="Alerta") return { icon:"⚠", badgeCls:"br", borderColor:brand.red };
@@ -1513,6 +1517,10 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
         setSyncMsg("Modo demo local");
         return;
       }
+      if(!isUuid(String(project.id))){
+        setSyncMsg(`Proyecto local no persistido (${project.id}). Selecciona un proyecto remoto UUID para guardar en Supabase.`);
+        return;
+      }
       try{
         const remoteProject = await fetchProjectWorkspace(project.id);
         if(cancelled || !remoteProject) return;
@@ -1529,6 +1537,7 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
 
   useEffect(()=>{
     if(!isSupabaseConfigured) return;
+    if(!isUuid(String(project.id))) return;
     upsertProjectScore(project.id, {
       overall_score: summary.overallScore,
       status_label: summary.statusLabel,
@@ -1554,6 +1563,12 @@ function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
 
   async function persistRecord(table, payload, fallback){
     if(!isSupabaseConfigured) return fallback;
+    ensureUuidOrThrow(project.id, "project_id");
+    ensureUuidOrThrow(payload.project_id, "project_id");
+    ensureUuidOrThrow(payload.zone_id, "zone_id");
+    ensureUuidOrThrow(payload.actor_id, "actor_id");
+    ensureUuidOrThrow(payload.program_id, "program_id");
+    ensureUuidOrThrow(payload.source_record_id, "source_record_id");
     return insertProjectRecord(table, payload);
   }
 
@@ -2227,6 +2242,15 @@ function ConsultantPanel({clients,setClients,selId,setSelId,session}){
     const moduleKey = uploadModule.toLowerCase();
     const bucket = moduleKeyToBucket(moduleKey);
     const created = [];
+    if (supabase) {
+      try {
+        ensureUuidOrThrow(String(client.id), "client_id");
+        ensureUuidOrThrow(uploadProjectId, "project_id");
+      } catch (error) {
+        setUploadMsg(`Carga abortada: ${error.message}`);
+        return;
+      }
+    }
     for (const file of uploadedFiles) {
       let storagePath = `${client.id || selId}/${uploadProjectId || "client"}/${Date.now()}-${file.name}`;
       if (supabase && file.raw) {
@@ -2421,6 +2445,26 @@ export default function App(){
   const activeProjects=activeClientForProjects?.projects || [];
   const activeProject=activeProjects.find(p=>p.id===selProjectId) || activeProjects[0] || null;
   const hasClients=clients.length>0;
+
+  useEffect(()=>{
+    let active = true;
+    async function loadRemoteClients(){
+      if(!isSupabaseConfigured || !session) return;
+      try{
+        const remoteClients = await fetchWorkspaceClients();
+        if(!active || !remoteClients.length) return;
+        setClients(remoteClients);
+        setSelClientId(prev=>remoteClients.some(client=>client.id===prev) ? prev : remoteClients[0].id);
+        const firstProjects = remoteClients[0]?.projects || [];
+        if(firstProjects.length) setSelProjectId(prev=>remoteClients.some(client=>client.projects?.some(project=>project.id===prev)) ? prev : firstProjects[0].id);
+      }catch(error){
+        if(!active) return;
+        setAuthMsg(`Supabase activo, pero no se pudieron cargar clientes/proyectos remotos: ${error.message}`);
+      }
+    }
+    loadRemoteClients();
+    return ()=>{ active=false; };
+  }, [session?.email, auth.status]);
 
   useEffect(()=>{
     const nextProjects=(isC?selClient:clientData)?.projects || [];
