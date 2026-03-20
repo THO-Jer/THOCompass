@@ -97,6 +97,142 @@ create table if not exists public.clients (
 );
 
 -- ============================================================
+-- 3.b PROJECTS (nueva unidad principal)
+-- ============================================================
+create table if not exists public.projects (
+  id                uuid        primary key default gen_random_uuid(),
+  client_id         uuid        not null references public.clients(id) on delete cascade,
+  name              text        not null,
+  module_key        text        not null check (module_key in ('rc','do','esg')),
+  project_type      text        not null check (project_type in ('territorial','organizational','programmatic')),
+  description       text        default '',
+  status            text        not null default 'draft' check (status in ('draft','active','paused','closed')),
+  starts_on         date,
+  ends_on           date,
+  created_by        uuid        references public.user_profiles(id),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_zones (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  name              text        not null,
+  zone_type         text        not null,
+  geometry_json     jsonb,
+  notes             text        default '',
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_actors (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  zone_id           uuid        references public.project_zones(id) on delete set null,
+  name              text        not null,
+  actor_type        text,
+  influence_level   text,
+  engagement_level  text,
+  relationship_status text,
+  latitude          numeric,
+  longitude         numeric,
+  notes             text        default '',
+  last_interaction_at timestamptz,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_programs (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  zone_id           uuid        references public.project_zones(id) on delete set null,
+  name              text        not null,
+  program_type      text,
+  status            text        not null default 'draft',
+  objective         text        default '',
+  starts_on         date,
+  ends_on           date,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_activities (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  zone_id           uuid        references public.project_zones(id) on delete set null,
+  program_id        uuid        references public.project_programs(id) on delete set null,
+  actor_id          uuid        references public.project_actors(id) on delete set null,
+  record_type       text        not null,
+  title             text        not null,
+  activity_date     date        not null,
+  participants_count integer,
+  organizations_count integer,
+  nps_score         numeric,
+  evaluation_score  numeric,
+  qualitative_summary text,
+  tensions_text     text,
+  opportunities_text text,
+  consultant_notes  text,
+  created_by        uuid        references public.user_profiles(id),
+  created_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_alerts (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  zone_id           uuid        references public.project_zones(id) on delete set null,
+  actor_id          uuid        references public.project_actors(id) on delete set null,
+  severity          text        not null check (severity in ('green','amber','red')),
+  category          text,
+  title             text        not null,
+  description       text        default '',
+  visible_to_client boolean     not null default true,
+  resolved          boolean     not null default false,
+  created_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_signals (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  source_record_id  uuid        references public.project_activities(id) on delete set null,
+  dimension         text,
+  signal_type       text,
+  severity          text,
+  confidence_score  numeric,
+  summary           text        not null,
+  visible_to_client boolean     not null default true,
+  created_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_scores (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  reporting_period_id uuid      references public.reporting_periods(id),
+  overall_score     numeric,
+  status_label      text,
+  dimension_scores_json jsonb,
+  method_notes      text,
+  updated_at        timestamptz not null default now()
+);
+
+create table if not exists public.project_commitments (
+  id                uuid        primary key default gen_random_uuid(),
+  project_id         uuid        not null references public.projects(id) on delete cascade,
+  zone_id           uuid        references public.project_zones(id) on delete set null,
+  actor_id          uuid        references public.project_actors(id) on delete set null,
+  source_record_id  uuid        references public.project_activities(id) on delete set null,
+  title             text        not null,
+  description       text        default '',
+  commitment_type   text        not null check (commitment_type in ('commitment','request','issue','complaint','followup')),
+  status            text        not null default 'open' check (status in ('open','in_progress','resolved','closed','rejected')),
+  due_date          date,
+  owner_user_id     uuid        references public.user_profiles(id),
+  visible_to_client boolean     not null default true,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+-- ============================================================
 -- 4. CLIENT USER ACCESS
 -- ============================================================
 create table if not exists public.client_user_access (

@@ -480,6 +480,52 @@ const INIT_CLIENTS = [
       {day:22,text:"Entrega reporte Q1",color:brand.blue},
       {day:28,text:"Encuesta engagement DO",color:brand.do},
     ],
+    projects:[
+      {
+        id:"p-mla-rc", name:"Plan de relacionamiento comunitario Los Vilos", module_key:"rc", project_type:"territorial", description:"Seguimiento consultivo del relacionamiento territorial del corredor operativo y su zona de influencia.", status:"active", starts_on:"2025-01-10", ends_on:"2025-12-20",
+        zones:[
+          {id:"z-norte",name:"Zona Norte",zone_type:"direct",notes:"Mayor sensibilidad por tránsito y agua.", geojson:{type:"Polygon"}},
+          {id:"z-puerto",name:"Entorno Puerto",zone_type:"operational",notes:"Operación logística y programas costeros.", geojson:{type:"Polygon"}},
+        ],
+        actors:[
+          {id:"a1",zone_id:"z-norte",name:"Junta de Vecinos La Greda",actor_type:"Comunidad",influence_level:"Alta",engagement_level:"Media",relationship_status:"Tensionada",notes:"Solicitan plan de tránsito.",last_interaction_at:"2025-03-12"},
+          {id:"a2",zone_id:"z-puerto",name:"Municipalidad de Los Vilos",actor_type:"Institucional",influence_level:"Media",engagement_level:"Alta",relationship_status:"Activa",notes:"Mesa técnica mensual.",last_interaction_at:"2025-03-10"},
+        ],
+        programs:[
+          {id:"pr1",zone_id:"z-norte",name:"Mesa de diálogo sector norte",program_type:"dialogue",status:"active",objective:"Reducir tensión comunitaria",starts_on:"2025-01-20",ends_on:"2025-11-30"},
+          {id:"pr2",zone_id:"z-puerto",name:"Programa de monitoreo costero",program_type:"monitoring",status:"active",objective:"Dar trazabilidad a compromisos ambientales",starts_on:"2025-02-01",ends_on:"2025-12-15"},
+        ],
+        alerts:[
+          {id:"al1",zone_id:"z-norte",actor_id:"a1",severity:"red",category:"movilidad",title:"Aumento de tensión por tránsito de camiones",description:"Vecinos reportan alza de tránsito en horario punta.",visible_to_client:true,resolved:false,created_at:"2025-03-03"},
+          {id:"al2",zone_id:"z-puerto",severity:"amber",category:"vinculación",title:"Actor clave no vinculado hace 21 días",description:"Pendiente nueva reunión con directiva territorial.",visible_to_client:true,resolved:false,created_at:"2025-03-11"},
+        ],
+        activities:[
+          {id:"r1",zone_id:"z-norte",program_id:"pr1",actor_id:"a1",record_type:"meeting",title:"Mesa con vecinos sector norte",activity_date:"2025-03-12",participants_count:18,organizations_count:4,nps_score:42,evaluation_score:58,qualitative_summary:"Reunión intensa con foco en tránsito y ruido.",tensions_text:"Percepción de baja respuesta operativa.",opportunities_text:"Abrir mesa técnica con plan semanal.",consultant_notes:"Se recomienda compromiso visible en 10 días."},
+          {id:"r2",zone_id:"z-puerto",program_id:"pr2",record_type:"site_visit",title:"Recorrido puerto y borde costero",activity_date:"2025-03-08",participants_count:9,organizations_count:3,nps_score:null,evaluation_score:71,qualitative_summary:"Buen avance de trazabilidad.",tensions_text:"Persisten dudas sobre frecuencia de reportes.",opportunities_text:"Publicar tablero simple para comunidad.",consultant_notes:"Visible para comité ESG cliente."},
+        ],
+        signals:[
+          {id:"s1",source_record_id:"r1",dimension:"confianza",signal_type:"tension",severity:"amber",confidence_score:0.76,summary:"Confianza inicial baja en zona norte.",visible_to_client:true,created_at:"2025-03-12"},
+          {id:"s2",source_record_id:"r1",dimension:"riesgos",signal_type:"alert",severity:"red",confidence_score:0.84,summary:"Riesgo de escalamiento reputacional por tránsito.",visible_to_client:true,created_at:"2025-03-12"},
+        ],
+        commitments:[
+          {id:"c1",zone_id:"z-norte",actor_id:"a1",source_record_id:"r1",title:"Plan de mitigación de tránsito",description:"Diseñar y comunicar medidas visibles para vecinos.",commitment_type:"commitment",status:"in_progress",due_date:"2025-03-28",visible_to_client:true},
+          {id:"c2",zone_id:"z-puerto",title:"Publicar reporte costero resumido",description:"Resumen mensual del monitoreo costero para stakeholders.",commitment_type:"followup",status:"open",due_date:"2025-04-05",visible_to_client:true},
+        ],
+        scores:{overall_score:68,status_label:"En atención",dimension_scores_json:{participacion:72,confianza:54,articulacion:69,riesgos:48,oportunidades:74},method_notes:"Score simple basado en actividad, señales y compromisos.",updated_at:"2025-03-14"},
+        files:[{name:"Mapa_Actores_Zona_Norte.pdf",type:"pdf",date:"14 Mar 2025",module:"RC",ai_score:72}],
+      },
+      {
+        id:"p-mla-esg", name:"Estrategia de sostenibilidad territorial 2025", module_key:"esg", project_type:"programmatic", description:"Portafolio ESG con foco en trazabilidad, programas y articulación interna.", status:"active", starts_on:"2025-02-01", ends_on:"2025-12-31",
+        zones:[], actors:[],
+        programs:[{id:"esg-pr1",name:"Ruta de indicadores ESG",program_type:"governance",status:"active",objective:"Ordenar evidencia y trazabilidad",starts_on:"2025-02-01",ends_on:"2025-10-31"}],
+        alerts:[{id:"esg-al1",severity:"amber",category:"trazabilidad",title:"Brecha de trazabilidad programática",description:"Faltan respaldos homogéneos entre áreas.",visible_to_client:true,resolved:false,created_at:"2025-03-09"}],
+        activities:[{id:"esg-r1",program_id:"esg-pr1",record_type:"internal_session",title:"Sesión de gobernanza ESG",activity_date:"2025-03-06",participants_count:7,organizations_count:1,evaluation_score:74,qualitative_summary:"Buena disposición ejecutiva.",tensions_text:"Falta claridad sobre dueños de datos.",opportunities_text:"Definir PMO ESG liviana.",consultant_notes:"Proyecto programático sin eje territorial principal."}],
+        signals:[{id:"esg-s1",dimension:"trazabilidad programática",signal_type:"opportunity",severity:"green",confidence_score:0.7,summary:"Existe disposición ejecutiva para ordenar evidencia ESG.",visible_to_client:true,created_at:"2025-03-06"}],
+        commitments:[{id:"esg-c1",title:"Definir owner por indicador",description:"Asignar responsables para trazabilidad ESG.",commitment_type:"issue",status:"open",due_date:"2025-04-02",visible_to_client:true}],
+        scores:{overall_score:71,status_label:"Avanzando",dimension_scores_json:{adopcion:69,cumplimiento:73,articulacion_interna:70,impacto_territorial:68,trazabilidad_programatica:74},method_notes:"Corte de marzo sobre iniciativas activas.",updated_at:"2025-03-10"},
+        files:[{name:"Roadmap_ESG_2025.pdf",type:"pdf",date:"10 Mar 2025",module:"ESG",ai_score:69}],
+      }
+    ],
     profile:{sector:"Minería y Recursos Naturales",size:"Grande (>1000 empleados)",region:"Coquimbo",since:"2024"},
   },
   {
@@ -508,6 +554,31 @@ const INIT_CLIENTS = [
     ],
     files:[{name:"Notas_Entrevista_Comunidad.txt",type:"txt",date:"8 Mar 2025",module:"RC",ai_score:52,status:"applied"}],
     events:[{day:20,text:"Call kick-off Coronel",color:brand.blue}],
+    projects:[
+      {
+        id:"p-bb-rc", name:"Plan de relacionamiento Proyecto Coronel", module_key:"rc", project_type:"territorial", description:"Seguimiento comunitario y territorial del proyecto Coronel.", status:"draft", starts_on:"2025-03-01", ends_on:"2025-11-30",
+        zones:[{id:"bb-z1",name:"Área de influencia directa",zone_type:"direct",notes:"Barrios colindantes y tránsito pesado.",geojson:{type:"Polygon"}}],
+        actors:[{id:"bb-a1",zone_id:"bb-z1",name:"Sindicato Proyecto Coronel",actor_type:"Trabajadores",influence_level:"Alta",engagement_level:"Media",relationship_status:"En desarrollo",notes:"Preocupación por ritmo de implementación.",last_interaction_at:"2025-03-06"}],
+        programs:[{id:"bb-pr1",zone_id:"bb-z1",name:"Mesa inicial Coronel",program_type:"engagement",status:"draft",objective:"Abrir canal territorial base",starts_on:"2025-03-20",ends_on:"2025-08-30"}],
+        alerts:[{id:"bb-al1",zone_id:"bb-z1",actor_id:"bb-a1",severity:"red",category:"licencia_social",title:"LSO bajo umbral crítico",description:"Todavía no existe relato común con actores clave.",visible_to_client:true,resolved:false,created_at:"2025-03-10"}],
+        activities:[{id:"bb-r1",zone_id:"bb-z1",record_type:"interview",title:"Entrevistas de arranque con actores laborales",activity_date:"2025-03-08",participants_count:6,organizations_count:2,evaluation_score:52,qualitative_summary:"Percepción inicial frágil.",tensions_text:"Baja confianza y alta expectativa de respuesta.",opportunities_text:"Diseñar quick wins visibles.",consultant_notes:"Proyecto en fase de diagnóstico."}],
+        signals:[{id:"bb-s1",source_record_id:"bb-r1",dimension:"confianza",signal_type:"tension",severity:"red",confidence_score:0.82,summary:"Confianza inicial baja con actores laborales.",visible_to_client:true,created_at:"2025-03-08"}],
+        commitments:[{id:"bb-c1",zone_id:"bb-z1",title:"Definir plan de escucha temprana",description:"Diseñar secuencia inicial de reuniones y devoluciones.",commitment_type:"followup",status:"open",due_date:"2025-03-27",visible_to_client:true}],
+        scores:{overall_score:52,status_label:"Crítico",dimension_scores_json:{participacion:49,confianza:42,articulacion:53,riesgos:41,oportunidades:61},method_notes:"Línea base del proyecto Coronel.",updated_at:"2025-03-10"},
+        files:[{name:"Base_Diagnostico_Coronel.pdf",type:"pdf",date:"10 Mar 2025",module:"RC",ai_score:55}],
+      },
+      {
+        id:"p-bb-do", name:"Proceso de cambio cultural y adopción CRM", module_key:"do", project_type:"organizational", description:"Acompañamiento al cambio cultural y adopción interna del CRM comercial.", status:"active", starts_on:"2025-02-15", ends_on:"2025-09-30",
+        zones:[], actors:[{id:"bb-do-a1",name:"Equipo Comercial",actor_type:"Área interna",influence_level:"Alta",engagement_level:"Media",relationship_status:"Variable",notes:"Resistencia operativa al uso del CRM.",last_interaction_at:"2025-03-05"}],
+        programs:[{id:"bb-do-pr1",name:"Ruta de adopción CRM",program_type:"change_management",status:"active",objective:"Mejorar adopción y claridad operativa",starts_on:"2025-02-20",ends_on:"2025-09-30"}],
+        alerts:[{id:"bb-do-al1",severity:"amber",category:"adopcion",title:"Resistencia moderada en equipo comercial",description:"Uso inconsistente del CRM entre supervisores.",visible_to_client:true,resolved:false,created_at:"2025-03-05"}],
+        activities:[{id:"bb-do-r1",program_id:"bb-do-pr1",record_type:"workshop",title:"Workshop de adopción CRM",activity_date:"2025-03-04",participants_count:24,organizations_count:1,evaluation_score:65,qualitative_summary:"Buena asistencia pero dudas operativas persistentes.",tensions_text:"Carga operativa percibida como alta.",opportunities_text:"Segmentar coaching por jefaturas.",consultant_notes:"Proyecto organizacional con foco en adopción."}],
+        signals:[{id:"bb-do-s1",source_record_id:"bb-do-r1",dimension:"resistencia",signal_type:"tension",severity:"amber",confidence_score:0.68,summary:"Resistencia moderada a la adopción por carga operativa.",visible_to_client:true,created_at:"2025-03-04"}],
+        commitments:[{id:"bb-do-c1",title:"Diseñar coaching por jefaturas",description:"Plan de acompañamiento para supervisores rezagados.",commitment_type:"commitment",status:"in_progress",due_date:"2025-03-29",visible_to_client:true}],
+        scores:{overall_score:65,status_label:"En desarrollo",dimension_scores_json:{claridad:66,adopcion:58,resistencia:49,liderazgo:71,carga_operativa:55},method_notes:"Corte DO marzo sobre adopción CRM.",updated_at:"2025-03-06"},
+        files:[{name:"Workshop_CRM_Marzo.pdf",type:"pdf",date:"6 Mar 2025",module:"DO",ai_score:66}],
+      }
+    ],
     profile:{sector:"Construcción e Inmobiliario",size:"Mediana (200–500 empleados)",region:"Biobío",since:"2025"},
   },
 ];
@@ -1221,6 +1292,81 @@ function ProfilePage({session,isConsultant,client}){
   );
 }
 
+function moduleAccent(moduleKey){ return MOD[moduleKey]?.color || brand.blue; }
+function moduleGradient(moduleKey){ const mod = MOD[moduleKey] || MOD.rc; return `linear-gradient(135deg,${mod.color},${mod.color2})`; }
+function statusBadgeCls(status){ return status==="active"?"bg":status==="draft"?"ba":status==="paused"?"bb":"br"; }
+function projectTabs(project){
+  const base=[["summary","Resumen"],["activity","Actividad"],["actors","Actores"],["programs","Programas"],["alerts","Alertas"],["commitments","Compromisos"],["reports","Reportes"],["files","Archivos"]];
+  if(project?.module_key==="rc"||project?.project_type==="territorial") base.splice(1,0,["territory","Mapa / Territorio"]);
+  return base;
+}
+function ProjectPortfolio({clients,onOpenProject,isConsultant}){
+  const visibleClients=isConsultant?clients:clients.slice(0,1);
+  return(
+    <div className="page fu">
+      <div className="ph">
+        <div className="ph-eye">{isConsultant?"Portafolio consultivo":"Proyectos autorizados"}</div>
+        <div className="ph-title">Proyectos activos y cerrados</div>
+        <div className="ph-desc muted">La unidad principal ya no es sólo el cliente: cada proyecto concentra actividades, alertas, actores, programas, compromisos y señales.</div>
+      </div>
+      {visibleClients.map(client=><div key={client.id} className="card fu" style={{marginBottom:16}}>
+        <div className="sec-hdr"><div><div className="ctitle mb0">{client.logo} {client.name}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{client.industry} · {(client.projects||[]).length} proyecto(s)</div></div><span className={`badge ${client.published?"bg":"ba"}`}>{client.published?"Cliente visible":"Interno / borrador"}</span></div>
+        <div className="g3" style={{marginTop:16}}>{(client.projects||[]).map(project=>{
+          const score=project.scores?.overall_score;
+          const openAlerts=(project.alerts||[]).filter(a=>!a.resolved).length;
+          const openCommitments=(project.commitments||[]).filter(c=>c.status!=="resolved"&&c.status!=="closed").length;
+          return <div key={project.id} className="card" style={{padding:18,border:`1px solid ${moduleAccent(project.module_key)}35`,background:`linear-gradient(180deg,${MOD[project.module_key]?.cB||brand.blueA},transparent 50%)`}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:10}}><span className="mod-tag" style={{color:moduleAccent(project.module_key),borderColor:moduleAccent(project.module_key)}}>{MOD[project.module_key]?.icon} {project.module_key.toUpperCase()}</span><span className={`badge ${statusBadgeCls(project.status)}`}>{project.status}</span></div>
+            <div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)",marginBottom:8}}>{project.name}</div>
+            <div style={{fontSize:13,color:"var(--t2)",marginBottom:14,lineHeight:1.6}}>{project.description}</div>
+            <div className="mono muted" style={{fontSize:11,marginBottom:14}}>{project.project_type} · {project.starts_on} → {project.ends_on}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginBottom:14}}>
+              <div className="stat-chip"><div className="stat-val" style={{color:sc(score||0)}}>{score??"—"}</div><div className="stat-lbl">Índice</div></div>
+              <div className="stat-chip"><div className="stat-val" style={{color:openAlerts?brand.amber:"var(--t1)"}}>{openAlerts}</div><div className="stat-lbl">Alertas</div></div>
+              <div className="stat-chip"><div className="stat-val" style={{color:openCommitments?brand.blue:"var(--t1)"}}>{openCommitments}</div><div className="stat-lbl">Compromisos</div></div>
+            </div>
+            <button className="btn btn-g btn-sm" onClick={()=>onOpenProject(client.id,project.id)} style={{width:"100%",justifyContent:"center"}}>Abrir proyecto</button>
+          </div>;
+        })}</div>
+      </div>)}
+    </div>
+  );
+}
+function ProjectWorkspace({client,project,isConsultant}){
+  const [tab,setTab]=useState("summary");
+  const tabs=projectTabs(project);
+  const score=project.scores?.overall_score;
+  const dimensions=Object.entries(project.scores?.dimension_scores_json||{});
+  const openAlerts=(project.alerts||[]).filter(a=>!a.resolved);
+  const openCommitments=(project.commitments||[]).filter(c=>!["resolved","closed"].includes(c.status));
+  const latestActivities=[...(project.activities||[])].sort((a,b)=>new Date(b.activity_date)-new Date(a.activity_date));
+  const timeline=[
+    ...(project.activities||[]).map(a=>({kind:"Actividad",date:a.activity_date,title:a.title,desc:a.qualitative_summary,color:moduleAccent(project.module_key)})),
+    ...(project.alerts||[]).map(a=>({kind:"Alerta",date:a.created_at,title:a.title,desc:a.description,color:a.severity==="red"?brand.red:a.severity==="amber"?brand.amber:brand.green})),
+    ...(project.commitments||[]).map(c=>({kind:"Compromiso",date:c.due_date||client.period,title:c.title,desc:c.description,color:brand.blue})),
+  ].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  return(
+    <div className="page fu">
+      <div className="ph">
+        <div className="ph-eye">{client.logo} {client.name} · {MOD[project.module_key]?.label}</div>
+        <div className="ph-title">{project.name}</div>
+        <div className="ph-row"><span className={`badge ${statusBadgeCls(project.status)}`}>{project.status}</span><span className="mod-tag" style={{color:moduleAccent(project.module_key),borderColor:moduleAccent(project.module_key)}}>{project.project_type}</span><span style={{fontSize:12,color:"var(--t3)"}}>{project.starts_on} → {project.ends_on}</span></div>
+        <div className="ph-desc muted">Proyecto basado en seguimiento consultivo: actividades, alertas, señales, compromisos y evolución reciente.</div>
+      </div>
+      <div className="tabs" style={{flexWrap:"wrap"}}>{tabs.map(([id,label])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{label}</button>)}</div>
+      {tab==="summary"&&<><div className="hero fu"><div><div className="hero-eye">Índice general del proyecto</div><div className="hero-co">{project.scores?.status_label||"Sin lectura"}</div><div className="hero-desc">{project.description}</div><div className="hero-tags">{(project.signals||[]).slice(0,3).map(signal=><span key={signal.id} className="mod-tag" style={{color:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green,borderColor:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green}}>{signal.summary}</span>)}</div></div><div style={{textAlign:"center"}}><ScoreRing val={score??null} size={128} color={moduleAccent(project.module_key)}/><div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Actualizado {project.scores?.updated_at||"—"}</div></div></div><div className="g4 fu">{[["Alertas activas",openAlerts.length,openAlerts.length?brand.amber:"var(--t1)"],["Compromisos abiertos",openCommitments.length,openCommitments.length?brand.blue:"var(--t1)"],["Actividades",(project.activities||[]).length,"var(--t1)"],["Actores",(project.actors||[]).length,"var(--t1)"]].map(([l,v,c])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:c}}>{v}</div><div className="stat-lbl">{l}</div></div>)}</div><div className="g2"><div className="card fu"><div className="ctitle">Dimensiones del proyecto</div>{dimensions.map(([label,val])=><Prog key={label} label={label.replaceAll("_"," ")} val={val} color={moduleAccent(project.module_key)}/>)}</div><div className="card fu"><div className="ctitle">Últimas actividades</div>{latestActivities.slice(0,4).map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)",margin:"4px 0"}}>{item.activity_date} · {item.record_type}</div><div style={{fontSize:13,color:"var(--t2)"}}>{item.qualitative_summary}</div></div>)}</div></div></>}
+      {tab==="territory"&&<div className="g2"><div className="card fu"><div className="ctitle">Mapa territorial MVP</div><div style={{position:"relative",height:320,borderRadius:16,border:"1px solid var(--b1)",background:"linear-gradient(180deg,var(--s2),var(--s3))",overflow:"hidden"}}>{(project.zones||[]).map((zone,idx)=><div key={zone.id} style={{position:"absolute",left:idx===0?30:220,top:idx===0?40:120,width:idx===0?180:150,height:idx===0?120:100,borderRadius:24,background:`${moduleAccent(project.module_key)}22`,border:`1px solid ${moduleAccent(project.module_key)}55`,padding:16}}><div style={{fontFamily:"'Fraunces',serif",fontSize:18,color:"var(--t1)"}}>{zone.name}</div><div className="mono muted" style={{fontSize:11,marginTop:4}}>{zone.zone_type}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:12}}>{zone.notes}</div></div>)}{(project.actors||[]).map((actor,idx)=><div key={actor.id} style={{position:"absolute",left:idx===0?110:300,top:idx===0?90:170,padding:"6px 10px",borderRadius:16,background:"var(--s1)",border:`1px solid ${actor.relationship_status==="Tensionada"?brand.red:brand.blue}55`,fontSize:12,color:"var(--t1)"}}>{actor.name}</div>)}</div></div><div className="card fu"><div className="ctitle">Zonas, actores y programas</div>{(project.zones||[]).map(zone=><div key={zone.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{zone.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{zone.zone_type}</div></div><span className="badge bb">{(project.actors||[]).filter(a=>a.zone_id===zone.id).length} actores</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{zone.notes}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:8}}>Programas: {(project.programs||[]).filter(p=>p.zone_id===zone.id).map(p=>p.name).join(" · ")||"Sin programas"}</div></div>)}</div></div>}
+      {tab==="activity"&&<div className="card fu"><div className="ctitle">Activity Timeline</div>{timeline.map((item,idx)=><div key={idx} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{width:10,height:10,borderRadius:"50%",background:item.color,marginTop:6,flexShrink:0}}/><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}><span className="badge bb">{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span></div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div></div></div>)}</div>}
+      {tab==="actors"&&<div className="card fu"><div className="ctitle">Actores y vínculos</div>{(project.actors||[]).map(actor=><div key={actor.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{actor.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{actor.actor_type} · Influencia {actor.influence_level} · Vinculación {actor.engagement_level}</div></div><span className={`badge ${actor.relationship_status==="Tensionada"?"br":"bb"}`}>{actor.relationship_status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{actor.notes}</div></div>)}</div>}
+      {tab==="programs"&&<div className="card fu"><div className="ctitle">Programas del proyecto</div>{(project.programs||[]).map(program=><div key={program.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{program.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{program.program_type} · {program.starts_on} → {program.ends_on}</div></div><span className={`badge ${statusBadgeCls(program.status)}`}>{program.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{program.objective}</div></div>)}</div>}
+      {tab==="alerts"&&<div className="card fu"><div className="ctitle">Alertas del proyecto</div>{(project.alerts||[]).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div></div></div>)}</div>}
+      {tab==="commitments"&&<div className="card fu"><div className="ctitle">Compromisos / issues</div>{(project.commitments||[]).map(item=><div key={item.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)"}}>{item.commitment_type} · vencimiento {item.due_date||"—"}</div></div><span className={`badge ${item.status==="open"?"ba":item.status==="in_progress"?"bb":"bg"}`}>{item.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{item.description}</div></div>)}</div>}
+      {tab==="reports"&&<div className="card fu"><div className="ctitle">Señales e interpretación</div>{(project.signals||[]).map(signal=><div key={signal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{signal.summary}</div><span className={`badge ${signal.severity==="red"?"br":signal.severity==="amber"?"ba":"bg"}`}>{signal.dimension}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:6}}>Confidence {signal.confidence_score||"—"} · visible cliente: {signal.visible_to_client?"sí":"no"}</div></div>)}</div>}
+      {tab==="files"&&<div className="card fu"><div className="ctitle">Archivos visibles</div>{(project.files||[]).map((f,i)=><div key={i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div></div>)}</div>}
+    </div>
+  );
+}
+
 // ─── CONSULTANT METRICS HOME ──────────────────────────────────────────────────
 function ConsultantHome({clients}){
   const published=clients.filter(c=>c.published).length;
@@ -1784,6 +1930,7 @@ export default function App(){
   const [clients,setClients]=useState(INIT_CLIENTS);
   const [page,setPage]=useState("home");
   const [selClientId,setSelClientId]=useState(1);
+  const [selProjectId,setSelProjectId]=useState(INIT_CLIENTS[0]?.projects?.[0]?.id || null);
   const [showTour,setShowTour]=useState(false);
 
   const t=darkMode?darkTokens:lightTokens;
@@ -1794,7 +1941,16 @@ export default function App(){
   const isC=isConsultantRole(session?.role);
   const clientData=clients[0];
   const selClient=clients.find(c=>c.id===selClientId);
+  const activeClientForProjects=isC?selClient:clientData;
+  const activeProjects=activeClientForProjects?.projects || [];
+  const activeProject=activeProjects.find(p=>p.id===selProjectId) || activeProjects[0] || null;
   const hasClients=clients.length>0;
+
+  useEffect(()=>{
+    const nextProjects=(isC?selClient:clientData)?.projects || [];
+    if (!nextProjects.length) { if (selProjectId!==null) setSelProjectId(null); return; }
+    if (!nextProjects.some(project=>project.id===selProjectId)) setSelProjectId(nextProjects[0].id);
+  }, [isC, selClientId, clients]);
 
   async function oauthLogin(provider, role){
     if (!supabase) return;
@@ -1819,7 +1975,8 @@ export default function App(){
   }
 
   const consultantNav=[
-    {id:"home",icon:"◈",label:"Métricas generales"},
+    {id:"home",icon:"◈",label:"Proyectos"},
+    {id:"project",icon:"🧭",label:"Proyecto activo"},
     {sep:true,label:"Gestión"},
     {id:"control",icon:"⚙",label:"Centro de control"},
     {sep:true,label:"Módulos"},
@@ -1833,7 +1990,8 @@ export default function App(){
   ];
 
   const clientNav=clientData?[
-    {id:"home",icon:"◈",label:"Mi Dashboard"},
+    {id:"home",icon:"◈",label:"Mis proyectos"},
+    {id:"project",icon:"🧭",label:"Proyecto"},
     {sep:true,label:"Servicios activos"},
     {id:"rc",icon:"🤝",label:"Relacionamiento",activeCls:"rc-active",locked:!clientData.modules.rc},
     {id:"do",icon:"🏛️",label:"Desarrollo Org.",activeCls:"do-active",locked:!clientData.modules.do},
@@ -1847,15 +2005,18 @@ export default function App(){
   const nav=isC?consultantNav:clientNav;
   const activeClient=isC?selClient:clientData;
 
+  function openProject(clientId, projectId){ setSelClientId(clientId); setSelProjectId(projectId); setPage("project"); }
   function navigate(id){
     if(id==="tour"){setShowTour(true);return;}
+    if(id==="project"&&!activeProject){setPage("home");return;}
     setPage(id);
   }
 
   function renderPage(){
     if(isC&&!hasClients&&page!=="control")return <div className="page fu"><div className="card"><div className="ctitle">No hay clientes todavía</div><button className="btn btn-g btn-sm" onClick={()=>setPage("control")}>Ir al centro de control</button></div></div>;
     if(isC){
-      if(page==="home")return<ConsultantHome clients={clients}/>;
+      if(page==="home")return<ProjectPortfolio clients={clients} onOpenProject={openProject} isConsultant={true}/>;
+      if(page==="project"&&activeProject&&selClient)return<ProjectWorkspace client={selClient} project={activeProject} isConsultant={true}/>;
       if(page==="control")return<ConsultantPanel clients={clients} setClients={setClients} selId={selClientId} setSelId={setSelClientId} session={session}/>;
       if(page==="rc"&&selClient)return<ModuleRC client={selClient} isConsultant={true} onUpdateStakeholders={stakeholders=>setClients(p=>p.map(c=>c.id===selClientId?{...c,stakeholders}:c))}/>;
       if(page==="do")return<ModuleDO client={selClient}/>;
@@ -1864,7 +2025,8 @@ export default function App(){
       if(page==="messages"&&selClient)return <div className="page fu"><div className="ph"><div className="ph-eye">Notificaciones</div><div className="ph-title">Mensajes de clientes</div></div><div className="card"><Messages messages={selClient.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div></div>;
     } else {
       if(!clientData)return <div className="page fu"><div className="card">No hay datos de cliente disponibles.</div></div>;
-      if(page==="home")return<ClientDashboard client={clientData} onMsg={sendMsg}/>;
+      if(page==="home")return<ProjectPortfolio clients={[clientData]} onOpenProject={openProject} isConsultant={false}/>;
+      if(page==="project"&&activeProject&&clientData)return<ProjectWorkspace client={clientData} project={activeProject} isConsultant={false}/>;
       if(page==="rc"&&clientData.modules.rc)return<ModuleRC client={clientData} isConsultant={false}/>;
       if(page==="do"&&clientData.modules.do)return<ModuleDO client={clientData}/>;
       if(page==="esg"&&clientData.modules.esg)return<ModuleESG client={clientData}/>;
