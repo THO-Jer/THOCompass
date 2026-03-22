@@ -241,19 +241,22 @@ function ProgBar({ label, value, color, tooltip, weight }) {
 // Genera un resumen automático basado en los datos del cliente.
 // En producción puede ser generado por la API de Claude.
 function AutoSummary({ client }) {
-  const activeModules = Object.entries(client.modules).filter(([,v])=>v);
-  const scores = activeModules.map(([k])=>client.scores[k]?.total||0);
-  const avgScore = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
-  const prevPeriod = client.history[client.history.length-2];
-  const currPeriod = client.history[client.history.length-1];
+  const activeModules = Object.entries(client.modules || {}).filter(([,v])=>v);
+  const scores = activeModules.map(([k])=>client.scores?.[k]?.total||0);
+  const avgScore = activeModules.length
+    ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length)
+    : 0;
+  const hist = client.history || [];
+  const prevPeriod = hist[hist.length-2];
+  const currPeriod = hist[hist.length-1];
   const trend = currPeriod && prevPeriod
     ? Object.keys(MOD).filter(k=>client.modules[k])
         .reduce((s,k)=>s+(currPeriod[k]||0)-(prevPeriod[k]||0),0)
     : 0;
 
-  const criticalAlerts = client.alerts.filter(a=>a.type==="red").length;
-  const pendingActions = client.alerts.filter(a=>a.type==="amber").length;
-  const goodNews       = client.alerts.filter(a=>a.type==="green").length;
+  const criticalAlerts = (client.alerts || []).filter(a=>a.type==="red").length;
+  const pendingActions = (client.alerts || []).filter(a=>a.type==="amber").length;
+  const goodNews       = (client.alerts || []).filter(a=>a.type==="green").length;
 
   // Determine overall status
   const status = avgScore>=70&&criticalAlerts===0 ? "good"
@@ -307,7 +310,7 @@ function AutoSummary({ client }) {
               { val:criticalAlerts, label:"Alertas críticas",  color:criticalAlerts>0?T.red:T.t3,   icon:"⚠" },
               { val:pendingActions, label:"Acciones pendientes",color:pendingActions>0?T.amber:T.t3, icon:"◐" },
               { val:goodNews,       label:"Avances positivos",  color:goodNews>0?T.green:T.t3,       icon:"✓" },
-              { val:client.recommendations.length, label:"Recomendaciones", color:T.blue, icon:"→" },
+              { val:(client.recommendations||[]).length, label:"Recomendaciones", color:T.blue, icon:"→" },
             ].map(s=>(
               <div key={s.label} style={{ display:"flex",alignItems:"center",gap:6 }}>
                 <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:14,
@@ -370,14 +373,14 @@ function ModuleCard({ modKey, scores, active, onClick }) {
 // ── Module Detail View ─────────────────────────────────────────
 function ModuleDetail({ modKey, client, onBack }) {
   const mod = MOD[modKey];
-  const scores = client.scores[modKey];
-  const moduleProjects = client.projects.filter(p=>p.module_key===modKey);
-  const moduleAlerts = client.alerts.filter(a=>a.module===modKey);
-  const moduleRecs   = client.recommendations.filter(r=>r.module===modKey);
-  const [tab, setTab] = useState("overview");
+  const scores = client.scores?.[modKey] || {};
+  const moduleProjects = (client.projects || []).filter(p=>p.module_key===modKey);
+  const moduleAlerts   = (client.alerts   || []).filter(a=>a.module===modKey);
+  const moduleRecs     = (client.recommendations || []).filter(r=>r.module===modKey);
+  const [tab, setTab]  = useState("overview");
 
   const radarData = mod.dims.map(d=>({ s:d.label.split(" ")[0], A:scores?.[d.key]||0 }));
-  const history = client.history.map(h=>({ period:h.period, score:h[modKey] }));
+  const history   = (client.history || []).map(h=>({ period:h.period, score:h[modKey] }));
 
   const TABS = [
     { id:"overview",  label:"Resumen"  },
@@ -758,15 +761,16 @@ function MessagesPanel({ messages, onSend }) {
 
 // ── General Dashboard ──────────────────────────────────────────
 function GeneralDashboard({ client, onOpenModule }) {
-  const activeModules = Object.entries(client.modules).filter(([,v])=>v);
-  const prev = client.history[client.history.length-2];
-  const curr = client.history[client.history.length-1];
+  const activeModules = Object.entries(client.modules || {}).filter(([,v])=>v);
+  const hist = client.history || [];
+  const prev = hist[hist.length-2];
+  const curr = hist[hist.length-1];
 
   const radarData = activeModules.flatMap(([k])=>
-    MOD[k].dims.map(d=>({ s:d.label.split(" ")[0], A:client.scores[k]?.[d.key]||0 }))
+    MOD[k].dims.map(d=>({ s:d.label.split(" ")[0], A:client.scores?.[k]?.[d.key]||0 }))
   );
 
-  const [msgList, setMsgList] = useState(client.messages);
+  const [msgList, setMsgList] = useState(client.messages || []);
 
   return (
     <div style={{ padding:"32px 36px",maxWidth:1200 }}>
@@ -822,7 +826,7 @@ function GeneralDashboard({ client, onOpenModule }) {
           </div>
           <div style={{ height:210 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={client.history}>
+              <AreaChart data={hist}>
                 <defs>
                   {activeModules.map(([k])=>(
                     <linearGradient key={k} id={`cg-${k}`} x1="0" y1="0" x2="0" y2="1">
@@ -998,8 +1002,23 @@ function GeneralDashboard({ client, onOpenModule }) {
 }
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
-export default function ClientDashboard({ client = MOCK_CLIENT }) {
+export default function ClientDashboard({ client: rawClient = MOCK_CLIENT }) {
   const [activeModule, setActiveModule] = useState(null);
+
+  // Normalize: garantiza que todos los arrays y objetos existan
+  // aunque el prop llegue incompleto desde Supabase o desde App.jsx
+  const client = {
+    ...MOCK_CLIENT,
+    ...rawClient,
+    modules:         { rc:false, do:false, esg:false, ...(rawClient?.modules || {}) },
+    scores:          { rc:{}, do:{}, esg:{},            ...(rawClient?.scores  || {}) },
+    history:         rawClient?.history         || [],
+    alerts:          rawClient?.alerts          || [],
+    recommendations: rawClient?.recommendations || [],
+    projects:        rawClient?.projects        || [],
+    messages:        rawClient?.messages        || [],
+    gri_summary:     rawClient?.gri_summary     || {},
+  };
 
   return (
     <>
