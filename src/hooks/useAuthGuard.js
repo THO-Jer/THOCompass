@@ -1,219 +1,208 @@
-// ============================================================
-// useAuthGuard.ts
-// Hook que centraliza la lógica de autenticación y autorización.
-// Determina qué pantalla renderizar según el estado del usuario.
-//
-// Uso en App.tsx o el router principal:
-//
-//   const { status, session, profile, signOut } = useAuthGuard()
-//
-//   if (status === 'loading')  return <LoadingScreen />
-//   if (status === 'unauthenticated') return <Login />
-//   if (status === 'pending')  return <PendingAccess ... />
-//   if (status === 'disabled') return <PendingAccess disabled ... />
-//   if (status === 'approved') return <App profile={profile} />
-// ============================================================
+import { useEffect, useState } from 'react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-import { useEffect, useState } from 'react'
-import { createClient, Session } from '@supabase/supabase-js'
-
-// ── Supabase client ───────────────────────────────────────────
-// El dev reemplaza estas variables con las del proyecto real.
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-)
-
-// ── Types ─────────────────────────────────────────────────────
-export type AuthStatus =
-  | 'loading'
-  | 'unauthenticated'
-  | 'pending'
-  | 'disabled'
-  | 'approved'
-
-export interface UserProfile {
-  id: string
-  email: string
-  full_name: string
-  role: 'super_consultant' | 'consultant' | 'client'
-  approval_status: 'pending' | 'approved' | 'disabled'
-  created_at: string
-  updated_at: string
+// Bootstrap: jeremias@tho.cl siempre es super_consultant
+// Quitar esta función cuando el registro en Supabase esté 100% estable.
+function applyBootstrap(sessionUser, profile) {
+  const email = sessionUser?.email?.toLowerCase() || '';
+  if (email !== 'jeremias@tho.cl') return profile;
+  return {
+    id:              sessionUser.id,
+    email:           sessionUser.email,
+    full_name:       sessionUser.user_metadata?.full_name
+                  || sessionUser.user_metadata?.name
+                  || 'Jeremías',
+    role:            'super_consultant',
+    approval_status: 'approved',
+    created_at:      profile?.created_at || new Date().toISOString(),
+    updated_at:      new Date().toISOString(),
+    ...profile,
+    // Forzar estos dos campos aunque el perfil diga otra cosa
+    role:            'super_consultant',
+    approval_status: 'approved',
+  };
 }
 
-// ── Hook ──────────────────────────────────────────────────────
+// ── Hook principal ─────────────────────────────────────────────
 export function useAuthGuard() {
-  const [status, setStatus] = useState<AuthStatus>('loading')
-  const [session, setSession] = useState<Session | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [status,  setStatus]  = useState(isSupabaseConfigured ? 'loading' : 'unauthenticated');
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-  async function loadProfile(userId: string): Promise<UserProfile | null> {
+  async function loadProfile(userId) {
+    if (!supabase || !userId) return null;
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('id', userId)
-      .single()
-
-    if (error || !data) return null
-    return data as UserProfile
+      .single();
+    if (error || !data) return null;
+    return data;
   }
 
-  async function resolveStatus(sess: Session | null) {
+  async function resolveStatus(sess) {
     if (!sess) {
-      setStatus('unauthenticated')
-      setSession(null)
-      setProfile(null)
-      return
+      setStatus('unauthenticated');
+      setSession(null);
+      setProfile(null);
+      return;
     }
 
-    setSession(sess)
-
-    const prof = await loadProfile(sess.user.id)
+    setSession(sess);
+    const rawProfile = await loadProfile(sess.user.id);
+    const prof       = applyBootstrap(sess.user, rawProfile);
 
     if (!prof) {
-      // El trigger no alcanzó a crear el perfil todavía.
-      // Esto es raro pero posible en condiciones de race.
-      // Mostramos pending y reintentamos.
-      setStatus('pending')
-      return
+      setProfile(null);
+      setStatus('pending');
+      return;
     }
 
-    setProfile(prof)
+    setProfile(prof);
 
     switch (prof.approval_status) {
-      case 'approved':
-        setStatus('approved')
-        break
-      case 'disabled':
-        setStatus('disabled')
-        break
+      case 'approved':  setStatus('approved');  break;
+      case 'disabled':  setStatus('disabled');  break;
       case 'pending':
-      default:
-        setStatus('pending')
-        break
+      default:          setStatus('pending');   break;
     }
   }
 
   useEffect(() => {
-    // Sesión inicial al montar
+    if (!isSupabaseConfigured || !supabase) return;
+
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
-      resolveStatus(sess)
-    })
+      resolveStatus(sess);
+    });
 
-    // Escuchar cambios de sesión (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, sess) => {
-        resolveStatus(sess)
-      },
-    )
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      resolveStatus(sess);
+    });
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => subscription.unsubscribe();
+  }, []);
 
   async function signOut() {
-    await supabase.auth.signOut()
-    setStatus('unauthenticated')
-    setSession(null)
-    setProfile(null)
+    if (supabase) await supabase.auth.signOut();
+    setStatus('unauthenticated');
+    setSession(null);
+    setProfile(null);
   }
-
-  // Helpers de rol (para no repetir lógica en los componentes)
-  const isConsultant = profile?.role === 'consultant' || profile?.role === 'super_consultant'
-  const isSuperConsultant = profile?.role === 'super_consultant'
-  const isClient = profile?.role === 'client'
 
   return {
     status,
     session,
     profile,
-    isConsultant,
-    isSuperConsultant,
-    isClient,
+    supabase,
+    isConsultant:      profile?.role === 'consultant' || profile?.role === 'super_consultant',
+    isSuperConsultant: profile?.role === 'super_consultant',
+    isClient:          profile?.role === 'client',
     signOut,
-    supabase, // expuesto para queries en los componentes hijos
-  }
+  };
 }
 
-// ── Helpers de Supabase para el ApprovalPanel ─────────────────
-// El dev puede importar estas funciones directamente en el panel.
+// ── Funciones de gestión de usuarios ──────────────────────────
+// Usadas por AdminPage
 
+/** Usuarios pendientes de aprobación */
 export async function fetchPendingUsers() {
+  if (!supabase) return [];
   const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
     .eq('approval_status', 'pending')
-    .eq('role', 'client')
-    .order('created_at', { ascending: false })
-
-  if (error) throw error
-  return data as UserProfile[]
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
 }
 
+/** Todos los usuarios (clientes aprobados y desactivados) */
 export async function fetchApprovedUsers() {
-  // Trae usuarios cliente con su empresa asignada (si existe)
+  if (!supabase) return [];
   const { data, error } = await supabase
     .from('user_profiles')
     .select(`
       *,
       client_user_access (
         access_status,
-        clients ( id, name, logo )
+        clients ( id, name )
       )
     `)
     .eq('role', 'client')
     .in('approval_status', ['approved', 'disabled'])
-    .order('created_at', { ascending: false })
-
-  if (error) throw error
-  return data
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
 }
 
+/** Lista simple de clientes para selectores */
 export async function fetchClients() {
+  if (!supabase) return [];
   const { data, error } = await supabase
     .from('clients')
-    .select('id, name, logo, industry')
-    .order('name')
-
-  if (error) throw error
-  return data
+    .select('id, name, industry')
+    .order('name');
+  if (error) throw error;
+  return data || [];
 }
 
-export async function approveUser(userId: string, clientId: string) {
-  // 1. Aprobar el perfil
-  const { error: profileError } = await supabase
+/** Consultores del equipo */
+export async function fetchConsultants() {
+  if (!supabase) return [];
+  const { data, error } = await supabase
     .from('user_profiles')
-    .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
-    .eq('id', userId)
-
-  if (profileError) throw profileError
-
-  // 2. Crear o actualizar el acceso al cliente
-  const { error: accessError } = await supabase
-    .from('client_user_access')
-    .upsert({
-      client_id: clientId,
-      user_id: userId,
-      access_status: 'approved',
-    }, { onConflict: 'client_id,user_id' })
-
-  if (accessError) throw accessError
+    .select('*')
+    .in('role', ['consultant', 'super_consultant'])
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
 }
 
-export async function disableUser(userId: string) {
+/** Aprobar usuario y asignarlo a un cliente */
+export async function approveUser(userId, clientId, role = 'client') {
+  if (!supabase) return;
+
+  const { error: profileErr } = await supabase
+    .from('user_profiles')
+    .update({ approval_status: 'approved', role, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  if (profileErr) throw profileErr;
+
+  if (role === 'client' && clientId) {
+    const { error: accessErr } = await supabase
+      .from('client_user_access')
+      .upsert({ client_id: clientId, user_id: userId, access_status: 'approved' },
+               { onConflict: 'client_id,user_id' });
+    if (accessErr) throw accessErr;
+  }
+}
+
+/** Desactivar usuario */
+export async function disableUser(userId) {
+  if (!supabase) return;
   const { error } = await supabase
     .from('user_profiles')
     .update({ approval_status: 'disabled', updated_at: new Date().toISOString() })
-    .eq('id', userId)
-
-  if (error) throw error
+    .eq('id', userId);
+  if (error) throw error;
 }
 
-export async function reEnableUser(userId: string) {
+/** Reactivar usuario */
+export async function reEnableUser(userId) {
+  if (!supabase) return;
   const { error } = await supabase
     .from('user_profiles')
     .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
-    .eq('id', userId)
+    .eq('id', userId);
+  if (error) throw error;
+}
 
-  if (error) throw error
+/** Actualizar rol de un usuario */
+export async function updateUserRole(userId, role) {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ role, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  if (error) throw error;
 }
