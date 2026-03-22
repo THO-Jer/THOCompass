@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
-import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl } from "./lib/supabase";
+import { supabase, isSupabaseConfigured, moduleKeyToBucket, getOAuthRedirectUrl, getAuthDebugInfo, fetchProjectWorkspace, insertProjectRecord, upsertProjectScore, fetchClientFiles, insertClientFile, fetchWorkspaceClients, isUuid } from "./lib/supabase";
+import ApprovalPanel from "./components/ApprovalPanel";
+import PendingAccess from "./components/PendingAccess";
+import { useAuthGuard, fetchPendingUsers, fetchApprovedUsers, fetchClients, approveUser, disableUser, reEnableUser } from "./hooks/useAuthGuard";
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────────────────
 const ThemeCtx = createContext();
@@ -477,6 +480,52 @@ const INIT_CLIENTS = [
       {day:22,text:"Entrega reporte Q1",color:brand.blue},
       {day:28,text:"Encuesta engagement DO",color:brand.do},
     ],
+    projects:[
+      {
+        id:"p-mla-rc", name:"Plan de relacionamiento comunitario Los Vilos", module_key:"rc", project_type:"territorial", description:"Seguimiento consultivo del relacionamiento territorial del corredor operativo y su zona de influencia.", status:"active", starts_on:"2025-01-10", ends_on:"2025-12-20",
+        zones:[
+          {id:"z-norte",name:"Zona Norte",zone_type:"direct",notes:"Mayor sensibilidad por tránsito y agua.", geojson:{type:"Polygon"}},
+          {id:"z-puerto",name:"Entorno Puerto",zone_type:"operational",notes:"Operación logística y programas costeros.", geojson:{type:"Polygon"}},
+        ],
+        actors:[
+          {id:"a1",zone_id:"z-norte",name:"Junta de Vecinos La Greda",actor_type:"Comunidad",influence_level:"Alta",engagement_level:"Media",relationship_status:"Tensionada",notes:"Solicitan plan de tránsito.",last_interaction_at:"2025-03-12"},
+          {id:"a2",zone_id:"z-puerto",name:"Municipalidad de Los Vilos",actor_type:"Institucional",influence_level:"Media",engagement_level:"Alta",relationship_status:"Activa",notes:"Mesa técnica mensual.",last_interaction_at:"2025-03-10"},
+        ],
+        programs:[
+          {id:"pr1",zone_id:"z-norte",name:"Mesa de diálogo sector norte",program_type:"dialogue",status:"active",objective:"Reducir tensión comunitaria",starts_on:"2025-01-20",ends_on:"2025-11-30"},
+          {id:"pr2",zone_id:"z-puerto",name:"Programa de monitoreo costero",program_type:"monitoring",status:"active",objective:"Dar trazabilidad a compromisos ambientales",starts_on:"2025-02-01",ends_on:"2025-12-15"},
+        ],
+        alerts:[
+          {id:"al1",zone_id:"z-norte",actor_id:"a1",source_record_id:"r1",severity:"red",category:"movilidad",title:"Aumento de tensión por tránsito de camiones",description:"Vecinos reportan alza de tránsito en horario punta.",visible_to_client:true,resolved:false,created_at:"2025-03-03"},
+          {id:"al2",zone_id:"z-puerto",source_record_id:"r2",severity:"amber",category:"vinculación",title:"Actor clave no vinculado hace 21 días",description:"Pendiente nueva reunión con directiva territorial.",visible_to_client:true,resolved:false,created_at:"2025-03-11"},
+        ],
+        activities:[
+          {id:"r1",zone_id:"z-norte",program_id:"pr1",actor_id:"a1",record_type:"meeting",title:"Mesa con vecinos sector norte",activity_date:"2025-03-12",participants_count:18,organizations_count:4,nps_score:42,evaluation_score:58,qualitative_summary:"Reunión intensa con foco en tránsito y ruido.",tensions_text:"Percepción de baja respuesta operativa.",opportunities_text:"Abrir mesa técnica con plan semanal.",consultant_notes:"Se recomienda compromiso visible en 10 días."},
+          {id:"r2",zone_id:"z-puerto",program_id:"pr2",record_type:"site_visit",title:"Recorrido puerto y borde costero",activity_date:"2025-03-08",participants_count:9,organizations_count:3,nps_score:null,evaluation_score:71,qualitative_summary:"Buen avance de trazabilidad.",tensions_text:"Persisten dudas sobre frecuencia de reportes.",opportunities_text:"Publicar tablero simple para comunidad.",consultant_notes:"Visible para comité ESG cliente."},
+        ],
+        signals:[
+          {id:"s1",source_record_id:"r1",dimension:"confianza",signal_type:"tension",severity:"amber",confidence_score:0.76,summary:"Confianza inicial baja en zona norte.",visible_to_client:true,created_at:"2025-03-12"},
+          {id:"s2",source_record_id:"r1",dimension:"riesgos",signal_type:"alert",severity:"red",confidence_score:0.84,summary:"Riesgo de escalamiento reputacional por tránsito.",visible_to_client:true,created_at:"2025-03-12"},
+        ],
+        commitments:[
+          {id:"c1",zone_id:"z-norte",actor_id:"a1",source_record_id:"r1",title:"Plan de mitigación de tránsito",description:"Diseñar y comunicar medidas visibles para vecinos.",commitment_type:"commitment",status:"in_progress",due_date:"2025-03-28",visible_to_client:true},
+          {id:"c2",zone_id:"z-puerto",title:"Publicar reporte costero resumido",description:"Resumen mensual del monitoreo costero para stakeholders.",commitment_type:"followup",status:"open",due_date:"2025-04-05",visible_to_client:true},
+        ],
+        scores:{overall_score:68,status_label:"En atención",dimension_scores_json:{participacion:72,confianza:54,articulacion:69,riesgos:48,oportunidades:74},method_notes:"Score simple basado en actividad, señales y compromisos.",updated_at:"2025-03-14"},
+        files:[{name:"Mapa_Actores_Zona_Norte.pdf",type:"pdf",date:"14 Mar 2025",module:"RC",ai_score:72}],
+      },
+      {
+        id:"p-mla-esg", name:"Estrategia de sostenibilidad territorial 2025", module_key:"esg", project_type:"programmatic", description:"Portafolio ESG con foco en trazabilidad, programas y articulación interna.", status:"active", starts_on:"2025-02-01", ends_on:"2025-12-31",
+        zones:[], actors:[],
+        programs:[{id:"esg-pr1",name:"Ruta de indicadores ESG",program_type:"governance",status:"active",objective:"Ordenar evidencia y trazabilidad",starts_on:"2025-02-01",ends_on:"2025-10-31"}],
+        alerts:[{id:"esg-al1",source_record_id:"esg-r1",severity:"amber",category:"trazabilidad",title:"Brecha de trazabilidad programática",description:"Faltan respaldos homogéneos entre áreas.",visible_to_client:true,resolved:false,created_at:"2025-03-09"}],
+        activities:[{id:"esg-r1",program_id:"esg-pr1",record_type:"internal_session",title:"Sesión de gobernanza ESG",activity_date:"2025-03-06",participants_count:7,organizations_count:1,evaluation_score:74,qualitative_summary:"Buena disposición ejecutiva.",tensions_text:"Falta claridad sobre dueños de datos.",opportunities_text:"Definir PMO ESG liviana.",consultant_notes:"Proyecto programático sin eje territorial principal."}],
+        signals:[{id:"esg-s1",dimension:"trazabilidad programática",signal_type:"opportunity",severity:"green",confidence_score:0.7,summary:"Existe disposición ejecutiva para ordenar evidencia ESG.",visible_to_client:true,created_at:"2025-03-06"}],
+        commitments:[{id:"esg-c1",title:"Definir owner por indicador",description:"Asignar responsables para trazabilidad ESG.",commitment_type:"issue",status:"open",due_date:"2025-04-02",visible_to_client:true}],
+        scores:{overall_score:71,status_label:"Avanzando",dimension_scores_json:{adopcion:69,cumplimiento:73,articulacion_interna:70,impacto_territorial:68,trazabilidad_programatica:74},method_notes:"Corte de marzo sobre iniciativas activas.",updated_at:"2025-03-10"},
+        files:[{name:"Roadmap_ESG_2025.pdf",type:"pdf",date:"10 Mar 2025",module:"ESG",ai_score:69}],
+      }
+    ],
     profile:{sector:"Minería y Recursos Naturales",size:"Grande (>1000 empleados)",region:"Coquimbo",since:"2024"},
   },
   {
@@ -505,30 +554,80 @@ const INIT_CLIENTS = [
     ],
     files:[{name:"Notas_Entrevista_Comunidad.txt",type:"txt",date:"8 Mar 2025",module:"RC",ai_score:52,status:"applied"}],
     events:[{day:20,text:"Call kick-off Coronel",color:brand.blue}],
+    projects:[
+      {
+        id:"p-bb-rc", name:"Plan de relacionamiento Proyecto Coronel", module_key:"rc", project_type:"territorial", description:"Seguimiento comunitario y territorial del proyecto Coronel.", status:"draft", starts_on:"2025-03-01", ends_on:"2025-11-30",
+        zones:[{id:"bb-z1",name:"Área de influencia directa",zone_type:"direct",notes:"Barrios colindantes y tránsito pesado.",geojson:{type:"Polygon"}}],
+        actors:[{id:"bb-a1",zone_id:"bb-z1",name:"Sindicato Proyecto Coronel",actor_type:"Trabajadores",influence_level:"Alta",engagement_level:"Media",relationship_status:"En desarrollo",notes:"Preocupación por ritmo de implementación.",last_interaction_at:"2025-03-06"}],
+        programs:[{id:"bb-pr1",zone_id:"bb-z1",name:"Mesa inicial Coronel",program_type:"engagement",status:"draft",objective:"Abrir canal territorial base",starts_on:"2025-03-20",ends_on:"2025-08-30"}],
+        alerts:[{id:"bb-al1",zone_id:"bb-z1",actor_id:"bb-a1",severity:"red",category:"licencia_social",title:"LSO bajo umbral crítico",description:"Todavía no existe relato común con actores clave.",visible_to_client:true,resolved:false,created_at:"2025-03-10"}],
+        activities:[{id:"bb-r1",zone_id:"bb-z1",record_type:"interview",title:"Entrevistas de arranque con actores laborales",activity_date:"2025-03-08",participants_count:6,organizations_count:2,evaluation_score:52,qualitative_summary:"Percepción inicial frágil.",tensions_text:"Baja confianza y alta expectativa de respuesta.",opportunities_text:"Diseñar quick wins visibles.",consultant_notes:"Proyecto en fase de diagnóstico."}],
+        signals:[{id:"bb-s1",source_record_id:"bb-r1",dimension:"confianza",signal_type:"tension",severity:"red",confidence_score:0.82,summary:"Confianza inicial baja con actores laborales.",visible_to_client:true,created_at:"2025-03-08"}],
+        commitments:[{id:"bb-c1",zone_id:"bb-z1",title:"Definir plan de escucha temprana",description:"Diseñar secuencia inicial de reuniones y devoluciones.",commitment_type:"followup",status:"open",due_date:"2025-03-27",visible_to_client:true}],
+        scores:{overall_score:52,status_label:"Crítico",dimension_scores_json:{participacion:49,confianza:42,articulacion:53,riesgos:41,oportunidades:61},method_notes:"Línea base del proyecto Coronel.",updated_at:"2025-03-10"},
+        files:[{name:"Base_Diagnostico_Coronel.pdf",type:"pdf",date:"10 Mar 2025",module:"RC",ai_score:55}],
+      },
+      {
+        id:"p-bb-do", name:"Proceso de cambio cultural y adopción CRM", module_key:"do", project_type:"organizational", description:"Acompañamiento al cambio cultural y adopción interna del CRM comercial.", status:"active", starts_on:"2025-02-15", ends_on:"2025-09-30",
+        zones:[], actors:[{id:"bb-do-a1",name:"Equipo Comercial",actor_type:"Área interna",influence_level:"Alta",engagement_level:"Media",relationship_status:"Variable",notes:"Resistencia operativa al uso del CRM.",last_interaction_at:"2025-03-05"}],
+        programs:[{id:"bb-do-pr1",name:"Ruta de adopción CRM",program_type:"change_management",status:"active",objective:"Mejorar adopción y claridad operativa",starts_on:"2025-02-20",ends_on:"2025-09-30"}],
+        alerts:[{id:"bb-do-al1",severity:"amber",category:"adopcion",title:"Resistencia moderada en equipo comercial",description:"Uso inconsistente del CRM entre supervisores.",visible_to_client:true,resolved:false,created_at:"2025-03-05"}],
+        activities:[{id:"bb-do-r1",program_id:"bb-do-pr1",record_type:"workshop",title:"Workshop de adopción CRM",activity_date:"2025-03-04",participants_count:24,organizations_count:1,evaluation_score:65,qualitative_summary:"Buena asistencia pero dudas operativas persistentes.",tensions_text:"Carga operativa percibida como alta.",opportunities_text:"Segmentar coaching por jefaturas.",consultant_notes:"Proyecto organizacional con foco en adopción."}],
+        signals:[{id:"bb-do-s1",source_record_id:"bb-do-r1",dimension:"resistencia",signal_type:"tension",severity:"amber",confidence_score:0.68,summary:"Resistencia moderada a la adopción por carga operativa.",visible_to_client:true,created_at:"2025-03-04"}],
+        commitments:[{id:"bb-do-c1",title:"Diseñar coaching por jefaturas",description:"Plan de acompañamiento para supervisores rezagados.",commitment_type:"commitment",status:"in_progress",due_date:"2025-03-29",visible_to_client:true}],
+        scores:{overall_score:65,status_label:"En desarrollo",dimension_scores_json:{claridad:66,adopcion:58,resistencia:49,liderazgo:71,carga_operativa:55},method_notes:"Corte DO marzo sobre adopción CRM.",updated_at:"2025-03-06"},
+        files:[{name:"Workshop_CRM_Marzo.pdf",type:"pdf",date:"6 Mar 2025",module:"DO",ai_score:66}],
+      }
+    ],
     profile:{sector:"Construcción e Inmobiliario",size:"Mediana (200–500 empleados)",region:"Biobío",since:"2025"},
   },
 ];
 
 const MOCK_CONSULTANT_EMAILS = ["admin@tho.cl", "equipo@tho.cl"];
 
+function isConsultantRole(role) {
+  return role === "consultant" || role === "super_consultant";
+}
+
+function getRoleLabel(role) {
+  if (role === "super_consultant") return "super consultora";
+  if (role === "consultant") return "consultora";
+  if (role === "client") return "cliente";
+  return "sin rol";
+}
+
+function getUserDisplayName(user) {
+  const metadataName = user?.user_metadata?.full_name
+    || user?.user_metadata?.name
+    || user?.user_metadata?.preferred_username
+    || user?.app_metadata?.full_name
+    || user?.app_metadata?.name;
+
+  if (metadataName) return metadataName;
+  if (user?.email) return user.email.split("@")[0];
+  return "Usuario";
+}
+
 function inferRoleFromUser(user) {
   const explicitRole = user?.app_metadata?.role || user?.user_metadata?.role;
-  if (explicitRole === "consultant" || explicitRole === "client") return explicitRole;
+  if (explicitRole === "consultant" || explicitRole === "super_consultant" || explicitRole === "client") return explicitRole;
   const email = user?.email?.toLowerCase() || "";
   if (MOCK_CONSULTANT_EMAILS.includes(email) || email.endsWith("@tho.cl")) return "consultant";
   return "client";
 }
 
-function formatAuthSession(user) {
+function formatRawUserSession(user, profile) {
   if (!user) return null;
   return {
     id: user.id,
     email: user.email,
-    role: inferRoleFromUser(user),
-    approvalStatus: user?.app_metadata?.approval_status || "pending",
+    displayName: getUserDisplayName(user),
+    role: profile?.role || inferRoleFromUser(user),
+    approvalStatus: profile?.approval_status || user?.app_metadata?.approval_status || "pending",
     provider: user?.app_metadata?.provider || user?.user_metadata?.provider || null,
   };
 }
+
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const sc = v => v===null||v===undefined?"var(--t3)":v>=70?brand.green:v>=50?brand.amber:brand.red;
@@ -1136,6 +1235,8 @@ function ModuleESG({client}){
 
 // ─── PROFILE PAGE ─────────────────────────────────────────────────────────────
 function ProfilePage({session,isConsultant,client}){
+  const profileName = isConsultant ? (session?.displayName || "THO Consultora") : client.name;
+  const profileEmail = isConsultant ? (session?.email || "Sin email") : client.email;
   const [saved,setSaved]=useState(false);
   return(
     <div className="page fu">
@@ -1149,12 +1250,12 @@ function ProfilePage({session,isConsultant,client}){
           <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
             <div className="profile-avatar-lg">{isConsultant?"T":client.logo}</div>
             <div>
-              <div style={{fontSize:16,fontFamily:"'Fraunces',serif",color:"var(--t1)",marginBottom:2}}>{isConsultant?"THO Consultora":client.name}</div>
-              <div className="mono muted" style={{fontSize:11}}>{isConsultant?"equipo@tho.cl":client.email}</div>
+              <div style={{fontSize:16,fontFamily:"'Fraunces',serif",color:"var(--t1)",marginBottom:2}}>{profileName}</div>
+              <div className="mono muted" style={{fontSize:11}}>{profileEmail}</div>
             </div>
           </div>
-          <div className="fg"><label className="fl">Nombre</label><input className="fi" defaultValue={isConsultant?"THO Consultora":client.name}/></div>
-          <div className="fg"><label className="fl">Email de contacto</label><input className="fi" type="email" defaultValue={isConsultant?"equipo@tho.cl":client.email}/></div>
+          <div className="fg"><label className="fl">Nombre</label><input className="fi" defaultValue={profileName}/></div>
+          <div className="fg"><label className="fl">Email de contacto</label><input className="fi" type="email" defaultValue={profileEmail}/></div>
           {!isConsultant&&(
             <>
               <div className="fg"><label className="fl">Sector</label><input className="fi" defaultValue={client.profile.sector}/></div>
@@ -1187,6 +1288,537 @@ function ProfilePage({session,isConsultant,client}){
           <button className="btn btn-g btn-sm">Actualizar contraseña</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function moduleAccent(moduleKey){ return MOD[moduleKey]?.color || brand.blue; }
+function moduleGradient(moduleKey){ const mod = MOD[moduleKey] || MOD.rc; return `linear-gradient(135deg,${mod.color},${mod.color2})`; }
+function statusBadgeCls(status){ return status==="active"?"bg":status==="draft"?"ba":status==="paused"?"bb":"br"; }
+function projectTabs(project){
+  const base=[["summary","Resumen"],["activity","Actividad"],["actors","Actores"],["programs","Programas"],["alerts","Alertas"],["commitments","Compromisos"],["reports","Señales"],["files","Archivos"]];
+  if(project?.module_key==="rc"||project?.project_type==="territorial") base.splice(1,0,["territory","Territorio"]);
+  return base;
+}
+function clampScore(value){ return Math.max(0, Math.min(100, Math.round(value))); }
+function labelizeDimension(key){ return key.replaceAll("_"," ").replace(/(^|\s)\S/g, c=>c.toUpperCase()); }
+function severityWeight(severity){ return severity==="red"?12:severity==="amber"?6:severity==="green"?-2:0; }
+function ensureUuidOrThrow(value, label){
+  if(value == null || value === "") return;
+  if(!isUuid(String(value))) throw new Error(`${label} inválido para Supabase: ${value}`);
+}
+function findMatchingRemoteClient(localClient, remoteClients){
+  if(!localClient) return null;
+  return remoteClients.find(remoteClient=>remoteClient.name?.trim().toLowerCase() === localClient.name?.trim().toLowerCase()) || null;
+}
+function findMatchingRemoteProject(localProject, remoteProjects){
+  if(!localProject || !remoteProjects?.length) return remoteProjects?.[0] || null;
+  const exactName = remoteProjects.find(project=>project.name?.trim().toLowerCase() === localProject.name?.trim().toLowerCase());
+  if(exactName) return exactName;
+  const byModule = remoteProjects.find(project=>project.module_key === localProject.module_key && project.project_type === localProject.project_type);
+  return byModule || remoteProjects[0] || null;
+}
+function getTimelineKindMeta(kind){
+  if(kind==="Actividad") return { icon:"📝", badgeCls:"bb", borderColor:brand.blue };
+  if(kind==="Alerta") return { icon:"⚠", badgeCls:"br", borderColor:brand.red };
+  if(kind==="Compromiso") return { icon:"✓", badgeCls:"ba", borderColor:brand.amber };
+  if(kind==="Señal") return { icon:"✦", badgeCls:"bg", borderColor:brand.green };
+  return { icon:"•", badgeCls:"bb", borderColor:"var(--b2)" };
+}
+function buildProjectSummary(project){
+  const activities=[...(project.activities||[])];
+  const alerts=[...(project.alerts||[])];
+  const commitments=[...(project.commitments||[])];
+  const signals=[...(project.signals||[])];
+  const programs=[...(project.programs||[])];
+  const zones=[...(project.zones||[])];
+  const openAlerts=alerts.filter(alert=>!alert.resolved);
+  const openCommitments=commitments.filter(item=>!["resolved","closed","rejected"].includes(item.status));
+  const activePrograms=programs.filter(program=>program.status==="active");
+  const recentActivities=[...activities].sort((a,b)=>new Date(b.activity_date)-new Date(a.activity_date));
+  const recentSignals=[...signals].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const evaluationValues=activities.map(activity=>[activity.evaluation_score,activity.nps_score]).flat().filter(v=>typeof v === "number" && !Number.isNaN(v));
+  const avgEvaluation=evaluationValues.length ? evaluationValues.reduce((sum,val)=>sum+val,0)/evaluationValues.length : 60;
+  const signalBuckets=(project.scores?.dimension_scores_json && typeof project.scores.dimension_scores_json === "object")
+    ? Object.fromEntries(Object.keys(project.scores.dimension_scores_json).map(key=>[key,60]))
+    : {participacion:60,confianza:60,articulacion:60,riesgos:60,oportunidades:60};
+
+  openAlerts.forEach(alert=>{
+    const penalty=severityWeight(alert.severity);
+    signalBuckets.riesgos=clampScore((signalBuckets.riesgos ?? 60) - penalty);
+    if(alert.category?.includes("confianza") || alert.category?.includes("licencia")) signalBuckets.confianza=clampScore((signalBuckets.confianza ?? 60) - penalty);
+    if(alert.category?.includes("particip") || alert.category?.includes("vinc")) signalBuckets.participacion=clampScore((signalBuckets.participacion ?? 60) - Math.max(2, penalty-2));
+  });
+
+  openCommitments.forEach(item=>{
+    const impact=item.status==="in_progress"?4:7;
+    signalBuckets.articulacion=clampScore((signalBuckets.articulacion ?? 60) - impact);
+    if(item.commitment_type === "issue" || item.commitment_type === "complaint") signalBuckets.confianza=clampScore((signalBuckets.confianza ?? 60) - (impact+2));
+  });
+
+  recentSignals.forEach(signal=>{
+    const key=(signal.dimension || "riesgos").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"_").replace(/^_|_$/g,"").toLowerCase() || "riesgos";
+    if(!(key in signalBuckets)) signalBuckets[key]=60;
+    const impact=signal.signal_type==="opportunity" ? (signal.severity==="green"?6:3) : signal.severity==="red"?-10:signal.severity==="amber"?-5:2;
+    signalBuckets[key]=clampScore(signalBuckets[key] + impact);
+  });
+
+  if(activities.length){
+    const participationBoost=Math.min(12, Math.round(activities.length*1.8));
+    signalBuckets.participacion=clampScore((signalBuckets.participacion ?? 60) + participationBoost);
+  }
+  signalBuckets.oportunidades=clampScore((signalBuckets.oportunidades ?? 60) + Math.round((avgEvaluation-60)/2));
+  signalBuckets.confianza=clampScore((signalBuckets.confianza ?? 60) + Math.round((avgEvaluation-55)/3));
+
+  const overallBase=avgEvaluation
+    - openAlerts.reduce((sum,alert)=>sum+severityWeight(alert.severity),0)
+    - openCommitments.reduce((sum,item)=>sum+(item.status==="in_progress"?4:7),0)
+    + activePrograms.length*2
+    + recentSignals.reduce((sum,signal)=>sum+(signal.signal_type==="opportunity"?3:(signal.severity==="red"?-4:signal.severity==="amber"?-2:1)),0);
+  const overallScore=clampScore(overallBase);
+  const statusLabel=overallScore>=75?"Sólido":overallScore>=63?"En atención":overallScore>=50?"Bajo vigilancia":"Crítico";
+  const scoreDrivers=[
+    {label:"Alertas activas", value:openAlerts.length, impact:-openAlerts.reduce((sum,alert)=>sum+severityWeight(alert.severity),0), detail:openAlerts.map(alert=>`${alert.severity} · ${alert.title}`)},
+    {label:"Compromisos abiertos", value:openCommitments.length, impact:-openCommitments.reduce((sum,item)=>sum+(item.status==="in_progress"?4:7),0), detail:openCommitments.map(item=>`${item.status} · ${item.title}`)},
+    {label:"Evaluaciones", value:evaluationValues.length?Math.round(avgEvaluation):"Sin dato", impact:Math.round(avgEvaluation-60), detail:recentActivities.slice(0,4).map(activity=>`${activity.title} · ${activity.evaluation_score ?? activity.nps_score ?? "sin score"}`)},
+    {label:"Señales", value:recentSignals.length, impact:recentSignals.reduce((sum,signal)=>sum+(signal.signal_type==="opportunity"?3:(signal.severity==="red"?-4:signal.severity==="amber"?-2:1)),0), detail:recentSignals.slice(0,4).map(signal=>`${signal.signal_type || "insight"} · ${signal.summary}`)},
+  ];
+  const zoneSummaries=zones.map(zone=>{
+    const zoneActivities=activities.filter(item=>item.zone_id===zone.id);
+    const zoneAlerts=alerts.filter(item=>item.zone_id===zone.id && !item.resolved);
+    const zoneCommitments=commitments.filter(item=>item.zone_id===zone.id && !["resolved","closed","rejected"].includes(item.status));
+    const zoneSignals=signals.filter(item=>{
+      if(item.source_record_id) return zoneActivities.some(activity=>activity.id===item.source_record_id);
+      return false;
+    });
+    const localBase=(zoneActivities.reduce((sum,activity)=>sum+(activity.evaluation_score ?? activity.nps_score ?? 60),0)/(zoneActivities.length||1))
+      - zoneAlerts.reduce((sum,alert)=>sum+severityWeight(alert.severity),0)
+      - zoneCommitments.length*6
+      + zoneSignals.reduce((sum,signal)=>sum+(signal.signal_type==="opportunity"?3:(signal.severity==="red"?-4:signal.severity==="amber"?-2:1)),0);
+    return {
+      zoneId:zone.id,
+      score:clampScore(zoneActivities.length ? localBase : 60 - zoneAlerts.length*8),
+      alerts:zoneAlerts,
+      commitments:zoneCommitments,
+      activities:zoneActivities,
+      signals:zoneSignals,
+    };
+  });
+  const activityIds=new Set(activities.map(activity=>activity.id));
+  const zoneIds=new Set(zones.map(zone=>zone.id));
+  const actorIds=new Set((project.actors||[]).map(actor=>actor.id));
+  const consistencyIssues=[
+    ...alerts.filter(item=>item.source_record_id && !activityIds.has(item.source_record_id)).map(item=>`Alerta sin actividad fuente válida: ${item.title}`),
+    ...signals.filter(item=>item.source_record_id && !activityIds.has(item.source_record_id)).map(item=>`Señal sin actividad fuente válida: ${item.summary}`),
+    ...commitments.filter(item=>item.source_record_id && !activityIds.has(item.source_record_id)).map(item=>`Compromiso sin actividad fuente válida: ${item.title}`),
+    ...activities.filter(item=>item.zone_id && !zoneIds.has(item.zone_id)).map(item=>`Actividad con zona huérfana: ${item.title}`),
+    ...alerts.filter(item=>item.actor_id && !actorIds.has(item.actor_id)).map(item=>`Alerta con actor huérfano: ${item.title}`),
+  ];
+
+  return {
+    overallScore,
+    statusLabel,
+    dimensionScores:signalBuckets,
+    openAlerts,
+    openCommitments,
+    recentActivities,
+    recentSignals,
+    activePrograms,
+    scoreDrivers,
+    zoneSummaries,
+    consistencyIssues,
+    timeline:[
+      ...activities.map(item=>({id:`activity-${item.id}`,kind:"Actividad",date:item.activity_date,title:item.title,desc:item.qualitative_summary || item.consultant_notes || "Sin resumen cualitativo.",color:moduleAccent(project.module_key),sourceId:item.id,meta:`${item.record_type} · ${item.participants_count||0} participantes`})),
+      ...alerts.map(item=>({id:`alert-${item.id}`,kind:"Alerta",date:item.created_at,title:item.title,desc:item.description,color:item.severity==="red"?brand.red:item.severity==="amber"?brand.amber:brand.green,sourceId:item.source_record_id,meta:`${item.category || "sin categoría"} · ${item.resolved?"resuelta":"activa"}`})),
+      ...signals.map(item=>({id:`signal-${item.id}`,kind:"Señal",date:item.created_at,title:item.summary,desc:`${labelizeDimension(item.dimension || "riesgos")} · ${item.signal_type || "interpretación"}`,color:item.severity==="red"?brand.red:item.severity==="amber"?brand.amber:brand.green,sourceId:item.source_record_id,meta:`confianza ${item.confidence_score ?? "—"}`})),
+      ...commitments.map(item=>({id:`commitment-${item.id}`,kind:"Compromiso",date:item.due_date || item.created_at,title:item.title,desc:item.description || "Sin descripción.",color:brand.blue,sourceId:item.source_record_id,meta:`${item.commitment_type} · ${item.status}`})),
+    ].sort((a,b)=>new Date(b.date)-new Date(a.date)),
+  };
+}
+function ProjectPortfolio({clients,onOpenProject,isConsultant}){
+  const visibleClients=isConsultant?clients:clients.slice(0,1);
+  return(
+    <div className="page fu">
+      <div className="ph">
+        <div className="ph-eye">{isConsultant?"Portafolio consultivo":"Proyectos autorizados"}</div>
+        <div className="ph-title">Proyectos activos y cerrados</div>
+        <div className="ph-desc muted">La unidad principal ya no es sólo el cliente: cada proyecto concentra actividades, alertas, actores, programas, compromisos y señales.</div>
+      </div>
+      {visibleClients.map(client=><div key={client.id} className="card fu" style={{marginBottom:16}}>
+        <div className="sec-hdr"><div><div className="ctitle mb0">{client.logo} {client.name}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{client.industry} · {(client.projects||[]).length} proyecto(s)</div></div><span className={`badge ${client.published?"bg":"ba"}`}>{client.published?"Cliente visible":"Interno / borrador"}</span></div>
+        <div className="g3" style={{marginTop:16}}>{(client.projects||[]).map(project=>{
+          const score=buildProjectSummary(project).overallScore;
+          const openAlerts=(project.alerts||[]).filter(a=>!a.resolved).length;
+          const openCommitments=(project.commitments||[]).filter(c=>c.status!=="resolved"&&c.status!=="closed").length;
+          return <div key={project.id} className="card" style={{padding:18,border:`1px solid ${moduleAccent(project.module_key)}35`,background:`linear-gradient(180deg,${MOD[project.module_key]?.cB||brand.blueA},transparent 50%)`}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:10}}><span className="mod-tag" style={{color:moduleAccent(project.module_key),borderColor:moduleAccent(project.module_key)}}>{MOD[project.module_key]?.icon} {project.module_key.toUpperCase()}</span><span className={`badge ${statusBadgeCls(project.status)}`}>{project.status}</span></div>
+            <div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)",marginBottom:8}}>{project.name}</div>
+            <div style={{fontSize:13,color:"var(--t2)",marginBottom:14,lineHeight:1.6}}>{project.description}</div>
+            <div className="mono muted" style={{fontSize:11,marginBottom:14}}>{project.project_type} · {project.starts_on} → {project.ends_on}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginBottom:14}}>
+              <div className="stat-chip"><div className="stat-val" style={{color:sc(score||0)}}>{score??"—"}</div><div className="stat-lbl">Índice</div></div>
+              <div className="stat-chip"><div className="stat-val" style={{color:openAlerts?brand.amber:"var(--t1)"}}>{openAlerts}</div><div className="stat-lbl">Alertas</div></div>
+              <div className="stat-chip"><div className="stat-val" style={{color:openCommitments?brand.blue:"var(--t1)"}}>{openCommitments}</div><div className="stat-lbl">Compromisos</div></div>
+            </div>
+            <button className="btn btn-g btn-sm" onClick={()=>onOpenProject(client.id,project.id)} style={{width:"100%",justifyContent:"center"}}>Abrir proyecto</button>
+          </div>;
+        })}</div>
+      </div>)}
+    </div>
+  );
+}
+function ProjectWorkspace({client,project,isConsultant,onUpdateProject}){
+  const [tab,setTab]=useState("summary");
+  const [selectedActivityId,setSelectedActivityId]=useState(project.activities?.[0]?.id || null);
+  const [selectedZoneId,setSelectedZoneId]=useState(project.zones?.[0]?.id || "all");
+  const [territoryFilter,setTerritoryFilter]=useState("all");
+  const [syncMsg,setSyncMsg]=useState(isSupabaseConfigured ? "Sincronizando con Supabase…" : "Modo demo local");
+  const [saving,setSaving]=useState(false);
+  const [activityForm,setActivityForm]=useState({
+    record_type:"meeting",
+    activity_date:new Date().toISOString().slice(0,10),
+    title:"",
+    participants_count:"",
+    evaluation_score:"",
+    qualitative_summary:"",
+    tensions_text:"",
+    opportunities_text:"",
+    consultant_notes:"",
+    zone_id:project.zones?.[0]?.id || "",
+    actor_id:project.actors?.[0]?.id || "",
+    auto_signal:true,
+    auto_alert:false,
+    auto_commitment:false,
+  });
+  const [composer,setComposer]=useState({
+    signal:{dimension:"confianza",signal_type:"tension",severity:"amber",summary:"",confidence_score:"0.75",visible_to_client:true},
+    alert:{severity:"amber",category:"seguimiento",title:"",description:"",visible_to_client:true},
+    commitment:{title:"",description:"",commitment_type:"followup",status:"open",due_date:"",visible_to_client:true},
+  });
+  const tabs=projectTabs(project);
+  const summary=buildProjectSummary(project);
+  const dimensions=Object.entries(summary.dimensionScores || {});
+  const selectedActivity=summary.recentActivities.find(activity=>activity.id===selectedActivityId) || summary.recentActivities[0] || null;
+  const zoneLookup=new Map((project.zones||[]).map(zone=>[zone.id, zone]));
+  const actorLookup=new Map((project.actors||[]).map(actor=>[actor.id, actor]));
+  const selectedZone = selectedZoneId === "all" ? null : zoneLookup.get(selectedZoneId) || null;
+  const selectedZoneSummary = summary.zoneSummaries.find(item=>item.zoneId===selectedZoneId) || null;
+  const visibleZones=(project.zones||[]).filter(zone=>territoryFilter==="all" || zone.zone_type===territoryFilter);
+  const visibleZoneIds=new Set(visibleZones.map(zone=>zone.id));
+  const territoryActors=(project.actors||[]).filter(actor=>territoryFilter==="all" ? true : visibleZoneIds.has(actor.zone_id));
+  const territoryAlerts=(project.alerts||[]).filter(alert=>territoryFilter==="all" ? true : visibleZoneIds.has(alert.zone_id));
+  const territoryPrograms=(project.programs||[]).filter(program=>territoryFilter==="all" ? true : visibleZoneIds.has(program.zone_id));
+
+  useEffect(()=>{
+    const firstActivity=project.activities?.[0]?.id || null;
+    if(selectedActivityId && project.activities?.some(activity=>activity.id===selectedActivityId)) return;
+    setSelectedActivityId(firstActivity);
+  }, [project.activities, selectedActivityId]);
+
+  useEffect(()=>{
+    const firstZone=project.zones?.[0]?.id || "all";
+    if(selectedZoneId === "all" || project.zones?.some(zone=>zone.id===selectedZoneId)) return;
+    setSelectedZoneId(firstZone);
+  }, [project.zones, selectedZoneId]);
+
+  useEffect(()=>{
+    let cancelled=false;
+    async function syncWorkspace(){
+      if(!isSupabaseConfigured){
+        setSyncMsg("Modo demo local");
+        return;
+      }
+      if(!isUuid(String(project.id))){
+        setSyncMsg(`Proyecto local no persistido (${project.id}). Selecciona un proyecto remoto UUID para guardar en Supabase.`);
+        return;
+      }
+      try{
+        const remoteProject = await fetchProjectWorkspace(project.id);
+        if(cancelled || !remoteProject) return;
+        onUpdateProject?.(prevProject=>({...prevProject, ...remoteProject}));
+        setSyncMsg("Fuente de verdad: Supabase");
+      }catch(error){
+        if(cancelled) return;
+        setSyncMsg(`Supabase no disponible (${error.message}). Usando fallback local.`);
+      }
+    }
+    syncWorkspace();
+    return ()=>{ cancelled=true; };
+  }, [project.id]);
+
+  useEffect(()=>{
+    if(!isSupabaseConfigured) return;
+    if(!isUuid(String(project.id))) return;
+    upsertProjectScore(project.id, {
+      overall_score: summary.overallScore,
+      status_label: summary.statusLabel,
+      dimension_scores_json: summary.dimensionScores,
+      score_drivers_json: summary.scoreDrivers,
+      method_notes: "Score demo explicable basado en alertas, compromisos, evaluaciones y señales.",
+      updated_at: new Date().toISOString(),
+    }).then((scoreRow)=>{
+      if(scoreRow) onUpdateProject?.(prevProject=>({...prevProject, scores: scoreRow}));
+    }).catch(()=>{});
+  }, [project.id, summary.overallScore, summary.statusLabel, JSON.stringify(summary.dimensionScores)]);
+
+  function updateForm(field, value){
+    setActivityForm(prev=>({...prev,[field]:value}));
+  }
+
+  function patchProject(patch){
+    onUpdateProject?.(prevProject=>({
+      ...prevProject,
+      ...patch,
+    }));
+  }
+
+  async function persistRecord(table, payload, fallback){
+    if(!isSupabaseConfigured) return fallback;
+    ensureUuidOrThrow(project.id, "project_id");
+    ensureUuidOrThrow(payload.project_id, "project_id");
+    ensureUuidOrThrow(payload.zone_id, "zone_id");
+    ensureUuidOrThrow(payload.actor_id, "actor_id");
+    ensureUuidOrThrow(payload.program_id, "program_id");
+    ensureUuidOrThrow(payload.source_record_id, "source_record_id");
+    return insertProjectRecord(table, payload);
+  }
+
+  async function createLinkedRecord(kind, sourceActivityOverride){
+    const sourceActivity=sourceActivityOverride || selectedActivity;
+    if(!sourceActivity) return null;
+    if(kind==="signal"){
+      const summaryText=(composer.signal.summary || sourceActivity.opportunities_text || sourceActivity.tensions_text || sourceActivity.title).trim();
+      if(!summaryText) return null;
+      const draft={
+        id:`signal-${Date.now()}`,
+        project_id:project.id,
+        source_record_id:sourceActivity.id,
+        dimension:composer.signal.dimension,
+        signal_type:composer.signal.signal_type,
+        severity:composer.signal.severity,
+        confidence_score:Number(composer.signal.confidence_score || 0),
+        summary:summaryText,
+        visible_to_client:composer.signal.visible_to_client,
+        created_at:new Date().toISOString().slice(0,10),
+      };
+      const saved=await persistRecord("project_signals", draft, draft);
+      patchProject({signals:[saved,...(project.signals||[])]});
+      setComposer(prev=>({...prev,signal:{...prev.signal,summary:""}}));
+      return saved;
+    }
+    if(kind==="alert"){
+      const draft={
+        id:`alert-${Date.now()}`,
+        project_id:project.id,
+        source_record_id:sourceActivity.id,
+        zone_id:sourceActivity.zone_id || null,
+        actor_id:sourceActivity.actor_id || null,
+        severity:composer.alert.severity,
+        category:composer.alert.category.trim(),
+        title:(composer.alert.title || `Seguimiento: ${sourceActivity.title}`).trim(),
+        description:(composer.alert.description || sourceActivity.tensions_text || sourceActivity.qualitative_summary || "").trim(),
+        visible_to_client:composer.alert.visible_to_client,
+        resolved:false,
+        created_at:new Date().toISOString().slice(0,10),
+      };
+      const saved=await persistRecord("project_alerts", draft, draft);
+      patchProject({alerts:[saved,...(project.alerts||[])]});
+      setComposer(prev=>({...prev,alert:{...prev.alert,title:"",description:""}}));
+      return saved;
+    }
+    if(kind==="commitment"){
+      const draft={
+        id:`commitment-${Date.now()}`,
+        project_id:project.id,
+        source_record_id:sourceActivity.id,
+        zone_id:sourceActivity.zone_id || null,
+        actor_id:sourceActivity.actor_id || null,
+        title:(composer.commitment.title || `Acción derivada: ${sourceActivity.title}`).trim(),
+        description:(composer.commitment.description || sourceActivity.opportunities_text || sourceActivity.consultant_notes || "").trim(),
+        commitment_type:composer.commitment.commitment_type,
+        status:composer.commitment.status,
+        due_date:composer.commitment.due_date || null,
+        visible_to_client:composer.commitment.visible_to_client,
+        created_at:new Date().toISOString().slice(0,10),
+      };
+      const saved=await persistRecord("project_commitments", draft, draft);
+      patchProject({commitments:[saved,...(project.commitments||[])]});
+      setComposer(prev=>({...prev,commitment:{...prev.commitment,title:"",description:"",due_date:""}}));
+      return saved;
+    }
+    return null;
+  }
+
+  async function createActivity(){
+    if(!activityForm.title.trim() || !activityForm.activity_date) return;
+    setSaving(true);
+    try{
+      const draft={
+        id:`activity-${Date.now()}`,
+        project_id:project.id,
+        zone_id:activityForm.zone_id || null,
+        actor_id:activityForm.actor_id || null,
+        record_type:activityForm.record_type,
+        title:activityForm.title.trim(),
+        activity_date:activityForm.activity_date,
+        participants_count:activityForm.participants_count ? Number(activityForm.participants_count) : null,
+        evaluation_score:activityForm.evaluation_score ? Number(activityForm.evaluation_score) : null,
+        qualitative_summary:activityForm.qualitative_summary.trim(),
+        tensions_text:activityForm.tensions_text.trim(),
+        opportunities_text:activityForm.opportunities_text.trim(),
+        consultant_notes:activityForm.consultant_notes.trim(),
+        created_at:new Date().toISOString(),
+      };
+      const savedActivity=await persistRecord("project_activities", draft, draft);
+      patchProject({activities:[savedActivity,...(project.activities||[])]});
+      setSelectedActivityId(savedActivity.id);
+
+      if(activityForm.auto_signal){
+        setComposer(prev=>({...prev,signal:{...prev.signal,summary:prev.signal.summary || draft.opportunities_text || draft.tensions_text || draft.qualitative_summary}}));
+        await createLinkedRecord("signal", savedActivity);
+      }
+      if(activityForm.auto_alert) await createLinkedRecord("alert", savedActivity);
+      if(activityForm.auto_commitment) await createLinkedRecord("commitment", savedActivity);
+
+      setActivityForm(prev=>({
+        ...prev,
+        title:"",
+        participants_count:"",
+        evaluation_score:"",
+        qualitative_summary:"",
+        tensions_text:"",
+        opportunities_text:"",
+        consultant_notes:"",
+      }));
+      setSyncMsg(isSupabaseConfigured ? "Cambios persistidos en Supabase" : "Cambios guardados en demo local");
+    }catch(error){
+      setSyncMsg(`Error al guardar: ${error.message}`);
+    }finally{
+      setSaving(false);
+    }
+  }
+
+  const projectScore = summary.overallScore;
+
+  return(
+    <div className="page fu">
+      <div className="ph">
+        <div className="ph-eye">{client.logo} {client.name} · {MOD[project.module_key]?.label}</div>
+        <div className="ph-title">{project.name}</div>
+        <div className="ph-row"><span className={`badge ${statusBadgeCls(project.status)}`}>{project.status}</span><span className="mod-tag" style={{color:moduleAccent(project.module_key),borderColor:moduleAccent(project.module_key)}}>{project.project_type}</span><span style={{fontSize:12,color:"var(--t3)"}}>{project.starts_on} → {project.ends_on}</span><span className="badge bb">{syncMsg}</span></div>
+        <div className="ph-desc muted">El sistema registra lo que pasa en el proyecto y te muestra su impacto inmediato en score, señales, alertas, compromisos y territorio.</div>
+      </div>
+      <div className="tabs" style={{flexWrap:"wrap"}}>{tabs.map(([id,label])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{label}</button>)}</div>
+
+      {tab==="summary"&&<>
+        <div className="hero fu">
+          <div>
+            <div className="hero-eye">Resumen operativo del proyecto</div>
+            <div className="hero-co">{summary.statusLabel}</div>
+            <div className="hero-desc">{project.description}</div>
+            <div className="hero-tags">{summary.recentSignals.slice(0,4).map(signal=><span key={signal.id} className="mod-tag" style={{color:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green,borderColor:signal.severity==="red"?brand.red:signal.severity==="amber"?brand.amber:brand.green}}>{signal.summary}</span>)}</div>
+          </div>
+          <div style={{textAlign:"center"}}><ScoreRing val={projectScore} size={128} color={moduleAccent(project.module_key)}/><div style={{marginTop:8,fontSize:12,color:"var(--t3)"}}>Score explicado por actividad + alertas + compromisos + señales</div></div>
+        </div>
+        <div className="g4 fu">
+          {[["Alertas activas",summary.openAlerts.length,summary.openAlerts.length?brand.amber:"var(--t1)"],["Compromisos abiertos",summary.openCommitments.length,summary.openCommitments.length?brand.blue:"var(--t1)"],["Actividades",(project.activities||[]).length,"var(--t1)"],["Programas activos",summary.activePrograms.length,summary.activePrograms.length?brand.green:"var(--t1)"]].map(([l,v,c])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:c}}>{v}</div><div className="stat-lbl">{l}</div></div>)}
+        </div>
+        <div className="g2">
+          <div className="card fu">
+            <div className="ctitle">Breakdown por dimensión</div>
+            {dimensions.map(([label,val])=><Prog key={label} label={labelizeDimension(label)} val={val} color={moduleAccent(project.module_key)}/>)}
+          </div>
+          <div className="card fu">
+            <div className="ctitle">Qué está afectando el score</div>
+            {summary.scoreDrivers.map(driver=><div key={driver.label} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{driver.label}</div><div className="mono" style={{color:driver.impact>=0?brand.green:brand.red}}>{driver.impact>=0?"+":""}{driver.impact}</div></div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>Valor: {driver.value}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:4}}>{driver.detail.join(" · ") || "Sin detalle aún."}</div></div>)}
+          </div>
+        </div>
+        <div className="g2">
+          <div className="card fu"><div className="ctitle">Últimas actividades</div>{summary.recentActivities.slice(0,5).map(item=><div key={item.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)",margin:"4px 0"}}>{item.activity_date} · {item.record_type} · {item.participants_count || 0} participantes</div><div style={{fontSize:13,color:"var(--t2)"}}>{item.qualitative_summary || item.consultant_notes}</div></div>)}</div>
+          <div className="card fu"><div className="ctitle">Consistencia de relaciones</div>{summary.consistencyIssues.length ? summary.consistencyIssues.map((issue,idx)=><div key={idx} className="alert al-r">{issue}</div>) : <div className="alert al-g">No se detectaron entidades huérfanas ni `source_record_id` inválidos.</div>}</div>
+        </div>
+        <div className="card fu">
+          <div className="ctitle">Timeline unificado del proyecto</div>
+          {summary.timeline.map(item=>{ const kindMeta=getTimelineKindMeta(item.kind); return <div key={item.id} style={{display:"flex",gap:12,padding:"12px 14px",borderBottom:"1px solid var(--b1)",borderLeft:`4px solid ${kindMeta.borderColor}`,borderRadius:10,marginBottom:8,background:"var(--s2)"}}><div style={{fontSize:20,lineHeight:1}}>{kindMeta.icon}</div><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className={`badge ${kindMeta.badgeCls}`}>{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span>{item.sourceId&&<span className="mono muted" style={{fontSize:11}}>source_record_id: {item.sourceId}</span>}</div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></div>;})}
+        </div>
+      </>}
+
+      {tab==="territory"&&<div className="g2">
+        <div className="card fu">
+          <div className="sec-hdr"><div className="ctitle mb0">Territorio RC</div><select className="fsel" style={{maxWidth:180}} value={territoryFilter} onChange={e=>setTerritoryFilter(e.target.value)}><option value="all">Todas las zonas</option><option value="direct">Influencia directa</option><option value="operational">Operación</option><option value="indirect">Indirecta</option></select></div>
+          <div style={{position:"relative",height:340,borderRadius:16,border:"1px solid var(--b1)",background:"linear-gradient(180deg,var(--s2),var(--s3))",overflow:"hidden"}}>
+            {visibleZones.map((zone,idx)=>{ const zoneSummary=summary.zoneSummaries.find(item=>item.zoneId===zone.id); return <button key={zone.id} onClick={()=>setSelectedZoneId(zone.id)} style={{position:"absolute",left:`${24 + (idx%2)*190}px`,top:`${36 + Math.floor(idx/2)*120}px`,width:160,height:92,borderRadius:24,background:selectedZoneId===zone.id?`${moduleAccent(project.module_key)}33`:`${moduleAccent(project.module_key)}18`,border:`1px solid ${selectedZoneId===zone.id?moduleAccent(project.module_key):`${moduleAccent(project.module_key)}55`}`,padding:16,textAlign:"left",cursor:"pointer",color:"var(--t1)"}}><div style={{fontFamily:"'Fraunces',serif",fontSize:18}}>{zone.name}</div><div className="mono muted" style={{fontSize:11,marginTop:4}}>{zone.zone_type}</div><div style={{fontSize:12,color:"var(--t2)",marginTop:10}}>Score local {zoneSummary?.score ?? "—"} · {zoneSummary?.alerts.length || 0} alertas</div></button>;})}
+            {territoryActors.map((actor,idx)=><div key={actor.id} style={{position:"absolute",left:`${78 + (idx%3)*126}px`,top:`${84 + (idx%2)*138}px`,padding:"6px 10px",borderRadius:16,background:"var(--s1)",border:`1px solid ${actor.relationship_status==="Tensionada"?brand.red:brand.blue}55`,fontSize:12,color:"var(--t1)"}}>{actor.name}</div>)}
+          </div>
+        </div>
+        <div className="card fu">
+          <div className="ctitle">Detalle territorial</div>
+          {selectedZone ? <>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:10}}><div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)"}}>{selectedZone.name}</div><div className="stat-chip" style={{minWidth:110}}><div className="stat-val" style={{color:sc(selectedZoneSummary?.score || 0)}}>{selectedZoneSummary?.score ?? "—"}</div><div className="stat-lbl">Score local</div></div></div>
+            <div className="badge bb" style={{marginBottom:12}}>{selectedZone.zone_type}</div>
+            <div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}>{selectedZone.notes}</div>
+            <div className="ctitle-sm">Alertas</div>
+            {(selectedZoneSummary?.alerts || []).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div></div></div>)}
+            <div className="ctitle-sm" style={{marginTop:16}}>Actores</div>
+            {(project.actors||[]).filter(actor=>actor.zone_id===selectedZone.id).map(actor=><div key={actor.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{actor.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{actor.actor_type} · Influencia {actor.influence_level}</div></div><span className={`badge ${actor.relationship_status==="Tensionada"?"br":"bb"}`}>{actor.relationship_status}</span></div></div>)}
+            <div className="ctitle-sm" style={{marginTop:16}}>Programas</div>
+            {(project.programs||[]).filter(program=>program.zone_id===selectedZone.id).map(program=><div key={program.id} style={{padding:"10px 0",borderBottom:"1px solid var(--b1)"}}><div style={{fontSize:13,color:"var(--t1)",fontWeight:600}}>{program.name}</div><div style={{fontSize:12,color:"var(--t3)",marginTop:4}}>{program.objective}</div></div>)}
+          </> : <div className="muted">Selecciona una zona para ver score local, alertas, actores y programas.</div>}
+        </div>
+      </div>}
+
+      {tab==="activity"&&<div className="g2">
+        <div className="card fu">
+          <div className="ctitle">Timeline operativo</div>
+          {summary.timeline.map(item=>{ const kindMeta=getTimelineKindMeta(item.kind); return <button key={item.id} onClick={()=>item.kind==="Actividad" && setSelectedActivityId(item.sourceId)} style={{display:"flex",gap:12,padding:"12px 14px",marginBottom:8,border:`1px solid ${kindMeta.borderColor}44`,borderLeft:`4px solid ${kindMeta.borderColor}`,borderRadius:12,background:"var(--s2)",width:"100%",textAlign:"left",cursor:item.kind==="Actividad"?"pointer":"default"}}><div style={{fontSize:20,lineHeight:1}}>{kindMeta.icon}</div><div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}><span className={`badge ${kindMeta.badgeCls}`}>{item.kind}</span><span className="mono muted" style={{fontSize:11}}>{item.date}</span></div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:13,color:"var(--t2)",marginTop:4}}>{item.desc}</div><div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>{item.meta}</div></div></button>;})}
+        </div>
+        <div className="fu" style={{display:"grid",gap:16}}>
+          <div className="card">
+            <div className="ctitle">Detalle de actividad e impacto</div>
+            {selectedActivity ? <>
+              <div style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"var(--t1)",marginBottom:6}}>{selectedActivity.title}</div>
+              <div style={{fontSize:12,color:"var(--t3)",marginBottom:12}}>{selectedActivity.activity_date} · {selectedActivity.record_type} · actor {actorLookup.get(selectedActivity.actor_id)?.name || "sin actor"}</div>
+              <div className="g2" style={{marginBottom:12}}>
+                <div className="stat-chip"><div className="stat-val" style={{color:"var(--t1)"}}>{selectedActivity.participants_count || 0}</div><div className="stat-lbl">Participantes</div></div>
+                <div className="stat-chip"><div className="stat-val" style={{color:sc(selectedActivity.evaluation_score || selectedActivity.nps_score || 0)}}>{selectedActivity.evaluation_score ?? selectedActivity.nps_score ?? "—"}</div><div className="stat-lbl">Evaluación / NPS</div></div>
+              </div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Resumen:</strong> {selectedActivity.qualitative_summary || "Sin resumen"}</div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Tensiones:</strong> {selectedActivity.tensions_text || "Sin tensiones registradas"}</div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:10}}><strong style={{color:"var(--t1)"}}>Oportunidades:</strong> {selectedActivity.opportunities_text || "Sin oportunidades registradas"}</div>
+              <div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}><strong style={{color:"var(--t1)"}}>Notas del consultor:</strong> {selectedActivity.consultant_notes || "Sin notas"}</div>
+              <div className="btn-row" style={{marginTop:0}}>
+                <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("signal")}>Crear señal</button>
+                <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("alert")}>Crear alerta</button>
+                <button className="btn btn-g btn-sm" onClick={()=>createLinkedRecord("commitment")}>Crear compromiso</button>
+              </div>
+            </> : <div className="muted">Selecciona una actividad para ver su detalle.</div>}
+          </div>
+          <div className="card">
+            <div className="ctitle">Registrar actividad y ver impacto</div>
+            <div className="frow"><div className="fg"><label className="fl">Tipo de actividad</label><select className="fsel" value={activityForm.record_type} onChange={e=>updateForm("record_type",e.target.value)}><option value="meeting">Meeting</option><option value="workshop">Workshop</option><option value="interview">Interview</option><option value="site_visit">Site visit</option><option value="internal_session">Internal session</option></select></div><div className="fg"><label className="fl">Fecha</label><input type="date" className="fi" value={activityForm.activity_date} onChange={e=>updateForm("activity_date",e.target.value)}/></div></div>
+            <div className="fg"><label className="fl">Título</label><input className="fi" value={activityForm.title} onChange={e=>updateForm("title",e.target.value)}/></div>
+            <div className="frow3"><div className="fg"><label className="fl">Participantes</label><input className="fi" value={activityForm.participants_count} onChange={e=>updateForm("participants_count",e.target.value)}/></div><div className="fg"><label className="fl">Evaluación / NPS</label><input className="fi" value={activityForm.evaluation_score} onChange={e=>updateForm("evaluation_score",e.target.value)}/></div><div className="fg"><label className="fl">Zona</label><select className="fsel" value={activityForm.zone_id} onChange={e=>updateForm("zone_id",e.target.value)}><option value="">Sin zona</option>{(project.zones||[]).map(zone=><option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></div></div>
+            <div className="fg"><label className="fl">Actor principal</label><select className="fsel" value={activityForm.actor_id} onChange={e=>updateForm("actor_id",e.target.value)}><option value="">Sin actor</option>{(project.actors||[]).map(actor=><option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
+            <div className="fg"><label className="fl">Resumen cualitativo</label><textarea className="fta" value={activityForm.qualitative_summary} onChange={e=>updateForm("qualitative_summary",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Tensiones</label><textarea className="fta" value={activityForm.tensions_text} onChange={e=>updateForm("tensions_text",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Oportunidades</label><textarea className="fta" value={activityForm.opportunities_text} onChange={e=>updateForm("opportunities_text",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Notas del consultor</label><textarea className="fta" value={activityForm.consultant_notes} onChange={e=>updateForm("consultant_notes",e.target.value)}/></div>
+            <div className="frow3">
+              <label className="stat-chip" style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={activityForm.auto_signal} onChange={e=>updateForm("auto_signal",e.target.checked)}/><span>Crear señal automática</span></label>
+              <label className="stat-chip" style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={activityForm.auto_alert} onChange={e=>updateForm("auto_alert",e.target.checked)}/><span>Crear alerta automática</span></label>
+              <label className="stat-chip" style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={activityForm.auto_commitment} onChange={e=>updateForm("auto_commitment",e.target.checked)}/><span>Crear compromiso automático</span></label>
+            </div>
+            <button className="btn btn-p btn-sm" onClick={createActivity} disabled={saving}>{saving?"Guardando…":"Registrar actividad y aplicar impacto"}</button>
+          </div>
+        </div>
+      </div>}
+
+      {tab==="actors"&&<div className="card fu"><div className="ctitle">Actores y vínculos</div>{(project.actors||[]).map(actor=><div key={actor.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{actor.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{actor.actor_type} · Influencia {actor.influence_level} · Vinculación {actor.engagement_level}</div></div><span className={`badge ${actor.relationship_status==="Tensionada"?"br":"bb"}`}>{actor.relationship_status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{actor.notes}</div></div>)}</div>}
+      {tab==="programs"&&<div className="card fu"><div className="ctitle">Programas del proyecto</div>{(project.programs||[]).map(program=><div key={program.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{program.name}</div><div style={{fontSize:12,color:"var(--t3)"}}>{program.program_type} · {program.starts_on} → {program.ends_on}</div></div><span className={`badge ${statusBadgeCls(program.status)}`}>{program.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{program.objective}</div></div>)}</div>}
+      {tab==="alerts"&&<div className="card fu"><div className="ctitle">Alertas del proyecto</div>{(project.alerts||[]).map(alert=><div key={alert.id} className={`alert al-${alert.severity==="red"?"r":alert.severity==="amber"?"a":"g"}`}><span>{alert.severity==="red"?"✕":alert.severity==="amber"?"⚠":"✓"}</span><div><div style={{fontWeight:600}}>{alert.title}</div><div style={{fontSize:12,opacity:.8,marginTop:4}}>{alert.description}</div><div style={{fontSize:11,marginTop:4}}>source_record_id: {alert.source_record_id || "manual"}</div></div></div>)}</div>}
+      {tab==="commitments"&&<div className="card fu"><div className="ctitle">Compromisos / issues</div>{(project.commitments||[]).map(item=><div key={item.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{item.title}</div><div style={{fontSize:12,color:"var(--t3)"}}>{item.commitment_type} · vencimiento {item.due_date||"—"} · source_record_id {item.source_record_id || "manual"}</div></div><span className={`badge ${item.status==="open"?"ba":item.status==="in_progress"?"bb":"bg"}`}>{item.status}</span></div><div style={{fontSize:13,color:"var(--t2)",marginTop:8}}>{item.description}</div></div>)}</div>}
+      {tab==="reports"&&<div className="card fu"><div className="ctitle">Señales e interpretación</div>{(project.signals||[]).map(signal=><div key={signal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--b1)"}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><div style={{fontSize:14,color:"var(--t1)",fontWeight:600}}>{signal.summary}</div><span className={`badge ${signal.severity==="red"?"br":signal.severity==="amber"?"ba":"bg"}`}>{signal.dimension}</span></div><div style={{fontSize:12,color:"var(--t3)",marginTop:6}}>Confidence {signal.confidence_score||"—"} · visible cliente: {signal.visible_to_client?"sí":"no"} · source_record_id {signal.source_record_id || "manual"}</div></div>)}</div>}
+      {tab==="files"&&<div className="card fu"><div className="ctitle">Archivos visibles</div>{(project.files||[]).map((f,i)=><div key={f.id || i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score} · {f.scope_label || (f.project_id ? "Proyecto" : "Cliente")}</div></div></div>)}</div>}
     </div>
   );
 }
@@ -1440,16 +2072,165 @@ function ClientDashboard({client,onMsg}){
 }
 
 // ─── CONSULTANT PANEL ─────────────────────────────────────────────────────────
-function ConsultantPanel({clients,setClients,selId,setSelId}){
+function ConsultantPanel({clients,setClients,selId,setSelId,session}){
   const [tab,setTab]=useState("overview");
   const [weights,setWeights]=useState(null);
   const [saved,setSaved]=useState(false);
   const [uploadModule,setUploadModule]=useState("RC");
+  const [uploadProjectScope,setUploadProjectScope]=useState("client");
   const [newUserMail,setNewUserMail]=useState("");
   const [uploadMsg,setUploadMsg]=useState("");
+  const [approvalPendingUsers,setApprovalPendingUsers]=useState([]);
+  const [approvalApprovedUsers,setApprovalApprovedUsers]=useState([]);
+  const [approvalClients,setApprovalClients]=useState([]);
+  const [approvalMsg,setApprovalMsg]=useState("");
+  const [approvalLoaded,setApprovalLoaded]=useState(false);
   const client=clients.find(c=>c.id===selId);
+  const uploadProjectId=uploadProjectScope==="client" ? null : uploadProjectScope;
 
   useEffect(()=>{ if(client) setWeights({...client.weights}); },[selId,client]);
+  useEffect(()=>{ setUploadProjectScope("client"); },[selId]);
+
+  useEffect(()=>{
+    let active=true;
+    async function loadClientFiles(){
+      if(!client) return;
+      if(!supabase) return;
+      try{
+        const files = await fetchClientFiles(String(client.id));
+        if(!active) return;
+        setClients(prev=>prev.map(entry=>entry.id===client.id?{...entry,files}:entry));
+      }catch(error){
+        if(!active) return;
+        setUploadMsg(`No se pudo recargar client_files: ${error.message}`);
+      }
+    }
+    loadClientFiles();
+    return ()=>{ active=false; };
+  }, [selId, client?.id]);
+
+
+  useEffect(()=>{
+    let active = true;
+
+    const fallbackClients = clients.map((c) => ({
+      id: String(c.id),
+      name: c.name,
+      logo: c.logo,
+      industry: c.industry,
+    }));
+
+    if (!supabase) {
+      setApprovalClients(fallbackClients);
+      setApprovalLoaded(true);
+      setApprovalMsg("Supabase no está configurado. Puedes revisar el flujo con datos demo mientras conectas las queries reales.");
+      return;
+    }
+
+    async function loadApprovalData() {
+      try {
+        const [pendingData, clientsData, approvedData] = await Promise.all([
+          fetchPendingUsers(),
+          fetchClients(),
+          fetchApprovedUsers(),
+        ]);
+
+        if (!active) return;
+
+        setApprovalPendingUsers((pendingData || []).map((user) => ({
+        ...user,
+        assigned_client: null,
+      })));
+      setApprovalClients((clientsData || []).length ? clientsData : fallbackClients);
+      setApprovalApprovedUsers((approvedData || []).map((user) => {
+        const approvedAccess = (user.client_user_access || []).find((entry) => entry.access_status === "approved");
+        return {
+          ...user,
+          assigned_client: approvedAccess?.clients
+            ? { id: approvedAccess.clients.id, name: approvedAccess.clients.name, logo: approvedAccess.clients.logo }
+            : null,
+        };
+      }));
+      setApprovalLoaded(true);
+      setApprovalMsg("");
+      } catch (error) {
+        if (!active) return;
+        setApprovalMsg(`No se pudo cargar aprobación desde Supabase: ${error.message}`);
+        setApprovalClients(fallbackClients);
+        setApprovalLoaded(true);
+      }
+    }
+
+    loadApprovalData();
+    return () => { active = false; };
+  }, [clients]);
+
+  async function handleApproveUser(userId, selectedClientId) {
+    if (!supabase) {
+      const assignedClient = approvalClients.find((entry) => entry.id === selectedClientId) || null;
+      setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+      setApprovalApprovedUsers((prev) => {
+        const target = approvalPendingUsers.find((user) => user.id === userId);
+        if (!target) return prev;
+        return [{ ...target, approval_status: "approved", assigned_client: assignedClient }, ...prev];
+      });
+      setApprovalMsg(`Usuario aprobado en modo demo para ${assignedClient?.name || "sin cliente"}.`);
+      return;
+    }
+
+    try {
+      await approveUser(userId, selectedClientId);
+    } catch (error) {
+      setApprovalMsg(`No se pudo aprobar el usuario: ${error.message}`);
+      return;
+    }
+
+    const assignedClient = approvalClients.find((entry) => entry.id === selectedClientId) || null;
+    const approvedUser = approvalPendingUsers.find((user) => user.id === userId);
+    setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+    if (approvedUser) {
+      setApprovalApprovedUsers((prev) => [{ ...approvedUser, approval_status: "approved", assigned_client: assignedClient }, ...prev]);
+    }
+    setApprovalMsg(`Usuario aprobado y asignado a ${assignedClient?.name || "cliente"}.`);
+  }
+
+  async function handleDisableUser(userId) {
+    if (!supabase) {
+      setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+      setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "disabled" } : user));
+      setApprovalMsg("Usuario deshabilitado en modo demo.");
+      return;
+    }
+
+    try {
+      await disableUser(userId);
+    } catch (error) {
+      setApprovalMsg(`No se pudo deshabilitar el usuario: ${error.message}`);
+      return;
+    }
+
+    setApprovalPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+    setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "disabled" } : user));
+    setApprovalMsg("Usuario deshabilitado correctamente.");
+  }
+
+  async function handleReEnableUser(userId) {
+    if (!supabase) {
+      setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "approved" } : user));
+      setApprovalMsg("Usuario reactivado en modo demo.");
+      return;
+    }
+
+    try {
+      await reEnableUser(userId);
+    } catch (error) {
+      setApprovalMsg(`No se pudo reactivar el usuario: ${error.message}`);
+      return;
+    }
+
+    setApprovalApprovedUsers((prev) => prev.map((user) => user.id === userId ? { ...user, approval_status: "approved" } : user));
+    setApprovalMsg("Usuario reactivado correctamente.");
+  }
 
   function toggle(f){setClients(p=>p.map(c=>c.id===selId?{...c,[f]:!c[f]}:c));}
   function toggleMod(m){
@@ -1472,8 +2253,17 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
     const moduleKey = uploadModule.toLowerCase();
     const bucket = moduleKeyToBucket(moduleKey);
     const created = [];
+    if (supabase) {
+      try {
+        ensureUuidOrThrow(String(client.id), "client_id");
+        ensureUuidOrThrow(uploadProjectId, "project_id");
+      } catch (error) {
+        setUploadMsg(`Carga abortada: ${error.message}`);
+        return;
+      }
+    }
     for (const file of uploadedFiles) {
-      let storagePath = `${client.id || selId}/${Date.now()}-${file.name}`;
+      let storagePath = `${client.id || selId}/${uploadProjectId || "client"}/${Date.now()}-${file.name}`;
       if (supabase && file.raw) {
         const { error } = await supabase.storage.from(bucket).upload(storagePath, file.raw, { upsert: false });
         if (error) {
@@ -1481,7 +2271,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
           continue;
         }
       }
-      created.push({
+      const draft={
         name:file.name,
         type:file.type,
         date:`${d.getDate()} Mar 2025`,
@@ -1490,11 +2280,36 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
         status:supabase ? "uploaded" : "local-only",
         storage_bucket:bucket,
         storage_path:storagePath,
-      });
+        project_id:uploadProjectId,
+        scope:uploadProjectId ? "project" : "client",
+        scope_label:uploadProjectId ? "Proyecto" : "Cliente",
+      };
+      if (supabase) {
+        try {
+          const saved = await insertClientFile({
+            client_id:String(client.id),
+            project_id:uploadProjectId,
+            module_key:moduleKey,
+            storage_bucket:bucket,
+            storage_path:storagePath,
+            original_name:file.name,
+            mime_type:file.raw?.type || file.type || null,
+            size_bytes:file.raw?.size || null,
+            ai_score:70,
+            status:"uploaded",
+          });
+          created.push(saved || draft);
+        } catch (error) {
+          setUploadMsg(`Error guardando metadata de ${file.name}: ${error.message}`);
+          continue;
+        }
+      } else {
+        created.push(draft);
+      }
     }
     if (created.length) {
       setClients(p=>p.map(c=>c.id===selId?{...c,files:[...created,...c.files]}:c));
-      setUploadMsg(`${created.length} archivo(s) cargado(s) correctamente en ${bucket}.`);
+      setUploadMsg(`${created.length} archivo(s) cargado(s) correctamente en ${bucket} para alcance ${uploadProjectId ? "proyecto" : "cliente"}.`);
     }
   }
   function addClient(){
@@ -1520,7 +2335,7 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
     setClients(p=>p.map(c=>{ if(c.id!==id)return c; if(base)return JSON.parse(JSON.stringify(base)); return {...c,ircs:null,rc:null,do:null,esg:null,trend:[],alerts:[],recommendations:[],messages:[],files:[],events:[],stakeholders:[],internal_notes:""}; }));
   }
 
-  const tabs=[["overview","Resumen"],["upload","Carga IA"],["heatmap","Mapa Riesgo"],["weights","Pesos"],["admin","Admin"],["messages","Mensajes"],["files","Historial"]];
+  const tabs=[["overview","Resumen"],["approvals","Aprobaciones"],["upload","Carga IA"],["heatmap","Mapa Riesgo"],["weights","Pesos"],["admin","Admin"],["messages","Mensajes"],["files","Historial"]];
 
   if(!client){
     return <div className="page fu"><div className="card"><div className="ctitle">Sin clientes creados</div><div className="muted" style={{marginBottom:12}}>Actualmente no hay clientes. Puedes crear uno nuevo desde aquí.</div><button className="btn btn-g btn-sm" onClick={addClient}>+ Crear cliente</button></div></div>;
@@ -1558,22 +2373,24 @@ function ConsultantPanel({clients,setClients,selId,setSelId}){
 
       {tab==="overview"&&<div className="card fu"><div className="ctitle">Resumen de {client.name}</div><div className="g4" style={{marginBottom:0}}>{[["IRCS",client.ircs],["RC",client.rc],["DO",client.do],["ESG",client.esg]].map(([l,v])=><div key={l} className="stat-chip"><div className="stat-val" style={{color:sc(v??0)}}>{v??"—"}</div><div className="stat-lbl">{l}</div></div>)}</div></div>}
 
-      {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos desde tu disco local al bucket del módulo seleccionado. Próxima iteración: selector embebido de archivos ya existentes en Storage.</div>{uploadMsg&&<div className="alert al-b">{uploadMsg}</div>}<div className="btn-row"><button className="btn btn-g btn-sm" onClick={()=>setUploadMsg(`Abrir selector de Storage para bucket ${moduleKeyToBucket(uploadModule.toLowerCase())} (pendiente de interfaz dedicada).`)}>Abrir archivos desde Storage</button></div><FileUpload onApply={applyFile}/></div>}
+      {tab==="approvals"&&<div className="card fu"><div className="ctitle">Aprobación y acceso de usuarios cliente</div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16}}>Aprueba usuarios nuevos, asígnalos a una empresa y reactiva/desactiva accesos sin salir del Centro de Control.</div>{approvalLoaded&&<ApprovalPanel pendingUsers={approvalPendingUsers} approvedUsers={approvalApprovedUsers} clients={approvalClients} onApprove={handleApproveUser} onDisable={handleDisableUser} onReEnable={handleReEnableUser} statusMessage={approvalMsg} isUsingMocks={!supabase}/>}</div>}
+
+      {tab==="upload"&&<div className="card fu"><div className="ctitle">Carga multi-fuente con análisis IA</div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}><span className="muted" style={{fontSize:12}}>Módulo objetivo:</span><select className="fsel" style={{maxWidth:220}} value={uploadModule} onChange={e=>setUploadModule(e.target.value)}><option>RC</option><option>DO</option><option>ESG</option></select><span className="muted" style={{fontSize:12}}>Alcance:</span><select className="fsel" style={{maxWidth:320}} value={uploadProjectScope} onChange={e=>setUploadProjectScope(e.target.value)}><option value="client">Cliente general</option>{(client.projects||[]).map(project=><option key={project.id} value={project.id}>Proyecto · {project.name}</option>)}</select></div><div style={{fontSize:13,color:"var(--t2)",marginBottom:16,lineHeight:1.65}}>Sube archivos desde tu disco local al bucket del módulo seleccionado. Puedes guardarlos a nivel cliente general o ligados a un proyecto específico vía `project_id`.</div>{uploadMsg&&<div className="alert al-b">{uploadMsg}</div>}<div className="btn-row"><button className="btn btn-g btn-sm" onClick={()=>setUploadMsg(`Abrir selector de Storage para bucket ${moduleKeyToBucket(uploadModule.toLowerCase())} (pendiente de interfaz dedicada).`)}>Abrir archivos desde Storage</button></div><FileUpload onApply={applyFile}/></div>}
 
       {tab==="heatmap"&&<div className="card fu"><div className="ctitle">Mapa de calor de riesgos — {client.name}</div><div className="alert al-b">ℹ️ El mapa se recalcula por módulos activos. Si solo hay RC, no se muestran dimensiones ambientales.</div><RiskHeatmap client={client}/></div>}
 
       {tab==="weights"&&weights&&<div className="card fu"><div className="ctitle">Configuración de pesos IRCS — {client.name}</div><div style={{fontSize:13,color:"var(--t2)",marginBottom:22}}>Si hay sólo 1 módulo activo, su peso queda en 100%. IRCS integrado requiere 2+ módulos.</div>{Object.entries(MOD).map(([key,m])=><div key={key} style={{marginBottom:22,opacity:client.modules[key]?1:.4}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>{m.label}{!client.modules[key]&&" (no activo)"}</div><div className="sldr-wrap"><input type="range" min={0} max={100} value={weights[key]} className="sldr" disabled={!client.modules[key]} onChange={e=>setWeights(p=>({...p,[key]:parseInt(e.target.value)}))}/><div className="sldr-val" style={{color:m.color}}>{weights[key]}%</div></div></div>)}<button className="btn btn-p btn-sm" onClick={()=>{setClients(p=>p.map(c=>c.id===selId?{...c,weights}:c));setSaved(true);setTimeout(()=>setSaved(false),2000);}}>{saved?"✓ Guardado":"Aplicar pesos"}</button>{Object.values(client.modules).filter(Boolean).length<2&&<div className="alert al-a" style={{marginTop:12}}>IRCS global no se muestra con menos de 2 módulos activos.</div>}</div>}
 
-      {tab==="admin"&&<div className="fu"><div className="card" style={{marginBottom:16}}><div className="ctitle">Gestión de módulos por cliente</div>{clients.map(c=><div key={c.id} className="client-admin-row"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div><div style={{fontSize:14,fontFamily:"'Fraunces',serif",color:"var(--t1)"}}>{c.logo} {c.name}</div><div style={{fontSize:11,color:"var(--t3)",fontFamily:"'JetBrains Mono',monospace"}}>{c.industry} · {c.period}</div></div><span className={`badge ${c.published?"bg":"ba"}`}>{c.published?"Publicado":"Borrador"}</span></div><div style={{display:"flex",gap:20}}>{Object.entries(MOD).map(([key,m])=><div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><label className="tgl"><input type="checkbox" checked={c.modules[key]} onChange={()=>{setSelId(c.id);toggleMod(key);}}/><div className="tgl-sl"/></label><span style={{fontSize:11,color:c.modules[key]?m.color:"var(--t4)"}}>{m.short}</span></div>)}</div></div>)}</div><div className="card"><div className="ctitle">Usuarios y accesos</div><div className="alert al-b">Esta lista es por cliente. Cliente activo: {client.name}.</div><table className="tbl"><thead><tr><th>Email</th><th>Empresa</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>{[["admin@tho.cl","THO Consultora","Admin","Activo"],...(client.authorized_users||[]).map(e=>[e,client.name,"Cliente","Activo"])].map(([e,emp,r,s],i)=><tr key={i}><td style={{color:"var(--t1)"}}>{e}</td><td>{emp}</td><td><span className={`badge ${r==="Admin"?"bb":"bg"}`}>{r}</span></td><td><span className="badge bg">{s}</span></td><td>{r!=="Admin"&&<button className="btn btn-d btn-sm" onClick={()=>setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:(c.authorized_users||[]).filter(m=>m!==e)}:c))}>Quitar</button>}</td></tr>)}</tbody></table><div style={{display:"flex",gap:8,marginTop:12}}><input className="fi" placeholder="nuevo.mail@empresa.cl" value={newUserMail} onChange={e=>setNewUserMail(e.target.value)}/><button className="btn btn-g btn-sm" onClick={()=>{if(!newUserMail.includes('@'))return;setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:[...(c.authorized_users||[]),newUserMail]}:c));setNewUserMail("");}}>+ Invitar usuario</button></div></div></div>}
+      {tab==="admin"&&<div className="fu"><div className="card" style={{marginBottom:16}}><div className="ctitle">Gestión de módulos por cliente</div>{clients.map(c=><div key={c.id} className="client-admin-row"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}><div><div style={{fontSize:14,fontFamily:"'Fraunces',serif",color:"var(--t1)"}}>{c.logo} {c.name}</div><div style={{fontSize:11,color:"var(--t3)",fontFamily:"'JetBrains Mono',monospace"}}>{c.industry} · {c.period}</div></div><span className={`badge ${c.published?"bg":"ba"}`}>{c.published?"Publicado":"Borrador"}</span></div><div style={{display:"flex",gap:20}}>{Object.entries(MOD).map(([key,m])=><div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><label className="tgl"><input type="checkbox" checked={c.modules[key]} onChange={()=>{setSelId(c.id);toggleMod(key);}}/><div className="tgl-sl"/></label><span style={{fontSize:11,color:c.modules[key]?m.color:"var(--t4)"}}>{m.short}</span></div>)}</div></div>)}</div><div className="card"><div className="ctitle">Usuarios y accesos</div><div className="alert al-b">Esta lista es por cliente. Cliente activo: {client.name}.</div><table className="tbl"><thead><tr><th>Email</th><th>Empresa</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>{[[session?.email || "Sin email","THO Consultora",session?.role === "super_consultant" ? "Super Admin" : "Consultora",session?.approvalStatus || "Activo"],...(client.authorized_users||[]).map(e=>[e,client.name,"Cliente","Activo"])].map(([e,emp,r,s],i)=><tr key={i}><td style={{color:"var(--t1)"}}>{e}</td><td>{emp}</td><td><span className={`badge ${r.includes("Admin")?"bb":"bg"}`}>{r}</span></td><td><span className="badge bg">{s}</span></td><td>{emp!=="THO Consultora"&&<button className="btn btn-d btn-sm" onClick={()=>setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:(c.authorized_users||[]).filter(m=>m!==e)}:c))}>Quitar</button>}</td></tr>)}</tbody></table><div style={{display:"flex",gap:8,marginTop:12}}><input className="fi" placeholder="nuevo.mail@empresa.cl" value={newUserMail} onChange={e=>setNewUserMail(e.target.value)}/><button className="btn btn-g btn-sm" onClick={()=>{if(!newUserMail.includes('@'))return;setClients(p=>p.map(c=>c.id===selId?{...c,authorized_users:[...(c.authorized_users||[]),newUserMail]}:c));setNewUserMail("");}}>+ Invitar usuario</button></div></div></div>}
 
       {tab==="messages"&&<div className="card fu"><div className="ctitle">Mensajes de {client.name}</div><Messages messages={client.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div>}
-      {tab==="files"&&<div className="card fu"><div className="sec-hdr"><div className="ctitle mb0">Historial de archivos</div><span className="badge bb">{client.files.length} archivos</span></div>{client.files.map((f,i)=><div key={i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score}</div></div></div>)}</div>}
+      {tab==="files"&&<div className="card fu"><div className="sec-hdr"><div className="ctitle mb0">Historial de archivos</div><span className="badge bb">{client.files.length} archivos</span></div>{client.files.map((f,i)=><div key={f.id || i} className="file-row"><div className="f-icon" style={{background:fileColor(f.type)}}>{fileIcon(f.type)}</div><div className="f-info"><div className="f-name">{f.name}</div><div className="f-meta">{f.module} · {f.date} · Score IA: {f.ai_score} · {f.scope_label || (f.project_id ? "Proyecto" : "Cliente")}</div></div></div>)}</div>}
     </div>
   );
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady}){
+function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady,authDebug}){
   const [role,setRole]=useState("consultant");
   return(
     <div className="login-wrap">
@@ -1587,6 +2404,12 @@ function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady}){
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:3,textTransform:"uppercase",marginBottom:18}}>Plataforma de Reputación Corporativa</div>
         <div className="alert al-b" style={{marginBottom:18}}>Usa Microsoft/Azure o Google. Tras el primer login, el acceso queda pendiente hasta que una consultora lo apruebe en el centro de control.</div>
         {authMsg&&<div className="alert al-a" style={{marginBottom:18}}>{authMsg}</div>}
+        {authDebug&&<div style={{marginBottom:18,padding:12,borderRadius:12,border:`1px solid ${t.b2}`,background:t.s2}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>Debug OAuth callback</div>
+          <div style={{fontSize:12,color:t.t2,marginBottom:4}}><strong style={{color:t.t1}}>VITE_APP_URL:</strong> <span style={{wordBreak:'break-all'}}>{authDebug.explicitAppUrl}</span></div>
+          <div style={{fontSize:12,color:t.t2,marginBottom:4}}><strong style={{color:t.t1}}>window.location.origin:</strong> <span style={{wordBreak:'break-all'}}>{authDebug.origin}</span></div>
+          <div style={{fontSize:12,color:t.t2}}><strong style={{color:t.t1}}>redirectTo efectivo:</strong> <span style={{wordBreak:'break-all'}}>{authDebug.redirectUrl}</span></div>
+        </div>}
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:t.t3,letterSpacing:2,textTransform:"uppercase",marginBottom:9}}>Tipo de acceso esperado</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
           {[['consultant','⚙️','Consultora'],['client','📊','Cliente']].map(([r,ic,l])=>(
@@ -1610,43 +2433,66 @@ function Login({onLogin,onOAuthLogin,t,authMsg,isAuthReady}){
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function App(){
   const [darkMode,setDarkMode]=useState(true);
-  const [session,setSession]=useState(null);
-  const [authReady,setAuthReady]=useState(false);
+  const [demoSession,setDemoSession]=useState(null);
+  const auth = useAuthGuard();
   const [authMsg,setAuthMsg]=useState(isSupabaseConfigured ? "" : "Supabase no está configurado localmente. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para activar OAuth real.");
+  const authDebug = getAuthDebugInfo();
   const [sidebarOpen,setSidebarOpen]=useState(true);
   const [clients,setClients]=useState(INIT_CLIENTS);
   const [page,setPage]=useState("home");
   const [selClientId,setSelClientId]=useState(1);
+  const [selProjectId,setSelProjectId]=useState(INIT_CLIENTS[0]?.projects?.[0]?.id || null);
   const [showTour,setShowTour]=useState(false);
 
   const t=darkMode?darkTokens:lightTokens;
   const css=buildCSS(t);
+  const authReady = !isSupabaseConfigured || auth.status !== "loading";
+  const session = demoSession || formatRawUserSession(auth.session?.user, auth.profile);
 
-  const isC=session?.role==="consultant";
+  const isC=isConsultantRole(session?.role);
   const clientData=clients[0];
   const selClient=clients.find(c=>c.id===selClientId);
+  const activeClientForProjects=isC?selClient:clientData;
+  const activeProjects=activeClientForProjects?.projects || [];
+  const activeProject=activeProjects.find(p=>p.id===selProjectId) || activeProjects[0] || null;
   const hasClients=clients.length>0;
+  const localSelectedClientRef = useRef(null);
+  const localSelectedProjectRef = useRef(null);
+
+  useEffect(()=>{
+    const localSelectedClient = (isC ? selClient : clientData) || clients[0] || null;
+    localSelectedClientRef.current = localSelectedClient;
+    localSelectedProjectRef.current = localSelectedClient?.projects?.find(project=>project.id===selProjectId) || localSelectedClient?.projects?.[0] || null;
+  }, [isC, selClient, clientData, clients, selProjectId]);
 
   useEffect(()=>{
     let active = true;
-    if (!supabase) { setAuthReady(false); return; }
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      const next = formatAuthSession(data.session?.user) || null;
-      setSession(next);
-      setAuthReady(true);
-      if (next && typeof window !== "undefined" && window.location.pathname === "/auth/callback") {
-        window.history.replaceState({}, "", "/");
+    async function loadRemoteClients(){
+      if(!isSupabaseConfigured || !session) return;
+      try{
+        const localSelectedClient = localSelectedClientRef.current;
+        const localSelectedProject = localSelectedProjectRef.current;
+        const remoteClients = await fetchWorkspaceClients();
+        if(!active || !remoteClients.length) return;
+        const matchedRemoteClient = findMatchingRemoteClient(localSelectedClient, remoteClients) || remoteClients[0];
+        const matchedRemoteProject = findMatchingRemoteProject(localSelectedProject, matchedRemoteClient?.projects || []);
+        setClients(remoteClients);
+        setSelClientId(matchedRemoteClient?.id || remoteClients[0].id);
+        setSelProjectId(matchedRemoteProject?.id || null);
+      }catch(error){
+        if(!active) return;
+        setAuthMsg(`Supabase activo, pero no se pudieron cargar clientes/proyectos remotos: ${error.message}`);
       }
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(formatAuthSession(nextSession?.user) || null);
-    });
-    return () => {
-      active = false;
-      listener.subscription.unsubscribe();
-    };
-  }, []);
+    }
+    loadRemoteClients();
+    return ()=>{ active=false; };
+  }, [session?.email, auth.status]);
+
+  useEffect(()=>{
+    const nextProjects=(isC?selClient:clientData)?.projects || [];
+    if (!nextProjects.length) { if (selProjectId!==null) setSelProjectId(null); return; }
+    if (!nextProjects.some(project=>project.id===selProjectId)) setSelProjectId(nextProjects[0].id);
+  }, [isC, selClientId, clients]);
 
   async function oauthLogin(provider, role){
     if (!supabase) return;
@@ -1662,8 +2508,8 @@ export default function App(){
     else setAuthMsg(`Redirigiendo a ${providerName}. Callback configurado: ${getOAuthRedirectUrl()}. El rol esperado para esta solicitud es ${role}.`);
   }
 
-  function login(role){setSession({role, approvalStatus:'demo'});if(role==="client")setShowTour(true);}
-  async function logout(){ if (supabase) await supabase.auth.signOut(); setSession(null);setPage("home"); }
+  function login(role){setDemoSession({role, approvalStatus:"demo", displayName:role==="consultant"?"Demo THO":"Demo Cliente", email:role==="consultant"?"demo@tho.cl":"demo@cliente.cl"});if(role==="client")setShowTour(true);}
+  async function logout(){ if (demoSession) setDemoSession(null); else await auth.signOut(); setPage("home"); }
   function sendMsg(txt,from){
     if(!clientData)return;
     const d=new Date(); const ds=`${d.getDate()} Mar · ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
@@ -1671,7 +2517,8 @@ export default function App(){
   }
 
   const consultantNav=[
-    {id:"home",icon:"◈",label:"Métricas generales"},
+    {id:"home",icon:"◈",label:"Proyectos"},
+    {id:"project",icon:"🧭",label:"Proyecto activo"},
     {sep:true,label:"Gestión"},
     {id:"control",icon:"⚙",label:"Centro de control"},
     {sep:true,label:"Módulos"},
@@ -1685,7 +2532,8 @@ export default function App(){
   ];
 
   const clientNav=clientData?[
-    {id:"home",icon:"◈",label:"Mi Dashboard"},
+    {id:"home",icon:"◈",label:"Mis proyectos"},
+    {id:"project",icon:"🧭",label:"Proyecto"},
     {sep:true,label:"Servicios activos"},
     {id:"rc",icon:"🤝",label:"Relacionamiento",activeCls:"rc-active",locked:!clientData.modules.rc},
     {id:"do",icon:"🏛️",label:"Desarrollo Org.",activeCls:"do-active",locked:!clientData.modules.do},
@@ -1699,28 +2547,49 @@ export default function App(){
   const nav=isC?consultantNav:clientNav;
   const activeClient=isC?selClient:clientData;
 
+  function openProject(clientId, projectId){ setSelClientId(clientId); setSelProjectId(projectId); setPage("project"); }
+  function updateProjectRecord(updatedProject){
+    setClients(prev=>prev.map(client=>{
+      const targetProject = typeof updatedProject === "function"
+        ? client.projects?.find(item=>item.id===selProjectId)
+        : updatedProject;
+      if(!targetProject) return client;
+      const nextProject = typeof updatedProject === "function"
+        ? updatedProject(targetProject)
+        : updatedProject;
+      const matchesClient = client.id === selClientId || client.projects?.some(item=>item.id===nextProject.id);
+      if(!matchesClient) return client;
+      return {
+        ...client,
+        projects:(client.projects||[]).map(item=>item.id===nextProject.id ? nextProject : item),
+      };
+    }));
+  }
   function navigate(id){
     if(id==="tour"){setShowTour(true);return;}
+    if(id==="project"&&!activeProject){setPage("home");return;}
     setPage(id);
   }
 
   function renderPage(){
     if(isC&&!hasClients&&page!=="control")return <div className="page fu"><div className="card"><div className="ctitle">No hay clientes todavía</div><button className="btn btn-g btn-sm" onClick={()=>setPage("control")}>Ir al centro de control</button></div></div>;
     if(isC){
-      if(page==="home")return<ConsultantHome clients={clients}/>;
-      if(page==="control")return<ConsultantPanel clients={clients} setClients={setClients} selId={selClientId} setSelId={setSelClientId}/>;
+      if(page==="home")return<ProjectPortfolio clients={clients} onOpenProject={openProject} isConsultant={true}/>;
+      if(page==="project"&&activeProject&&selClient)return<ProjectWorkspace client={selClient} project={activeProject} isConsultant={true} onUpdateProject={updateProjectRecord}/>;
+      if(page==="control")return<ConsultantPanel clients={clients} setClients={setClients} selId={selClientId} setSelId={setSelClientId} session={session}/>;
       if(page==="rc"&&selClient)return<ModuleRC client={selClient} isConsultant={true} onUpdateStakeholders={stakeholders=>setClients(p=>p.map(c=>c.id===selClientId?{...c,stakeholders}:c))}/>;
       if(page==="do")return<ModuleDO client={selClient}/>;
       if(page==="esg")return<ModuleESG client={selClient}/>;
-      if(page==="profile")return<ProfilePage isConsultant={true} client={selClient}/>;
+      if(page==="profile")return<ProfilePage session={session} isConsultant={true} client={selClient}/>;
       if(page==="messages"&&selClient)return <div className="page fu"><div className="ph"><div className="ph-eye">Notificaciones</div><div className="ph-title">Mensajes de clientes</div></div><div className="card"><Messages messages={selClient.messages} onSend={txt=>sendMsg(txt,"consultant")}/></div></div>;
     } else {
       if(!clientData)return <div className="page fu"><div className="card">No hay datos de cliente disponibles.</div></div>;
-      if(page==="home")return<ClientDashboard client={clientData} onMsg={sendMsg}/>;
+      if(page==="home")return<ProjectPortfolio clients={[clientData]} onOpenProject={openProject} isConsultant={false}/>;
+      if(page==="project"&&activeProject&&clientData)return<ProjectWorkspace client={clientData} project={activeProject} isConsultant={false} onUpdateProject={updateProjectRecord}/>;
       if(page==="rc"&&clientData.modules.rc)return<ModuleRC client={clientData} isConsultant={false}/>;
       if(page==="do"&&clientData.modules.do)return<ModuleDO client={clientData}/>;
       if(page==="esg"&&clientData.modules.esg)return<ModuleESG client={clientData}/>;
-      if(page==="profile")return<ProfilePage isConsultant={false} client={clientData}/>;
+      if(page==="profile")return<ProfilePage session={session} isConsultant={false} client={clientData}/>;
       if(page==="messages")return(
         <div className="page fu">
           <div className="ph"><div className="ph-eye">Comunicación</div><div className="ph-title">Mensajes</div></div>
@@ -1737,7 +2606,18 @@ export default function App(){
     :root{--b1:${t.b1};--b2:${t.b2};--s2:${t.s2};--s3:${t.s3};--t1:${t.t1};--t2:${t.t2};--t3:${t.t3};--t4:${t.t4};}
   `;
 
-  if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} onOAuthLogin={oauthLogin} t={t} authMsg={authMsg} isAuthReady={authReady}/></>);
+  if (auth.status === "loading" && !demoSession) return <><style>{css}{dynCSS}</style><div className="login-wrap"><div className="card" style={{padding:24}}>Cargando acceso…</div></div></>;
+
+  if(!session)return(<><style>{css}{dynCSS}</style><Login onLogin={login} onOAuthLogin={oauthLogin} t={t} authMsg={authMsg} isAuthReady={authReady} authDebug={authDebug}/></>);
+
+  if (!demoSession && (auth.status === "pending" || auth.status === "disabled")) return (
+    <PendingAccess
+      userEmail={session.email}
+      userName={session.displayName}
+      disabled={session.approvalStatus === "disabled"}
+      onSignOut={logout}
+    />
+  );
 
   const pageLabel=nav.find(n=>n.id===page)?.label||"Dashboard";
 
@@ -1775,8 +2655,8 @@ export default function App(){
             <div className="sb-user">
               <div className={`sb-avatar ${isC?"av-c":"av-cl"}`}>{isC?"TH":(clientData?.logo||"—")}</div>
               <div className="sb-user-info">
-                <div className="sb-uname">{isC?"THO Team":(clientData?.name||"Sin cliente")}</div>
-                <div className="sb-urole">{isC?"consultora":"cliente"}</div>
+                <div className="sb-uname">{isC?(session?.displayName || session?.email || "THO Team"):(clientData?.name||"Sin cliente")}</div>
+                <div className="sb-urole">{isC?`${getRoleLabel(session?.role)} · ${session?.email || "sin email"}`:"cliente"}</div>
               </div>
             </div>
             <button className="sb-logout" onClick={logout}>Cerrar sesión</button>
