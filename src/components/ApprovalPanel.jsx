@@ -1,497 +1,213 @@
 // ============================================================
-// ApprovalPanel.tsx
+// ApprovalPanel.jsx — plain JSX (no TypeScript)
 // Panel de aprobación de usuarios para la vista consultora.
-// Se integra como una sección del Centro de Control.
-//
-// Queries Supabase necesarias:
-//
-// 1. Usuarios pendientes:
-//    supabase.from('user_profiles')
-//      .select('*')
-//      .eq('approval_status', 'pending')
-//      .order('created_at', { ascending: false })
-//
-// 2. Lista de clientes (para el selector de asignación):
-//    supabase.from('clients').select('id, name, logo, industry')
-//
-// 3. Aprobar usuario:
-//    supabase.from('user_profiles')
-//      .update({ approval_status: 'approved', updated_at: new Date() })
-//      .eq('id', userId)
-//
-// 4. Asignar cliente:
-//    supabase.from('client_user_access').upsert({
-//      client_id: selectedClientId,
-//      user_id: userId,
-//      access_status: 'approved'
-//    })
-//
-// 5. Deshabilitar usuario:
-//    supabase.from('user_profiles')
-//      .update({ approval_status: 'disabled' })
-//      .eq('id', userId)
-//
-// 6. Usuarios aprobados (tabla de gestión):
-//    supabase.from('user_profiles')
-//      .select(`*, client_user_access(client_id, access_status, clients(name, logo))`)
-//      .in('approval_status', ['approved', 'disabled'])
-//      .eq('role', 'client')
-//      .order('created_at', { ascending: false })
+// Props:
+//   pendingUsers  — array de user_profiles con approval_status='pending'
+//   approvedUsers — array de user_profiles con approval_status='approved'|'disabled'
+//   clients       — array de { id, name, industry }
+//   onApprove(userId, clientId, role) — aprueba y asigna
+//   onDisable(userId)                 — desactiva
+//   onReEnable(userId)                — reactiva
 // ============================================================
 
 import { useState } from 'react'
 
-// ── Types ────────────────────────────────────────────────────
-interface UserProfile {
-  id: string
-  email: string
-  full_name: string
-  role: 'super_consultant' | 'consultant' | 'client'
-  approval_status: 'pending' | 'approved' | 'disabled'
-  created_at: string
-  assigned_client?: { id: string; name: string; logo: string } | null
+const T = {
+  bg:'#08090c', s1:'#0d0f14', s2:'#111520', s3:'#161b28',
+  b1:'#1d2535', b2:'#232d42',
+  t1:'#e8ecf4', t2:'#8a97b0', t3:'#3d4d66', t4:'#1e2a3e',
+  rc:'#f97316', blue:'#3b82f6', amber:'#f59e0b', red:'#ef4444', green:'#22c55e',
 }
 
-interface Client {
-  id: string
-  name: string
-  logo: string
-  industry: string
-}
-
-interface ApprovalPanelProps {
-  // En producción estos vienen de Supabase.
-  // El dev reemplaza estos arrays con los hooks/queries reales.
-  pendingUsers?: UserProfile[]
-  approvedUsers?: UserProfile[]
-  clients?: Client[]
-  onApprove: (userId: string, clientId: string) => Promise<void>
-  onDisable: (userId: string) => Promise<void>
-  onReEnable: (userId: string) => Promise<void>
-}
-
-// ── Paleta (debe coincidir con la del resto de la app) ────────
-const C = {
-  bg: '#07090d', s1: '#0d1017', s2: '#121620', s3: '#141820',
-  b1: '#1c2333', b2: '#232d40', b3: '#2a364d',
-  t1: '#edf2fa', t2: '#8fa3be', t3: '#435570', t4: '#1e2d42',
-  rc: '#f97316', amber: '#f59e0b', green: '#22c55e',
-  red: '#ef4444', blue: '#3b82f6',
-}
-
-// ── Mock data — el dev reemplaza con queries reales ───────────
-const MOCK_PENDING: UserProfile[] = [
-  {
-    id: 'u1', email: 'rosa.fernandez@mlosandes.cl',
-    full_name: 'Rosa Fernández', role: 'client',
-    approval_status: 'pending', created_at: '2025-03-17T14:23:00Z',
-    assigned_client: null,
-  },
-  {
-    id: 'u2', email: 'andres.mora@biobio.cl',
-    full_name: 'Andrés Mora', role: 'client',
-    approval_status: 'pending', created_at: '2025-03-18T09:11:00Z',
-    assigned_client: null,
-  },
-]
-
-const MOCK_APPROVED: UserProfile[] = [
-  {
-    id: 'u3', email: 'jefa@mlosandes.cl',
-    full_name: 'Carmen López', role: 'client',
-    approval_status: 'approved', created_at: '2025-02-10T10:00:00Z',
-    assigned_client: { id: 'c1', name: 'Minera Los Andes', logo: '⛏️' },
-  },
-  {
-    id: 'u4', email: 'rrhh@biobio.cl',
-    full_name: 'Felipe Torres', role: 'client',
-    approval_status: 'disabled', created_at: '2025-01-20T08:00:00Z',
-    assigned_client: { id: 'c2', name: 'Constructora BíoBío', logo: '🏗️' },
-  },
-]
-
-const MOCK_CLIENTS: Client[] = [
-  { id: 'c1', name: 'Minera Los Andes', logo: '⛏️', industry: 'Minería' },
-  { id: 'c2', name: 'Constructora BíoBío', logo: '🏗️', industry: 'Construcción' },
-]
-
-// ── CSS ───────────────────────────────────────────────────────
-const CSS = `
-.ap-wrap { font-family: 'Figtree', sans-serif; color: ${C.t1}; }
-
-/* Section header */
-.ap-sh { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
-.ap-title { font-family:'Fraunces',serif; font-size:17px; color:${C.t1}; letter-spacing:-.2px; }
-.ap-count {
-  display:inline-flex; align-items:center; gap:5px;
-  padding:3px 10px; border-radius:20px; font-size:11px;
-  font-family:'JetBrains Mono',monospace;
-}
-.ap-count-pending { background:rgba(245,158,11,.12); color:${C.amber}; }
-.ap-count-none    { background:${C.s2}; color:${C.t3}; }
-
-/* Alert banner */
-.ap-banner {
-  background:rgba(245,158,11,.07);
-  border:1px solid rgba(245,158,11,.2);
-  border-radius:11px; padding:14px 18px;
-  display:flex; align-items:flex-start; gap:12px;
-  margin-bottom:22px;
-}
-.ap-banner-icon { font-size:18px; flex-shrink:0; margin-top:1px; }
-.ap-banner-text { font-size:13px; color:#fbbf24; line-height:1.55; }
-.ap-banner-text strong { display:block; margin-bottom:2px; font-size:14px; }
-
-/* Pending card */
-.ap-pending-card {
-  background:${C.s1}; border:1px solid ${C.b1};
-  border-radius:13px; padding:20px 22px; margin-bottom:12px;
-  transition:border-color .15s;
-  position:relative; overflow:hidden;
-}
-.ap-pending-card::before {
-  content:''; position:absolute; top:0; left:0; right:0; height:2px;
-  background:linear-gradient(90deg,${C.amber},${C.rc});
-}
-.ap-pending-card:hover { border-color:${C.b2}; }
-
-.ap-user-row { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
-.ap-avatar {
-  width:42px; height:42px; border-radius:50%; flex-shrink:0;
-  display:flex; align-items:center; justify-content:center;
-  font-family:'Fraunces',serif; font-weight:700; font-size:15px;
-  background:rgba(245,158,11,.1); color:${C.amber};
-  border:1px solid rgba(245,158,11,.2);
-}
-.ap-uname { font-size:14px; font-weight:600; color:${C.t1}; margin-bottom:2px; }
-.ap-uemail { font-family:'JetBrains Mono',monospace; font-size:11px; color:${C.t3}; }
-.ap-udate  { font-family:'JetBrains Mono',monospace; font-size:10px; color:${C.t4}; margin-top:2px; }
-
-/* Client selector in pending card */
-.ap-assign-row { display:flex; gap:10px; align-items:flex-end; margin-bottom:14px; }
-.ap-assign-label {
-  font-family:'JetBrains Mono',monospace; font-size:10px;
-  color:${C.t3}; letter-spacing:1.5px; text-transform:uppercase;
-  display:block; margin-bottom:6px;
-}
-.ap-select {
-  flex:1; background:${C.s2}; border:1px solid ${C.b2}; border-radius:8px;
-  padding:9px 12px; color:${C.t1}; font-size:13px; outline:none;
-  font-family:'Figtree',sans-serif; transition:border-color .15s;
-}
-.ap-select:focus { border-color:${C.blue}; }
-.ap-select option { background:${C.s2}; }
-
-/* Action buttons */
-.ap-actions { display:flex; gap:9px; flex-wrap:wrap; }
-.apb {
-  padding:8px 16px; border-radius:8px; font-size:13px;
-  font-weight:600; cursor:pointer; transition:all .15s;
-  border:none; font-family:'Figtree',sans-serif;
-  display:inline-flex; align-items:center; gap:6px;
-}
-.apb-approve { background:${C.green}; color:#07090d; }
-.apb-approve:hover { filter:brightness(1.1); }
-.apb-approve:disabled { opacity:.5; cursor:not-allowed; }
-.apb-deny { background:none; border:1px solid ${C.b2}; color:${C.red}; }
-.apb-deny:hover { background:rgba(239,68,68,.08); border-color:${C.red}; }
-.apb-reenable { background:none; border:1px solid ${C.b2}; color:${C.blue}; }
-.apb-reenable:hover { background:rgba(59,130,246,.08); border-color:${C.blue}; }
-.apb-edit { background:none; border:1px solid ${C.b2}; color:${C.t2}; }
-.apb-edit:hover { border-color:${C.blue}; color:${C.blue}; }
-
-/* Divider */
-.ap-div { height:1px; background:${C.b1}; margin:26px 0; }
-
-/* Approved table */
-.ap-tbl { width:100%; border-collapse:collapse; }
-.ap-tbl th {
-  font-family:'JetBrains Mono',monospace; font-size:9px;
-  color:${C.t3}; letter-spacing:1.5px; text-transform:uppercase;
-  text-align:left; padding:9px 14px; border-bottom:1px solid ${C.b1}; font-weight:400;
-}
-.ap-tbl td {
-  padding:13px 14px; font-size:13px; color:${C.t2};
-  border-bottom:1px solid ${C.b1}; vertical-align:middle;
-}
-.ap-tbl tr:last-child td { border-bottom:none; }
-.ap-tbl tr:hover td { background:${C.s2}; }
-
-.ap-badge {
-  display:inline-flex; align-items:center; gap:4px;
-  padding:3px 9px; border-radius:20px;
-  font-size:11px; font-family:'JetBrains Mono',monospace;
-}
-.ab-green   { background:rgba(34,197,94,.12); color:${C.green}; }
-.ab-amber   { background:rgba(245,158,11,.12); color:${C.amber}; }
-.ab-red     { background:rgba(239,68,68,.12);  color:${C.red};   }
-.ab-blue    { background:rgba(59,130,246,.12); color:${C.blue};  }
-
-/* Empty state */
-.ap-empty {
-  text-align:center; padding:40px 20px;
-  background:${C.s1}; border:1px dashed ${C.b1};
-  border-radius:13px;
-}
-.ap-empty-icon { font-size:36px; margin-bottom:12px; }
-.ap-empty-text { font-size:13px; color:${C.t3}; }
-
-/* Spinner */
-.ap-spin {
-  width:14px; height:14px; border:2px solid rgba(255,255,255,.2);
-  border-top-color:white; border-radius:50%;
-  animation:apSpin .7s linear infinite; display:inline-block;
-}
-@keyframes apSpin { to { transform:rotate(360deg); } }
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+.ap-wrap{font-family:'Instrument Sans',sans-serif;}
+.ap-tabs{display:flex;gap:3px;background:${T.s2};border-radius:10px;padding:4px;width:fit-content;margin-bottom:20px;}
+.ap-tab{padding:7px 16px;border-radius:7px;border:none;background:none;color:${T.t3};font-size:13px;font-weight:500;cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:all .15s;}
+.ap-tab.active{background:${T.s1};color:${T.t1};box-shadow:0 1px 6px rgba(0,0,0,.3);}
+.ap-card{background:${T.s1};border:1px solid ${T.b1};border-radius:14px;padding:20px 22px;margin-bottom:12px;}
+.ap-row{display:flex;align-items:center;gap:12px;}
+.ap-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-weight:700;font-size:13px;flex-shrink:0;}
+.ap-name{font-size:13px;font-weight:600;color:${T.t1};margin-bottom:2px;}
+.ap-email{font-family:'JetBrains Mono',monospace;font-size:11px;color:${T.t3};}
+.ap-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:${T.t4};margin-top:2px;}
+.ap-actions{display:flex;gap:8px;margin-top:14px;}
+.ap-btn{padding:6px 13px;border-radius:7px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:all .15s;}
+.ap-btn:disabled{opacity:.5;cursor:not-allowed;}
+.ap-btn-approve{background:${T.green};color:#08090c;}
+.ap-btn-deny{background:none;color:${T.red};border:1px solid rgba(239,68,68,.3);}
+.ap-btn-disable{background:none;color:${T.t2};border:1px solid ${T.b2};}
+.ap-btn-enable{background:none;color:${T.green};border:1px solid rgba(34,197,94,.3);}
+.ap-select{background:${T.s2};border:1px solid ${T.b2};border-radius:7px;padding:7px 11px;color:${T.t1};font-size:12px;outline:none;font-family:'Instrument Sans',sans-serif;cursor:pointer;width:100%;margin-top:10px;}
+.ap-pill{padding:2px 8px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:10px;white-space:nowrap;}
+.ap-empty{text-align:center;padding:32px 0;font-size:13px;color:${T.t3};}
 `
 
-// ── Helpers ───────────────────────────────────────────────────
-function initials(name: string, email: string) {
+function initials(name, email) {
   if (name) return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  return email[0]?.toUpperCase() ?? '?'
-}
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-CL', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
+  return email?.[0]?.toUpperCase() || '?'
 }
 
-// ── Pending User Card ─────────────────────────────────────────
-function PendingCard({
-  user, clients, onApprove, onDisable,
-}: {
-  user: UserProfile
-  clients: Client[]
-  onApprove: (userId: string, clientId: string) => Promise<void>
-  onDisable: (userId: string) => Promise<void>
-}) {
-  const [selectedClient, setSelectedClient] = useState('')
-  const [loading, setLoading] = useState<'approve' | 'deny' | null>(null)
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('es-CL', { day:'numeric', month:'short', year:'numeric' })
+}
 
-  async function handleApprove() {
-    if (!selectedClient) return
+function PendingRow({ user, clients, onApprove, onDisable }) {
+  const [selClient, setSelClient] = useState('')
+  const [selRole,   setSelRole]   = useState('client')
+  const [loading,   setLoading]   = useState(null)
+
+  async function approve() {
+    if (selRole === 'client' && !selClient) return
     setLoading('approve')
-    await onApprove(user.id, selectedClient)
-    setLoading(null)
+    try { await onApprove(user.id, selClient, selRole) }
+    finally { setLoading(null) }
   }
 
-  async function handleDeny() {
+  async function deny() {
     setLoading('deny')
-    await onDisable(user.id)
-    setLoading(null)
+    try { await onDisable(user.id) }
+    finally { setLoading(null) }
   }
 
   return (
-    <div className="ap-pending-card">
-      <div className="ap-user-row">
-        <div className="ap-avatar">{initials(user.full_name, user.email)}</div>
-        <div>
-          <div className="ap-uname">{user.full_name || 'Sin nombre'}</div>
-          <div className="ap-uemail">{user.email}</div>
-          <div className="ap-udate">Registrado {formatDate(user.created_at)}</div>
+    <div className="ap-card" style={{ borderLeft:`3px solid ${T.amber}` }}>
+      <div className="ap-row">
+        <div className="ap-avatar" style={{ background:`rgba(245,158,11,.15)`, color:T.amber,
+          border:`1px solid rgba(245,158,11,.25)` }}>
+          {initials(user.full_name, user.email)}
         </div>
+        <div style={{ flex:1 }}>
+          <div className="ap-name">{user.full_name || 'Sin nombre'}</div>
+          <div className="ap-email">{user.email}</div>
+          <div className="ap-meta">Registrado {formatDate(user.created_at)}</div>
+        </div>
+        <span className="ap-pill" style={{ background:`rgba(245,158,11,.15)`, color:T.amber,
+          border:`1px solid rgba(245,158,11,.25)` }}>Pendiente</span>
       </div>
 
-      <div className="ap-assign-row">
-        <div style={{ flex: 1 }}>
-          <label className="ap-assign-label">Asignar a cliente</label>
-          <select
-            className="ap-select"
-            value={selectedClient}
-            onChange={e => setSelectedClient(e.target.value)}
-          >
-            <option value="">— Seleccionar empresa —</option>
-            {clients.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.logo} {c.name} · {c.industry}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <select className="ap-select" value={selRole} onChange={e => setSelRole(e.target.value)}>
+        <option value="client">Rol: Cliente</option>
+        <option value="consultant">Rol: Consultor/a</option>
+      </select>
+
+      {selRole === 'client' && (
+        <select className="ap-select" value={selClient} onChange={e => setSelClient(e.target.value)}>
+          <option value="">— Asignar a empresa —</option>
+          {clients.map(c => (
+            <option key={c.id} value={c.id}>{c.name}{c.industry ? ` · ${c.industry}` : ''}</option>
+          ))}
+        </select>
+      )}
 
       <div className="ap-actions">
-        <button
-          className="apb apb-approve"
-          onClick={handleApprove}
-          disabled={!selectedClient || loading === 'approve'}
-        >
-          {loading === 'approve'
-            ? <><span className="ap-spin" /> Aprobando…</>
-            : '✓ Aprobar acceso'}
+        <button className="ap-btn ap-btn-approve" onClick={approve}
+          disabled={loading === 'approve' || (selRole === 'client' && !selClient)}>
+          {loading === 'approve' ? 'Aprobando…' : '✓ Aprobar'}
         </button>
-        <button
-          className="apb apb-deny"
-          onClick={handleDeny}
-          disabled={loading === 'deny'}
-        >
-          {loading === 'deny'
-            ? <><span className="ap-spin" /> Procesando…</>
-            : '✕ Rechazar'}
+        <button className="ap-btn ap-btn-deny" onClick={deny} disabled={loading === 'deny'}>
+          {loading === 'deny' ? 'Rechazando…' : 'Rechazar'}
         </button>
       </div>
     </div>
   )
 }
 
-// ── Main Component ────────────────────────────────────────────
+function ApprovedRow({ user, onDisable, onReEnable }) {
+  const [loading, setLoading] = useState(null)
+  const isDisabled = user.approval_status === 'disabled'
+  const clientName = user.client_user_access?.[0]?.clients?.name
+
+  async function handleDisable() {
+    setLoading('disable')
+    try { await onDisable(user.id) }
+    finally { setLoading(null) }
+  }
+
+  async function handleEnable() {
+    setLoading('enable')
+    try { await onReEnable(user.id) }
+    finally { setLoading(null) }
+  }
+
+  return (
+    <div className="ap-card">
+      <div className="ap-row">
+        <div className="ap-avatar" style={{
+          background: isDisabled ? `rgba(239,68,68,.1)` : `rgba(59,130,246,.15)`,
+          color: isDisabled ? T.red : T.blue,
+          border: `1px solid ${isDisabled ? 'rgba(239,68,68,.25)' : 'rgba(59,130,246,.25)'}`,
+        }}>
+          {initials(user.full_name, user.email)}
+        </div>
+        <div style={{ flex:1 }}>
+          <div className="ap-name">{user.full_name || 'Sin nombre'}</div>
+          <div className="ap-email">{user.email}</div>
+          {clientName && <div className="ap-meta">Empresa: {clientName}</div>}
+        </div>
+        <span className="ap-pill" style={{
+          background: isDisabled ? `rgba(239,68,68,.12)` : `rgba(34,197,94,.12)`,
+          color: isDisabled ? T.red : T.green,
+          border: `1px solid ${isDisabled ? 'rgba(239,68,68,.25)' : 'rgba(34,197,94,.25)'}`,
+        }}>
+          {isDisabled ? '● Desactivado' : '● Activo'}
+        </span>
+      </div>
+      <div className="ap-actions">
+        {isDisabled
+          ? <button className="ap-btn ap-btn-enable" onClick={handleEnable} disabled={loading === 'enable'}>
+              {loading === 'enable' ? 'Reactivando…' : 'Reactivar'}
+            </button>
+          : <button className="ap-btn ap-btn-disable" onClick={handleDisable} disabled={loading === 'disable'}>
+              {loading === 'disable' ? 'Desactivando…' : 'Desactivar'}
+            </button>
+        }
+      </div>
+    </div>
+  )
+}
+
 export default function ApprovalPanel({
-  pendingUsers = MOCK_PENDING,
-  approvedUsers = MOCK_APPROVED,
-  clients = MOCK_CLIENTS,
+  pendingUsers  = [],
+  approvedUsers = [],
+  clients       = [],
   onApprove,
   onDisable,
   onReEnable,
-}: ApprovalPanelProps) {
+}) {
+  const [tab, setTab] = useState('pending')
 
   return (
-    <>
-      <style>{CSS}</style>
-      <div className="ap-wrap">
-
-        {/* ── PENDING SECTION ── */}
-        <div className="ap-sh">
-          <div className="ap-title">Usuarios pendientes de aprobación</div>
-          {pendingUsers.length > 0
-            ? <span className="ap-count ap-count-pending">⚠ {pendingUsers.length} pendiente{pendingUsers.length > 1 ? 's' : ''}</span>
-            : <span className="ap-count ap-count-none">Sin pendientes</span>
-          }
-        </div>
-
-        {pendingUsers.length > 0 && (
-          <div className="ap-banner">
-            <div className="ap-banner-icon">⚠️</div>
-            <div className="ap-banner-text">
-              <strong>Acción requerida</strong>
-              {pendingUsers.length === 1
-                ? 'Hay 1 usuario esperando ser aprobado. Asígnalo a una empresa y activa su acceso.'
-                : `Hay ${pendingUsers.length} usuarios esperando ser aprobados. Asígnalos a sus empresas para activar su acceso.`}
-            </div>
-          </div>
-        )}
-
-        {pendingUsers.length === 0 ? (
-          <div className="ap-empty">
-            <div className="ap-empty-icon">✅</div>
-            <div className="ap-empty-text">No hay usuarios pendientes de aprobación.</div>
-          </div>
-        ) : (
-          pendingUsers.map(u => (
-            <PendingCard
-              key={u.id}
-              user={u}
-              clients={clients}
-              onApprove={onApprove}
-              onDisable={onDisable}
-            />
-          ))
-        )}
-
-        <div className="ap-div" />
-
-        {/* ── APPROVED / ALL USERS TABLE ── */}
-        <div className="ap-sh">
-          <div className="ap-title">Todos los usuarios cliente</div>
-          <span className="ap-count ap-count-none">{approvedUsers.length} registrados</span>
-        </div>
-
-        {approvedUsers.length === 0 ? (
-          <div className="ap-empty">
-            <div className="ap-empty-icon">👤</div>
-            <div className="ap-empty-text">No hay usuarios cliente registrados aún.</div>
-          </div>
-        ) : (
-          <div style={{ background: '#0d1017', border: '1px solid #1c2333', borderRadius: 13, overflow: 'hidden' }}>
-            <table className="ap-tbl">
-              <thead>
-                <tr>
-                  <th>Usuario</th>
-                  <th>Empresa asignada</th>
-                  <th>Estado</th>
-                  <th>Registrado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {approvedUsers.map(u => (
-                  <tr key={u.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{
-                          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontFamily: "'Fraunces',serif", fontWeight: 700, fontSize: 12,
-                          background: u.approval_status === 'disabled'
-                            ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)',
-                          color: u.approval_status === 'disabled' ? C.red : C.green,
-                          border: `1px solid ${u.approval_status === 'disabled'
-                            ? 'rgba(239,68,68,.2)' : 'rgba(34,197,94,.2)'}`,
-                        }}>
-                          {initials(u.full_name, u.email)}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>
-                            {u.full_name || 'Sin nombre'}
-                          </div>
-                          <div style={{ fontSize: 11, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>
-                            {u.email}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      {u.assigned_client
-                        ? <span style={{ color: C.t1 }}>{u.assigned_client.logo} {u.assigned_client.name}</span>
-                        : <span style={{ color: C.t4 }}>Sin asignar</span>}
-                    </td>
-                    <td>
-                      <span className={`ap-badge ${
-                        u.approval_status === 'approved' ? 'ab-green'
-                        : u.approval_status === 'disabled' ? 'ab-red'
-                        : 'ab-amber'
-                      }`}>
-                        {u.approval_status === 'approved' ? '● Activo'
-                          : u.approval_status === 'disabled' ? '● Desactivado'
-                          : '● Pendiente'}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: C.t3 }}>
-                      {new Date(u.created_at).toLocaleDateString('es-CL')}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 7 }}>
-                        <button className="apb apb-edit" style={{ padding: '5px 11px', fontSize: 12 }}>
-                          Editar
-                        </button>
-                        {u.approval_status === 'approved'
-                          ? <button
-                              className="apb apb-deny"
-                              style={{ padding: '5px 11px', fontSize: 12 }}
-                              onClick={() => onDisable(u.id)}
-                            >
-                              Desactivar
-                            </button>
-                          : u.approval_status === 'disabled'
-                            ? <button
-                                className="apb apb-reenable"
-                                style={{ padding: '5px 11px', fontSize: 12 }}
-                                onClick={() => onReEnable(u.id)}
-                              >
-                                Reactivar
-                              </button>
-                            : null
-                        }
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
+    <div className="ap-wrap">
+      <style>{css}</style>
+      <div className="ap-tabs">
+        <button className={`ap-tab ${tab === 'pending' ? 'active' : ''}`}
+          onClick={() => setTab('pending')}>
+          Pendientes {pendingUsers.length > 0 && `(${pendingUsers.length})`}
+        </button>
+        <button className={`ap-tab ${tab === 'approved' ? 'active' : ''}`}
+          onClick={() => setTab('approved')}>
+          Usuarios activos
+        </button>
       </div>
-    </>
+
+      {tab === 'pending' && (
+        pendingUsers.length === 0
+          ? <div className="ap-empty">Sin usuarios pendientes de aprobación.</div>
+          : pendingUsers.map(u => (
+              <PendingRow key={u.id} user={u} clients={clients}
+                onApprove={onApprove} onDisable={onDisable}/>
+            ))
+      )}
+
+      {tab === 'approved' && (
+        approvedUsers.length === 0
+          ? <div className="ap-empty">Sin usuarios registrados.</div>
+          : approvedUsers.map(u => (
+              <ApprovedRow key={u.id} user={u}
+                onDisable={onDisable} onReEnable={onReEnable}/>
+            ))
+      )}
+    </div>
   )
 }
