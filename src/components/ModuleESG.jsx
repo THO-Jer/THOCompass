@@ -1026,14 +1026,45 @@ function TabUpload({ project, supabase, onApplyScores }) {
   const activePillars = Object.entries(project.active_pillars)
     .filter(([,v])=>v).map(([k])=>k);
 
-  async function readFileText(file) {
+  async function readFileForUpload(file) {
+    const raw  = file.raw || file;
+    const name = file.name || raw.name || "";
+    const ext  = name.split(".").pop().toLowerCase();
+    const isPdfOrExcel = ["pdf","xlsx","xls","ods"].includes(ext);
     return new Promise((resolve) => {
-      if (file.name.match(/\.pdf$/i)) { resolve("[PDF]"); return; }
-      const r = new FileReader();
-      r.onload = e => resolve(e.target.result?.slice(0, 12000) || "");
-      r.onerror = () => resolve("");
-      r.readAsText(file.raw || file, "utf-8");
+      const reader = new FileReader();
+      if (isPdfOrExcel) {
+        reader.onload = e => {
+          const b64 = e.target.result?.split(",")[1] || "";
+          resolve({ name, base64: b64, content: null, mimeType: raw.type || "" });
+        };
+        reader.readAsDataURL(raw);
+      } else {
+        reader.onload = e => resolve({ name, content: e.target.result?.slice(0,15000)||"", base64:null });
+        reader.onerror = () => resolve({ name, content:"", base64:null });
+        reader.readAsText(raw, "utf-8");
+      }
     });
+  }
+
+  async function loadProjectContext() {
+    if (!supabase || !project?.id) return {};
+    const [logRes, actorsRes, commRes, actRes] = await Promise.all([
+      supabase.from("project_score_log").select("method,dimension,value_before,value_after,created_at")
+        .eq("project_id", project.id).order("created_at",{ascending:false}).limit(8),
+      supabase.from("project_actors").select("name,actor_type,influence_level,relationship_status")
+        .eq("project_id", project.id).limit(15),
+      supabase.from("project_commitments").select("title,status,due_date")
+        .eq("project_id", project.id).neq("status","completed").limit(10),
+      supabase.from("project_activities").select("title,activity_date,nps_score")
+        .eq("project_id", project.id).order("activity_date",{ascending:false}).limit(5),
+    ]);
+    return {
+      scoreHistory:     logRes.data    || [],
+      actors:           actorsRes.data || [],
+      commitments:      commRes.data   || [],
+      recentActivities: actRes.data    || [],
+    };
   }
 
   async function uploadAndRegister(file) {
@@ -1060,9 +1091,8 @@ function TabUpload({ project, supabase, onApplyScores }) {
     try {
       await Promise.all(files.map(f => uploadAndRegister(f)));
 
-      const fileContents = await Promise.all(
-        files.map(async f => ({ name: f.name, content: await readFileText(f) }))
-      );
+      const fileContents = await Promise.all(files.map(f => readFileForUpload(f)));
+      const projectContext = await loadProjectContext();
 
       const res = await fetch("/api/analyze-esg", {
         method: "POST",
@@ -1073,6 +1103,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
           currentScores:   project.score    || {},
           currentMaturity: project.maturity || {},
           activePillars,
+          projectContext,
         }),
       });
 
@@ -1212,7 +1243,19 @@ function TabUpload({ project, supabase, onApplyScores }) {
           <div style={{ fontSize:13,color:T.t2,marginBottom:16,lineHeight:1.65,
             background:T.s2,border:`1px solid ${T.b1}`,borderRadius:9,padding:"14px 16px" }}>
             {prop.summary}
-          </div>
+          {prop.source_consistency && (
+            <div style={{ display:"inline-flex",alignItems:"center",gap:6,marginTop:10,
+              padding:"4px 12px",borderRadius:20,fontSize:11,
+              fontFamily:"'JetBrains Mono',monospace",
+              background:prop.source_consistency==="consistente"?`${T.green}12`:
+                         prop.source_consistency==="contradictoria"?`${T.red}12`:`${T.amber}12`,
+              color:prop.source_consistency==="consistente"?T.green:
+                    prop.source_consistency==="contradictoria"?T.red:T.amber }}>
+              {prop.source_consistency==="consistente"?"✓ Fuentes consistentes":
+                prop.source_consistency==="contradictoria"?"⚠ Fuentes contradictorias":"~ Fuentes mixtas"}
+            </div>
+          )}
+        </div>
 
           {/* GRI updates */}
           {prop.gri_updates.length>0&&(
