@@ -484,6 +484,140 @@ function TD({ children, mono=false }) {
 }
 
 // ── MAIN COMPONENT ─────────────────────────────────────────────
+// ── Invite Consultant Modal ────────────────────────────────────
+function InviteConsultantModal({ supabase, onClose, onInvited }) {
+  const [email,   setEmail]   = useState("");
+  const [name,    setName]    = useState("");
+  const [role,    setRole]    = useState("consultant");
+  const [loading, setLoading] = useState(false);
+  const [result,  setResult]  = useState(null); // { ok, message }
+
+  async function handleInvite() {
+    if (!email.trim()) return;
+    setLoading(true); setResult(null);
+    try {
+      // 1. Send invite via Supabase Auth (magic link)
+      const { error: inviteErr } = await supabase.auth.admin
+        ? await supabase.auth.admin.inviteUserByEmail(email.trim(), {
+            data: { full_name: name.trim(), role, approval_status: "pending" }
+          })
+        : { error: { message: "admin API not available" } };
+
+      // If admin API not available, fall back to creating a pending profile
+      // and showing instructions to share the login link
+      if (inviteErr) {
+        // Fallback: create user_profile record manually so it shows in pendientes
+        const { error: profileErr } = await supabase.from("user_profiles").insert({
+          email:           email.trim(),
+          full_name:       name.trim() || email.trim().split("@")[0],
+          role,
+          approval_status: "pending",
+        });
+        if (profileErr && !profileErr.message?.includes("duplicate")) {
+          setResult({ ok:false, message:`Error: ${profileErr.message}` });
+          return;
+        }
+        setResult({
+          ok: true,
+          message: `Perfil creado. Comparte el link de acceso con ${email} para que inicie sesión. Aparecerá en Pendientes para aprobación.`
+        });
+        return;
+      }
+
+      setResult({ ok:true, message:`Invitación enviada a ${email}. Recibirá un email con instrucciones.` });
+    } catch(e) {
+      setResult({ ok:false, message:`Error: ${e.message}` });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.7)",
+      display:"flex",alignItems:"center",justifyContent:"center",zIndex:500,padding:20 }}>
+      <div style={{ background:T.s1,border:`1px solid ${T.b2}`,borderRadius:14,
+        width:"100%",maxWidth:440,boxShadow:"0 24px 64px rgba(0,0,0,.7)" }}>
+        <div style={{ padding:"18px 22px",borderBottom:`1px solid ${T.b1}`,
+          display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1 }}>
+            Invitar consultor/a al equipo
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",
+            color:T.t3,cursor:"pointer",fontSize:18 }}>✕</button>
+        </div>
+        <div style={{ padding:"20px 22px",display:"flex",flexDirection:"column",gap:14 }}>
+          <div>
+            <label style={{ fontSize:11,color:T.t3,fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6 }}>
+              Email *
+            </label>
+            <input value={email} onChange={e=>setEmail(e.target.value)}
+              placeholder="nombre@empresa.cl" type="email"
+              style={{ width:"100%",background:T.s2,border:`1px solid ${T.b2}`,borderRadius:8,
+                padding:"9px 12px",color:T.t1,fontSize:13,outline:"none",
+                fontFamily:"'Instrument Sans',sans-serif",boxSizing:"border-box" }}/>
+          </div>
+          <div>
+            <label style={{ fontSize:11,color:T.t3,fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6 }}>
+              Nombre completo
+            </label>
+            <input value={name} onChange={e=>setName(e.target.value)}
+              placeholder="Ej. María González"
+              style={{ width:"100%",background:T.s2,border:`1px solid ${T.b2}`,borderRadius:8,
+                padding:"9px 12px",color:T.t1,fontSize:13,outline:"none",
+                fontFamily:"'Instrument Sans',sans-serif",boxSizing:"border-box" }}/>
+          </div>
+          <div>
+            <label style={{ fontSize:11,color:T.t3,fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6 }}>
+              Rol
+            </label>
+            <select value={role} onChange={e=>setRole(e.target.value)}
+              style={{ width:"100%",background:T.s2,border:`1px solid ${T.b2}`,borderRadius:8,
+                padding:"9px 12px",color:T.t1,fontSize:13,outline:"none",cursor:"pointer",
+                fontFamily:"'Instrument Sans',sans-serif",boxSizing:"border-box" }}>
+              <option value="consultant">Consultor/a — acceso a clientes asignados</option>
+              <option value="super_consultant">Super consultora — acceso a todo</option>
+            </select>
+          </div>
+
+          {result && (
+            <div style={{ padding:"10px 14px",borderRadius:8,fontSize:13,
+              background:result.ok?`${T.green}12`:`${T.red}12`,
+              border:`1px solid ${result.ok?T.green:T.red}30`,
+              color:result.ok?T.green:T.red,lineHeight:1.55 }}>
+              {result.ok?"✓ ":""}{result.message}
+            </div>
+          )}
+
+          <div style={{ fontSize:12,color:T.t3,padding:"8px 12px",
+            background:T.s2,borderRadius:8,lineHeight:1.6 }}>
+            ℹ La persona debe iniciar sesión en{" "}
+            <span style={{ fontFamily:"'JetBrains Mono',monospace",color:T.blue }}>
+              {window.location.origin}
+            </span>{" "}
+            y quedará en estado Pendiente hasta que la apruebes en Administración → Pendientes.
+          </div>
+        </div>
+        <div style={{ padding:"14px 22px",borderTop:`1px solid ${T.b1}`,
+          display:"flex",gap:10,justifyContent:"flex-end" }}>
+          {result?.ok
+            ? <Btn variant="primary" onClick={onInvited}>Listo</Btn>
+            : <>
+                <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+                <Btn variant="primary" onClick={handleInvite}
+                  disabled={!email.trim()||loading}>
+                  {loading ? "Procesando…" : "Invitar"}
+                </Btn>
+              </>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage({ supabase, currentUser, onClientsChange }) {
   // State
   const [pending,     setPending]     = useState([]);
@@ -501,6 +635,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
   const [editModal,    setEditModal]    = useState(null);
   const [editClient,   setEditClient]   = useState(null);
   const [createClient, setCreateClient] = useState(false);
+  const [inviteModal,  setInviteModal]  = useState(false);
   const [confirmDlg,   setConfirmDlg]   = useState(null);
 
   // ── Load data from Supabase ────────────────────────────────────
@@ -983,7 +1118,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
         {tab==="consultants" && (
           <div className="adm-fade">
             <SectionTitle count={consultants.length}
-              action={<Btn variant="primary" size="sm" onClick={()=>{}}>
+              action={<Btn variant="primary" size="sm" onClick={()=>setInviteModal(true)}>
                 + Invitar consultor/a
               </Btn>}>
               Equipo consultor
@@ -1043,6 +1178,12 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
       {confirmDlg && (
         <ConfirmDialog message={confirmDlg.message}
           onConfirm={confirmDlg.onConfirm} onClose={()=>setConfirmDlg(null)}/>
+      )}
+      {inviteModal && (
+        <InviteConsultantModal
+          supabase={supabase}
+          onClose={()=>setInviteModal(false)}
+          onInvited={()=>{ setInviteModal(false); loadAll(); }}/>
       )}
     </>
   );

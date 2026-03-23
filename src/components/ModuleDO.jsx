@@ -1120,6 +1120,11 @@ export default function ModuleDO({ client, supabase }) {
   const [projCommitments, setProjCommitments] = useState([]);
   const [showBaseline,    setShowBaseline]    = useState(false);
 
+  useEffect(() => {
+    if (!supabase || !client?.id) return;
+    loadProjects();
+  }, [supabase, client?.id]);
+
   async function loadProjects() {
     setLoading(true);
     try {

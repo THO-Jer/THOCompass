@@ -653,7 +653,16 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
                     <span style={{ background:`${T.green}18`, color:T.green, border:`1px solid ${T.green}30`,
                       padding:"3px 9px", borderRadius:20, fontSize:11,
                       fontFamily:"'JetBrains Mono',monospace" }}>● Activo</span>
-                    <Btn variant="danger" size="sm">Revocar acceso</Btn>
+                    <Btn variant="danger" size="sm" onClick={()=>{
+                      if (!window.confirm(`¿Revocar acceso de ${u.email}?`)) return;
+                      supabase.from("client_user_access")
+                        .update({ access_status:"revoked", updated_at:new Date().toISOString() })
+                        .eq("client_id", client.id).eq("user_id", u.id)
+                        .then(({ error })=>{
+                          if (error) { alert("Error: " + error.message); return; }
+                          onUpdate({ ...client, users:(client.users||[]).filter(x=>x.id!==u.id) });
+                        });
+                    }}>Revocar acceso</Btn>
                   </div>
                 ))}
               </div>

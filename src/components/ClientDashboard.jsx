@@ -1305,17 +1305,21 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
   }
 
   // Normalize: usa datos reales si están disponibles, si no el prop
+  const src = liveData || rawClient || {};
   const client = {
-    ...MOCK_CLIENT,
-    ...(liveData || rawClient),
-    modules:         { rc:false, do:false, esg:false, ...((liveData||rawClient)?.modules || {}) },
-    scores:          { rc:{}, do:{}, esg:{},            ...((liveData||rawClient)?.scores  || {}) },
-    history:         (liveData||rawClient)?.history         || [],
-    alerts:          (liveData||rawClient)?.alerts          || [],
-    recommendations: (liveData||rawClient)?.recommendations || [],
-    projects:        (liveData||rawClient)?.projects        || [],
-    commitments:     (liveData||rawClient)?.commitments     || [],
-    gri_summary:     (liveData||rawClient)?.gri_summary     || {},
+    id:       src.id,
+    name:     src.name     || "—",
+    industry: src.industry || "",
+    period:   src.period   || new Date().toLocaleDateString("es-CL",{month:"long",year:"numeric"}),
+    contact_consultant: src.contact_consultant || "THO Consultora",
+    modules:         { rc:false, do:false, esg:false,   ...(src.modules || {}) },
+    scores:          { rc:{},   do:{},    esg:{},        ...(src.scores  || {}) },
+    history:         src.history         || [],
+    alerts:          src.alerts          || [],
+    recommendations: src.recommendations || [],
+    projects:        src.projects        || [],
+    commitments:     src.commitments     || [],
+    gri_summary:     src.gri_summary     || {},
   };
 
   // Sync msgList cuando llegan mensajes reales de Supabase
