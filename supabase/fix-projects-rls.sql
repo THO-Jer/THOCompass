@@ -282,10 +282,12 @@ create table if not exists public.project_score_log (
 
 alter table public.project_score_log enable row level security;
 
+drop policy if exists "consultants manage score log" on public.project_score_log;
 create policy "consultants manage score log"
   on public.project_score_log for all
   using (is_consultant());
 
+drop policy if exists "clients read score log" on public.project_score_log;
 create policy "clients read score log"
   on public.project_score_log for select
   using (

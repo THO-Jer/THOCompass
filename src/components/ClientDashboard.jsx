@@ -683,8 +683,16 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
                   const daysLeft = c.due_date
                     ? Math.ceil((new Date(c.due_date)-new Date())/(1000*60*60*24)) : null;
                   const isOverdue = daysLeft !== null && daysLeft < 0;
-                  const ST = { pending:{l:"Pendiente",col:T.t3}, in_progress:{l:"En curso",col:T.blue},
-                    completed:{l:"Completado",col:T.green}, overdue:{l:"Atrasado",col:T.red} };
+                  const ST = {
+                    pending:     {l:"Pendiente",  col:T.t3},
+                    open:        {l:"Abierto",    col:T.blue},
+                    in_progress: {l:"En curso",   col:T.blue},
+                    completed:   {l:"Completado", col:T.green},
+                    resolved:    {l:"Resuelto",   col:T.green},
+                    closed:      {l:"Cerrado",    col:T.t3},
+                    overdue:     {l:"Atrasado",   col:T.red},
+                    rejected:    {l:"Rechazado",  col:T.red},
+                  };
                   const st = ST[c.status] || ST.pending;
                   return (
                     <div key={c.id} style={{ padding:"13px 16px",background:T.s2,
@@ -1288,7 +1296,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
           .from("project_commitments")
           .select("*")
           .in("project_id", projs.map(p=>p.id))
-          .neq("status", "completed")
+          .not("status", "in", '("completed","resolved","closed","rejected")')
           .order("due_date", { ascending: true, nullsLast: true });
         commitments = comData || [];
       }

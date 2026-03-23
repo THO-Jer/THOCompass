@@ -18,9 +18,13 @@ const T = {
 
 const STATUS_META = {
   pending:     { label:"Pendiente",    color:T.t3,    bg:`${T.t3}12`,   icon:"○" },
+  open:        { label:"Abierto",      color:T.blue,  bg:`${T.blue}12`, icon:"○" },
   in_progress: { label:"En curso",     color:T.blue,  bg:`${T.blue}12`, icon:"◐" },
   completed:   { label:"Completado",   color:T.green, bg:`${T.green}12`,icon:"●" },
+  resolved:    { label:"Resuelto",     color:T.green, bg:`${T.green}12`,icon:"●" },
+  closed:      { label:"Cerrado",      color:T.t3,    bg:`${T.t3}12`,   icon:"●" },
   overdue:     { label:"Atrasado",     color:T.red,   bg:`${T.red}12`,  icon:"⚠" },
+  rejected:    { label:"Rechazado",    color:T.red,   bg:`${T.red}12`,  icon:"✕" },
 };
 
 function daysUntil(dateStr) {
@@ -248,6 +252,8 @@ export default function CommitmentsPanel({ projectId, clientId, moduleKey, supab
     loadCommitments();
   }, [supabase, projectId]);
 
+  const DONE_STATUSES = ["completed","resolved","closed","rejected"];
+
   async function loadCommitments() {
     setLoading(true);
     const { data, error } = await supabase
@@ -264,7 +270,7 @@ export default function CommitmentsPanel({ projectId, clientId, moduleKey, supab
     const now = new Date().toISOString().split("T")[0];
     const updated = (data || []).map(c => ({
       ...c,
-      status: c.status !== "completed" && c.due_date && c.due_date < now
+      status: !DONE_STATUSES.includes(c.status) && c.due_date && c.due_date < now
         ? "overdue" : c.status,
     }));
     setCommitments(updated);
@@ -308,16 +314,16 @@ export default function CommitmentsPanel({ projectId, clientId, moduleKey, supab
   }
 
   const filtered = commitments.filter(c => {
-    if (filter === "completed") return c.status === "completed";
-    if (filter === "active")    return c.status !== "completed";
+    if (filter === "completed") return DONE_STATUSES.includes(c.status);
+    if (filter === "active")    return !DONE_STATUSES.includes(c.status);
     return true;
   });
 
   const counts = {
     total:     commitments.length,
     overdue:   commitments.filter(c=>c.status==="overdue").length,
-    completed: commitments.filter(c=>c.status==="completed").length,
-    pending:   commitments.filter(c=>c.status==="pending"||c.status==="in_progress").length,
+    completed: commitments.filter(c=>DONE_STATUSES.includes(c.status)).length,
+    pending:   commitments.filter(c=>!DONE_STATUSES.includes(c.status)).length,
   };
 
   return (
