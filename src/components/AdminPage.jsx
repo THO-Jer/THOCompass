@@ -737,6 +737,27 @@ export default function AdminPage({ supabase, currentUser }) {
     { id:"consultants", label:"Mi equipo"    },
   ];
 
+  // Early return while loading
+  if (loading) return (
+    <>
+      <style>{CSS}</style>
+      <div style={{ padding:"32px 36px", maxWidth:1200 }}>
+        <div className="adm-fade" style={{ marginBottom:28 }}>
+          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:T.t3,
+            letterSpacing:2, textTransform:"uppercase", marginBottom:8 }}>Centro de administración</div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:30, color:T.t1,
+            letterSpacing:-.5, marginBottom:6 }}>Administración</div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, color:T.t3, fontSize:13,
+          fontFamily:"'JetBrains Mono',monospace", padding:"48px 0" }}>
+          <span style={{ width:14, height:14, border:`2px solid ${T.b2}`, borderTopColor:T.rc,
+            borderRadius:"50%", animation:"admSpin .8s linear infinite", display:"inline-block" }}/>
+          Cargando datos…
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <>
       <style>{CSS}</style>
@@ -754,18 +775,6 @@ export default function AdminPage({ supabase, currentUser }) {
             Gestión de usuarios, empresas, accesos y equipo consultor.
           </div>
         </div>
-
-        {loading ? (
-          <div style={{ display:"flex", alignItems:"center", gap:10, color:T.t3, fontSize:13,
-            fontFamily:"'JetBrains Mono',monospace", padding:"48px 0" }}>
-            <span style={{ width:14, height:14, border:`2px solid ${T.b2}`,
-              borderTopColor:T.rc, borderRadius:"50%",
-              animation:"admSpin .8s linear infinite", display:"inline-block" }}/>
-            Cargando datos…
-          </div>
-        ) : null}
-
-        {!loading && (<>
 
         {/* Stats strip */}
         <div className="adm-fade adm-d1" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)",
@@ -1015,9 +1024,6 @@ export default function AdminPage({ supabase, currentUser }) {
         )}
 
       </div>
-
-      {/* !loading block closes here */}
-      </>)}
 
       {/* ── MODALS ── */}
       {approveModal && (
