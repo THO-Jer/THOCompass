@@ -994,43 +994,79 @@ function TabUpload({ project, supabase, onApplyScores }) {
     name:f.name,
     type:f.name.match(/\.(xlsx|csv)/i)?"excel":f.name.match(/\.pdf/i)?"pdf":
          f.name.match(/\.docx?/i)?"doc":"txt",
+    raw:f,
   }))]);
   const fIcon = t=>({excel:"📊",pdf:"📄",doc:"📝",txt:"📋"})[t]||"📎";
 
   const activePillars = Object.entries(project.active_pillars)
     .filter(([,v])=>v).map(([k])=>k);
 
+  async function readFileText(file) {
+    return new Promise((resolve) => {
+      if (file.name.match(/\.pdf$/i)) { resolve("[PDF]"); return; }
+      const r = new FileReader();
+      r.onload = e => resolve(e.target.result?.slice(0, 8000) || "");
+      r.onerror = () => resolve("");
+      r.readAsText(file.raw || file, "utf-8");
+    });
+  }
+
   async function analyze() {
     if (!files.length) return;
     setBusy(true); setProp(null);
-    // Real implementation:
-    // 1. Upload to bucket 'esg-documents'
-    //    path: {client_id}/esg/{project_id}/{timestamp}_{filename}
-    // 2. POST /api/analyze-esg with paths + project context
-    //    Context includes: active pillars, current GRI compliance,
-    //    current scores. Claude maps findings to GRI standards.
-    // 3. Store in client_files with ai_score, ai_summary,
-    //    and gri_mappings in ai_analysis_json
-    await new Promise(r=>setTimeout(r,2400));
-    setBusy(false);
-    setProp({
-      detected_pillar:"gobernanza",
-      summary:"El documento corresponde al Modelo de Prevención de Delitos. Se identificaron indicadores relevantes para GRI 205 (Anticorrupción) y cumplimiento Ley 21.595. El modelo está implementado pero la capacitación no ha alcanzado al 100% del personal.",
-      gri_updates:[
-        { id:"GRI 205", current:"parcial", proposed:"cumple",
-          reason:"El modelo de prevención está formalmente implementado y auditado." },
-        { id:"GRI 2-26", current:"parcial", proposed:"cumple",
-          reason:"Canal de denuncias activo y documentado con protocolos de respuesta." },
-      ],
-      proposed_scores:{
-        gobernanza:{ current:project.score.gobernanza, proposed:76,
-          reason:"Avance en compliance y canal de denuncias eleva el score de gobernanza." },
-      },
-      proposed_maturity:{
-        gobernanza:{ current:project.maturity.gobernanza, proposed:4,
-          reason:"Transición a nivel Gestionado: medición activa y reporte interno en curso." },
-      },
-    });
+    try {
+      const fileContents = await Promise.all(
+        files.map(async f => `### ${f.name}\n${await readFileText(f)}`)
+      );
+      const scores   = project.score   || {};
+      const maturity = project.maturity || {};
+      const gri      = project.gri_compliance || {};
+      const pillarsStr = activePillars.join(", ");
+
+      const prompt = `Eres un consultor experto en Sostenibilidad (ESG) y estándares GRI en Chile.
+
+Analiza los siguientes archivos para el proyecto "${project.name}" y propón actualizaciones BASADAS ÚNICAMENTE en el contenido real de los archivos.
+
+PILARES ACTIVOS: ${pillarsStr}
+
+SCORES ACTUALES (0-100):
+${activePillars.map(k=>`- ${k}: ${scores[k] ?? "sin dato"}`).join("\n")}
+
+MADUREZ ACTUAL (1-5):
+${activePillars.map(k=>`- ${k}: ${maturity[k] ?? 1}`).join("\n")}
+
+ARCHIVOS:
+${fileContents.join("\n\n")}
+
+Responde SOLO con JSON sin texto adicional ni bloques markdown:
+{
+  "detected_pillar": "<pilar más relevante del archivo: ${activePillars[0] || 'social'}>",
+  "summary": "Resumen de 2-3 oraciones del contenido real analizado",
+  "insights": ["hallazgo 1 del archivo", "hallazgo 2", "hallazgo 3"],
+  "gri_updates": [
+    { "id": "<código GRI>", "current": "<cumple|parcial|pendiente|no_aplica>", "proposed": "<cumple|parcial|pendiente|no_aplica>", "reason": "razón basada en el archivo" }
+  ],
+  "proposed_scores": {
+    ${activePillars.map(k=>`"${k}": { "current": ${scores[k] ?? 50}, "proposed": <0-100>, "reason": "basado en datos" }`).join(",\n    ")}
+  },
+  "proposed_maturity": {
+    ${activePillars.map(k=>`"${k}": { "current": ${maturity[k] ?? 1}, "proposed": <1-5>, "reason": "basado en datos" }`).join(",\n    ")}
+  }
+}`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1200,
+          messages:[{ role:"user", content:prompt }] }),
+      });
+      const data = await res.json();
+      const clean = (data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim();
+      setProp(JSON.parse(clean));
+    } catch(e) {
+      console.error("Analyze ESG error:", e);
+      setProp({ summary:"Error al analizar. Revisa la consola.", insights:[], gri_updates:[], proposed_scores:{}, proposed_maturity:{} });
+    } finally { setBusy(false); }
   }
 
   function handleApply() {

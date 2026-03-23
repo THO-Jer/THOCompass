@@ -885,38 +885,79 @@ function TabUpload({ project, supabase, onApplyScores }) {
 
   const fIcon = t=>({excel:"📊",pdf:"📄",doc:"📝",txt:"📋"})[t]||"📎";
 
+  // Lee el archivo como texto (csv, txt, docx parcial)
+  async function readFileText(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result?.slice(0, 8000) || "");
+      reader.onerror = () => resolve("");
+      if (file.name.match(/\.pdf$/i)) {
+        resolve("[PDF — contenido binario, se usará nombre del archivo como contexto]");
+      } else {
+        reader.readAsText(file, "utf-8");
+      }
+    });
+  }
+
   async function analyze() {
     if (!files.length) return;
     setBusy(true); setProp(null);
-    // Real implementation:
-    // 1. Upload files to Supabase Storage bucket 'rc-documents'
-    //    path: {client_id}/rc/{project_id}/{timestamp}_{filename}
-    // 2. POST to /api/analyze-rc with file paths + project context
-    //    The API calls Claude with the file content and asks for:
-    //    - Score proposals per dimension
-    //    - Identified tensions and opportunities
-    //    - Recommended actions
-    // 3. Store result in client_files with ai_score and ai_summary
-    await new Promise(r=>setTimeout(r,2400));
-    setBusy(false);
-    setProp({
-      summary:"El análisis detectó tono general constructivo con tensiones localizadas. Se identificaron 2 compromisos nuevos y mejora en la frecuencia de diálogo respecto al período anterior.",
-      insights:[
-        "La comunidad de pescadores muestra mayor apertura tras la visita de campo del 5 de marzo.",
-        "El reclamo por ruido nocturno requiere respuesta formal antes del 10 de marzo.",
-        "Se detectaron 3 menciones positivas sobre el programa de reforestación.",
-      ],
-      proposed_scores:{
-        percepcion:{ current:project.score.percepcion, proposed:69,
-          reason:"Mejora en satisfacción detectada en encuesta y entrevistas." },
-        compromisos:{ current:project.score.compromisos, proposed:project.score.compromisos,
-          reason:"Sin cambios. No hay nuevos registros de seguimiento de compromisos." },
-        dialogo:{ current:project.score.dialogo, proposed:73,
-          reason:"Aumento de reuniones formales y tasa de acuerdos cumplidos al 92%." },
-        conflictividad:{ current:project.score.conflictividad, proposed:58,
-          reason:"Reclamo activo detectado. Se recomienda resolución antes de siguiente medición." },
-      },
-    });
+    try {
+      // Leer contenido de los archivos
+      const fileContents = await Promise.all(
+        files.map(async f => {
+          const text = await readFileText(f.raw);
+          return `### Archivo: ${f.name}\n${text}`;
+        })
+      );
+
+      const scores = project.score || {};
+      const prompt = `Eres un consultor experto en Relacionamiento Comunitario (RC) para proyectos en Chile.
+
+Analiza los siguientes archivos cargados para el proyecto "${project.name}" y propón actualizaciones de scores basadas ÚNICAMENTE en el contenido real de los archivos.
+
+SCORES ACTUALES (escala 0-100):
+- Percepción y confianza: ${scores.percepcion ?? "sin dato"}
+- Gestión de compromisos: ${scores.compromisos ?? "sin dato"}  
+- Calidad del diálogo: ${scores.dialogo ?? "sin dato"}
+- Conflictividad activa: ${scores.conflictividad ?? "sin dato"}
+
+ARCHIVOS:
+${fileContents.join("\n\n")}
+
+Responde SOLO con un objeto JSON con esta estructura exacta (sin texto antes ni después, sin bloques de código markdown):
+{
+  "summary": "Resumen de 2-3 oraciones del contenido analizado",
+  "insights": ["insight 1 basado en datos reales", "insight 2", "insight 3"],
+  "proposed_scores": {
+    "percepcion": { "current": ${scores.percepcion ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" },
+    "compromisos": { "current": ${scores.compromisos ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" },
+    "dialogo": { "current": ${scores.dialogo ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" },
+    "conflictividad": { "current": ${scores.conflictividad ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" }
+  }
+}`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "{}";
+      const clean = text.replace(/```json|```/g, "").trim();
+      const result = JSON.parse(clean);
+      setProp(result);
+    } catch(e) {
+      console.error("Analyze error:", e);
+      setProp({ summary: "Error al analizar. Revisa la consola.", insights: [], proposed_scores: {} });
+    } finally {
+      setBusy(false);
+    }
   }
 
   function handleApply() {

@@ -136,3 +136,29 @@ from pg_tables
 where schemaname = 'public'
   and tablename like 'project%'
 order by tablename;
+
+-- ── 9. CLIENT_MESSAGES — INSERT para clientes y consultores ───
+-- El schema original solo tenía SELECT para clientes
+-- Aquí agregamos INSERT para ambos roles
+
+drop policy if exists "clients insert own messages" on public.client_messages;
+create policy "clients insert own messages"
+  on public.client_messages for insert
+  with check (
+    sender_role = 'client'
+    and public.has_client_access(client_id)
+  );
+
+drop policy if exists "consultants insert client messages" on public.client_messages;
+create policy "consultants insert client messages"
+  on public.client_messages for insert
+  with check (public.is_consultant());
+
+drop policy if exists "consultants read client messages" on public.client_messages;
+create policy "consultants read client messages"
+  on public.client_messages for select
+  using (public.is_consultant());
+
+-- Verificar políticas de mensajes
+select policyname, cmd from pg_policies
+where tablename = 'client_messages';

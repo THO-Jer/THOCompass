@@ -788,33 +788,64 @@ function TabUpload({ project, supabase, onApplyScores }) {
     name:f.name,
     type:f.name.match(/\.(xlsx|csv)/i)?"excel":f.name.match(/\.pdf/i)?"pdf":
          f.name.match(/\.docx?/i)?"doc":"txt",
+    raw:f,
   }))]);
   const fIcon = t=>({excel:"📊",pdf:"📄",doc:"📝",txt:"📋"})[t]||"📎";
+
+  async function readFileText(file) {
+    return new Promise((resolve) => {
+      if (file.name.match(/\.pdf$/i)) { resolve("[PDF]"); return; }
+      const r = new FileReader();
+      r.onload = e => resolve(e.target.result?.slice(0, 8000) || "");
+      r.onerror = () => resolve("");
+      r.readAsText(file.raw || file, "utf-8");
+    });
+  }
 
   async function analyze() {
     if (!files.length) return;
     setBusy(true); setProp(null);
-    // Real implementation:
-    // 1. Upload to bucket 'do-documents'
-    //    path: {client_id}/do/{project_id}/{timestamp}_{filename}
-    // 2. POST /api/analyze-do with paths + project context
-    //    Claude analyzes: dimension scores, insights, tensions/opportunities
-    // 3. Store in client_files with ai_score and ai_summary
-    await new Promise(r=>setTimeout(r,2400));
-    setBusy(false);
-    setProp({
-      summary:"El análisis detectó fortalezas en cultura y trabajo en equipo, con oportunidades claras en la dimensión de liderazgo de mandos medios y bienestar percibido.",
-      insights:[
-        "El eNPS promedio es +38, levemente bajo el objetivo del cliente (+45).",
-        "La dimensión de comunicación interna muestra brecha entre niveles jerárquicos.",
-        "Alta valoración de la cultura de seguridad y colaboración entre pares.",
-      ],
-      proposed:{
-        cultura:   { current:project.score.cultura,    proposed:82, reason:"Cuestionario Denison muestra mejora en cohesión y misión." },
-        engagement:{ current:project.score.engagement, proposed:78, reason:"eNPS subió de +32 a +38. Satisfacción general estable." },
-        liderazgo: { current:project.score.liderazgo,  proposed:74, reason:"Evaluación 180° detecta brecha en comunicación descendente." },
-      },
-    });
+    try {
+      const fileContents = await Promise.all(
+        files.map(async f => `### ${f.name}\n${await readFileText(f)}`)
+      );
+      const scores = project.score || {};
+      const prompt = `Eres un consultor experto en Desarrollo Organizacional (DO) en Chile.
+
+Analiza los siguientes archivos para el proyecto "${project.name}" y propón scores basados ÚNICAMENTE en el contenido real.
+
+SCORES ACTUALES (0-100):
+- Cultura organizacional: ${scores.cultura ?? "sin dato"}
+- Engagement y clima: ${scores.engagement ?? "sin dato"}
+- Liderazgo: ${scores.liderazgo ?? "sin dato"}
+
+ARCHIVOS:
+${fileContents.join("\n\n")}
+
+Responde SOLO con JSON sin texto adicional ni bloques markdown:
+{
+  "summary": "Resumen de 2-3 oraciones",
+  "insights": ["insight 1 del archivo", "insight 2", "insight 3"],
+  "proposed": {
+    "cultura":    { "current": ${scores.cultura ?? 50},    "proposed": <0-100>, "reason": "basado en datos" },
+    "engagement": { "current": ${scores.engagement ?? 50}, "proposed": <0-100>, "reason": "basado en datos" },
+    "liderazgo":  { "current": ${scores.liderazgo ?? 50},  "proposed": <0-100>, "reason": "basado en datos" }
+  }
+}`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000,
+          messages:[{ role:"user", content:prompt }] }),
+      });
+      const data = await res.json();
+      const clean = (data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim();
+      setProp(JSON.parse(clean));
+    } catch(e) {
+      console.error("Analyze DO error:", e);
+      setProp({ summary:"Error al analizar.", insights:[], proposed:{} });
+    } finally { setBusy(false); }
   }
 
   function handleApply() {

@@ -314,25 +314,31 @@ export default function App() {
 
   async function loadConsultantClients() {
     const sb = auth.supabase;
-    const [{ data: clientData }, { data: moduleData }] = await Promise.all([
-      sb.from("clients").select("id, name, published").order("name"),
-      sb.from("client_modules").select("client_id, rc, do_enabled, esg"),
-    ]);
-    if (clientData?.length) {
-      const mapped = clientData.map(c => {
-        const m = moduleData?.find(m => m.client_id === c.id);
-        return {
-          ...c,
-          modules: {
-            rc:  m?.rc         ?? false,
-            do:  m?.do_enabled ?? false,
-            esg: m?.esg        ?? false,
-          },
-        };
-      });
-      setClients(mapped);
-      setSelClientId(prev => prev || mapped[0]?.id);
-    }
+    // Primero traemos los clientes, luego filtramos módulos por sus IDs
+    const { data: clientData } = await sb
+      .from("clients").select("id, name, published").order("name");
+
+    if (!clientData?.length) return;
+
+    const ids = clientData.map(c => c.id);
+    const { data: moduleData } = await sb
+      .from("client_modules")
+      .select("client_id, rc, do_enabled, esg")
+      .in("client_id", ids);
+
+    const mapped = clientData.map(c => {
+      const m = moduleData?.find(m => m.client_id === c.id);
+      return {
+        ...c,
+        modules: {
+          rc:  m?.rc         ?? false,
+          do:  m?.do_enabled ?? false,
+          esg: m?.esg        ?? false,
+        },
+      };
+    });
+    setClients(mapped);
+    setSelClientId(prev => prev || mapped[0]?.id);
   }
 
   // Load assigned client for client users
