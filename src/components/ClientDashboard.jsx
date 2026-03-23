@@ -1049,6 +1049,9 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
       const m = modulesRes.data;
       const s = scoresRes.data;
 
+      // c puede ser null si el consultor no tiene cliente asignado o la query falla
+      if (!c) { setLoadingData(false); return; }
+
       setLiveData({
         ...c,
         modules: { rc: m?.rc??false, do: m?.do_enabled??false, esg: m?.esg??false },

@@ -302,71 +302,74 @@ export default function App() {
   const auth = useAuthGuard();
   const [page,        setPage]        = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [selClientId, setSelClientId] = useState(null);
+  const [selClientId, setSelClientId]   = useState(null);
+  const [clients,     setClients]       = useState([]);
+  const [showPicker,  setShowPicker]    = useState(false);
 
-  // Mock client for consultant view (replace with Supabase fetch)
-  const MOCK_CLIENT = { id:"c1", name:"Minera Los Andes", industry:"Minería",
-    modules:{ rc:true, do:true, esg:true } };
+  // Load clients list for consultant
+  useEffect(() => {
+    if (!auth.isConsultant || !auth.supabase) return;
+    auth.supabase
+      .from("clients")
+      .select("id, name, published, client_modules(rc, do_enabled, esg)")
+      .order("name")
+      .then(({ data }) => {
+        if (data?.length) {
+          setClients(data.map(c => ({
+            ...c,
+            modules: {
+              rc:  c.client_modules?.rc         ?? false,
+              do:  c.client_modules?.do_enabled ?? false,
+              esg: c.client_modules?.esg        ?? false,
+            },
+          })));
+          setSelClientId(prev => prev || data[0]?.id);
+        }
+      });
+  }, [auth.isConsultant, auth.supabase]);
 
-  // Mock client for client view (replace with fetchClientDashboardData)
-  const CLIENT_VIEW_DATA = {
-    id:"c1", name:"Minera Los Andes", industry:"Minería", period:"Q1 2025",
-    contact_consultant:"Jeremías · THO Consultora",
-    modules:{ rc:true, do:true, esg:true },
-    scores:{
-      rc:{ total:68, percepcion:65, compromisos:72, dialogo:70, conflictividad:62 },
-      do:{ total:78, cultura:80, engagement:76, liderazgo:78 },
-      esg:{ total:71, ambiental:68, social:74, gobernanza:72,
-            maturity:{ ambiental:3, social:4, gobernanza:3 } },
-    },
-    history:[
-      { period:"Q2 2024", rc:58, do:70, esg:62 },
-      { period:"Q3 2024", rc:62, do:72, esg:65 },
-      { period:"Q4 2024", rc:65, do:75, esg:68 },
-      { period:"Q1 2025", rc:68, do:78, esg:71 },
-    ],
-    alerts:[
-      { id:"a1", type:"amber", text:"Mesa de diálogo comunidad La Greda pendiente de reagendar.", date:"12 Mar 2025", module:"rc" },
-      { id:"a2", type:"green", text:"Compromiso de reforestación completado al 100%.", date:"8 Mar 2025",  module:"rc" },
-      { id:"a3", type:"red",   text:"Conflictividad sobre umbral esperado en sector norte.",  date:"3 Mar 2025",  module:"rc" },
-    ],
-    recommendations:[
-      { id:"r1", text:"Priorizar mesa de diálogo sector norte para reducir conflictividad.", module:"rc" },
-      { id:"r2", text:"Plan de comunicación trimestral para fortalecer percepción.", module:"rc" },
-    ],
-    projects:[
-      { id:"p1", name:"Proyecto Coronel", module_key:"rc", status:"active",
-        description:"Gestión territorial zona costera Coronel.", starts_on:"2024-10-01", ends_on:"2025-06-30" },
-    ],
-    messages:[],
-    gri_summary:{ social:{ cumple:4, parcial:1, pendiente:1, total:6 },
-                  gobernanza:{ cumple:3, parcial:2, pendiente:0, total:5 } },
-  };
+  // Load assigned client for client users
+  useEffect(() => {
+    if (!auth.isClient || !auth.supabase || !auth.profile?.id) return;
+    auth.supabase
+      .from("client_user_access")
+      .select("client_id")
+      .eq("user_id", auth.profile.id)
+      .eq("access_status", "approved")
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data?.client_id) setSelClientId(data.client_id);
+      });
+  }, [auth.isClient, auth.supabase, auth.profile?.id]);
+
+  const selClient = clients.find(c => c.id === selClientId) || clients[0] || null;
+
+  // For client users: pass their assigned client id so ClientDashboard loads real data
+  const clientViewData = auth.isClient ? { id: selClientId } : null;
 
   const isC = auth.isConsultant;
-  const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV(CLIENT_VIEW_DATA.modules);
+  const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV(selClient?.modules || {});
   const ml   = sidebarOpen ? 228 : 56;
 
   // Navigate and reset scroll
   function navigate(id) {
     setPage(id);
-    window.scrollTo(0, 0);
+    window.scrollTo({ top:0, behavior:"instant" });
+    setShowPicker(false);
   }
 
   // ── Render page content ──────────────────────────────────────
   function renderPage() {
     if (isC) {
-      if (page === "dashboard") return <ClientDashboard client={MOCK_CLIENT} supabase={auth.supabase}/>;
-      if (page === "rc")        return <ModuleRC client={MOCK_CLIENT} supabase={auth.supabase}/>;
-      if (page === "do")        return <ModuleDO client={MOCK_CLIENT} supabase={auth.supabase}/>;
-      if (page === "esg")       return <ModuleESG client={MOCK_CLIENT} supabase={auth.supabase}/>;
+      if (page === "dashboard") return <ClientDashboard client={selClient} supabase={auth.supabase}/>;
+      if (page === "rc")        return <ModuleRC client={selClient} supabase={auth.supabase}/>;
+      if (page === "do")        return <ModuleDO client={selClient} supabase={auth.supabase}/>;
+      if (page === "esg")       return <ModuleESG client={selClient} supabase={auth.supabase}/>;
       if (page === "clients")   return <ClientsPage supabase={auth.supabase} currentUser={auth.profile}/>;
       if (page === "admin")     return <AdminPage   supabase={auth.supabase} currentUser={auth.profile}/>;
     } else {
-      if (page === "dashboard" || page === "rc" || page === "do" || page === "esg")
-        return <ClientDashboard client={CLIENT_VIEW_DATA} supabase={auth.supabase}/>;
-      if (page === "messages")
-        return <ClientDashboard client={CLIENT_VIEW_DATA} supabase={auth.supabase}/>;
+      return <ClientDashboard client={clientViewData} supabase={auth.supabase}/>;
     }
     return null;
   }
@@ -417,15 +420,69 @@ export default function App() {
               THO Compass{" "}
               <strong style={{ color:T.t1, fontWeight:600 }}>/ {pageLabel}</strong>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              {isC && (
-                <div style={{ background:T.s2, border:`1px solid ${T.b2}`, borderRadius:7,
-                  padding:"5px 12px", color:T.t1, fontSize:13, fontWeight:500,
-                  display:"flex", alignItems:"center", gap:8 }}>
-                  <div style={{ width:7, height:7, borderRadius:"50%",
-                    background:T.esg, animation:"pulse 2s ease infinite" }}/>
-                  {MOCK_CLIENT.name} ▾
-                </div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, position:"relative" }}>
+              {isC && clients.length > 0 && (
+                <>
+                  <button onClick={() => setShowPicker(p=>!p)} style={{
+                    background:T.s2, border:`1px solid ${T.b2}`, borderRadius:7,
+                    padding:"5px 12px", color:T.t1, fontSize:13, fontWeight:500,
+                    cursor:"pointer", fontFamily:"'Instrument Sans',sans-serif",
+                    display:"flex", alignItems:"center", gap:8, transition:"border-color .15s" }}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor=T.b3}
+                    onMouseLeave={e=>e.currentTarget.style.borderColor=T.b2}>
+                    <div style={{ width:7, height:7, borderRadius:"50%",
+                      background:selClient?.published ? T.esg : T.amber,
+                      animation:"pulse 2s ease infinite" }}/>
+                    {selClient?.name || "Seleccionar cliente"}
+                    <span style={{ color:T.t3, fontSize:11 }}>▾</span>
+                  </button>
+                  {showPicker && (
+                    <>
+                      {/* Backdrop */}
+                      <div onClick={() => setShowPicker(false)}
+                        style={{ position:"fixed", inset:0, zIndex:199 }}/>
+                      {/* Dropdown */}
+                      <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0,
+                        background:T.s1, border:`1px solid ${T.b2}`, borderRadius:10,
+                        padding:6, minWidth:220, zIndex:200,
+                        boxShadow:"0 8px 32px rgba(0,0,0,.5)" }}>
+                        <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:9,
+                          color:T.t3, letterSpacing:2, textTransform:"uppercase",
+                          padding:"6px 10px 4px" }}>Cliente activo</div>
+                        {clients.map(c => (
+                          <div key={c.id} onClick={() => { setSelClientId(c.id); setShowPicker(false); }}
+                            style={{ padding:"9px 12px", borderRadius:7, cursor:"pointer",
+                              background:c.id===selClientId ? `${T.rc}10` : "none",
+                              color:c.id===selClientId ? T.rc : T.t2,
+                              fontSize:13, fontWeight:500, transition:"background .1s",
+                              display:"flex", alignItems:"center", gap:8 }}
+                            onMouseEnter={e=>{ if(c.id!==selClientId) e.currentTarget.style.background=T.s2; }}
+                            onMouseLeave={e=>{ if(c.id!==selClientId) e.currentTarget.style.background="none"; }}>
+                            <div style={{ width:6, height:6, borderRadius:"50%", flexShrink:0,
+                              background:c.published ? T.esg : T.amber }}/>
+                            {c.name}
+                          </div>
+                        ))}
+                        <div style={{ height:1, background:T.b1, margin:"6px 0" }}/>
+                        <div onClick={() => { navigate("clients"); }}
+                          style={{ padding:"8px 12px", borderRadius:7, cursor:"pointer",
+                            fontSize:12, color:T.t3, transition:"color .1s" }}
+                          onMouseEnter={e=>e.currentTarget.style.color=T.t1}
+                          onMouseLeave={e=>e.currentTarget.style.color=T.t3}>
+                          + Gestionar clientes
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+              {isC && clients.length === 0 && (
+                <button onClick={() => navigate("clients")} style={{
+                  background:`${T.rc}10`, border:`1px solid ${T.rc}30`, borderRadius:7,
+                  padding:"5px 12px", color:T.rc, fontSize:12, cursor:"pointer",
+                  fontFamily:"'Instrument Sans',sans-serif" }}>
+                  + Crear primer cliente
+                </button>
               )}
             </div>
           </div>
