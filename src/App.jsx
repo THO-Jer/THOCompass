@@ -344,7 +344,7 @@ export default function App() {
       .eq("user_id", auth.profile.id)
       .eq("access_status", "approved")
       .limit(1)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data?.client_id) setSelClientId(data.client_id);
       });
@@ -352,11 +352,11 @@ export default function App() {
 
   const selClient = clients.find(c => c.id === selClientId) || clients[0] || null;
 
-  // For client users: pass their assigned client id so ClientDashboard loads real data
-  const clientViewData = auth.isClient ? { id: selClientId } : null;
+  // Para usuario cliente: su clientId asignado — puede llegar con delay
+  const clientViewId = auth.isClient ? selClientId : null;
 
   const isC = auth.isConsultant;
-  const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV(selClient?.modules || {});
+  const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV({});
   const ml   = sidebarOpen ? 228 : 56;
 
   // Navigate and reset scroll
@@ -376,7 +376,18 @@ export default function App() {
       if (page === "clients")   return <ClientsPage supabase={auth.supabase} currentUser={auth.profile} onClientsChange={loadConsultantClients}/>;
       if (page === "admin")     return <AdminPage   supabase={auth.supabase} currentUser={auth.profile} onClientsChange={loadConsultantClients}/>;
     } else {
-      return <ClientDashboard client={clientViewData} supabase={auth.supabase}/>;
+      // Si aún no cargó el clientId, mostrar spinner
+      if (!clientViewId) return (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
+          height:"60vh", flexDirection:"column", gap:12 }}>
+          <div style={{ width:20, height:20, border:`2px solid #1d2535`,
+            borderTopColor:"#f97316", borderRadius:"50%",
+            animation:"spin .8s linear infinite" }}/>
+          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11,
+            color:"#3d4d66", letterSpacing:2 }}>CARGANDO…</div>
+        </div>
+      );
+      return <ClientDashboard client={{ id: clientViewId }} supabase={auth.supabase}/>;
     }
     return null;
   }

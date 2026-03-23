@@ -1065,12 +1065,13 @@ export default function ModuleDO({ client, supabase }) {
   const selProject      = projects.find(p=>p.id===selProjId) || projects[0];
   const projInstruments = instruments.filter(i=>i.project_id===selProjId);
 
-  function updateProject(updated) {
+  async function updateProject(updated) {
     setProjects(p=>p.map(pr=>pr.id===updated.id?updated:pr));
-    if (supabase && updated.client_visible !== undefined) {
-      supabase.from("projects")
+    if (supabase && 'client_visible' in updated) {
+      const { error } = await supabase.from("projects")
         .update({ client_visible:updated.client_visible, updated_at:new Date().toISOString() })
         .eq("id", updated.id);
+      if (error) console.error('client_visible update error:', error);
     }
   }
 

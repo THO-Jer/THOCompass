@@ -1023,13 +1023,14 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
   async function loadClientData() {
     setLoadingData(true);
     try {
+      // Queries separadas para evitar que .single() lance 406 si no hay fila
       const [
         clientRes, modulesRes, scoresRes, historyRes,
-        alertsRes, recsRes,   projectsRes, messagesRes,
+        alertsRes, recsRes, projectsRes, messagesRes,
       ] = await Promise.all([
-        supabase.from("clients").select("*").eq("id", rawClient.id).single(),
-        supabase.from("client_modules").select("*").eq("client_id", rawClient.id).single(),
-        supabase.from("client_scores").select("*").eq("client_id", rawClient.id).single(),
+        supabase.from("clients").select("*").eq("id", rawClient.id).maybeSingle(),
+        supabase.from("client_modules").select("*").eq("client_id", rawClient.id).maybeSingle(),
+        supabase.from("client_scores").select("*").eq("client_id", rawClient.id).maybeSingle(),
         supabase.from("client_score_history")
           .select("*, reporting_periods(label)")
           .eq("client_id", rawClient.id).order("created_at", { ascending:true }),
@@ -1040,7 +1041,8 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
           .eq("client_id", rawClient.id).eq("visible_to_client", true)
           .order("sort_order"),
         supabase.from("projects").select("*")
-          .eq("client_id", rawClient.id).eq("client_visible", true).eq("status", "active"),
+          .eq("client_id", rawClient.id).eq("client_visible", true)
+          .neq("status", "closed"),
         supabase.from("client_messages").select("*")
           .eq("client_id", rawClient.id).order("created_at", { ascending:true }),
       ]);
@@ -1049,29 +1051,36 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
       const m = modulesRes.data;
       const s = scoresRes.data;
 
-      // c puede ser null si el consultor no tiene cliente asignado o la query falla
       if (!c) { setLoadingData(false); return; }
+
+      // Inferir módulos activos desde proyectos si client_modules está vacío
+      const projs = projectsRes.data || [];
+      const hasRC  = m ? (m.rc ?? false)         : projs.some(p=>p.module_key==="rc");
+      const hasDO  = m ? (m.do_enabled ?? false)  : projs.some(p=>p.module_key==="do");
+      const hasESG = m ? (m.esg ?? false)          : projs.some(p=>p.module_key==="esg");
 
       setLiveData({
         ...c,
-        modules: { rc: m?.rc??false, do: m?.do_enabled??false, esg: m?.esg??false },
+        period: new Date().toLocaleDateString("es-CL", { month:"long", year:"numeric" }),
+        modules: { rc: hasRC, do: hasDO, esg: hasESG },
         scores: {
-          rc:  { total:s?.rc,       percepcion:s?.rc_percepcion,    compromisos:s?.rc_compromisos,
-                 dialogo:s?.rc_dialogo, conflictividad:s?.rc_conflictividad },
-          do:  { total:s?.do_score, cultura:s?.do_cultura,          engagement:s?.do_engagement,
-                 liderazgo:s?.do_liderazgo },
-          esg: { total:s?.esg,      ambiental:s?.esg_ambiental,     social:s?.esg_social,
-                 gobernanza:s?.esg_gobernanza,
+          rc:  { total:s?.rc       ?? null, percepcion:s?.rc_percepcion ?? null,
+                 compromisos:s?.rc_compromisos ?? null, dialogo:s?.rc_dialogo ?? null,
+                 conflictividad:s?.rc_conflictividad ?? null },
+          do:  { total:s?.do_score ?? null, cultura:s?.do_cultura ?? null,
+                 engagement:s?.do_engagement ?? null, liderazgo:s?.do_liderazgo ?? null },
+          esg: { total:s?.esg      ?? null, ambiental:s?.esg_ambiental ?? null,
+                 social:s?.esg_social ?? null, gobernanza:s?.esg_gobernanza ?? null,
                  maturity: s?.score_drivers_json?.maturity || { ambiental:1, social:1, gobernanza:1 } },
         },
         history: (historyRes.data||[]).map(h=>({
-          period: h.reporting_periods?.label || h.reporting_period_id,
+          period: h.reporting_periods?.label || "Período",
           rc: h.rc, do: h.do_score, esg: h.esg,
         })),
         alerts:          alertsRes.data   || [],
         recommendations: recsRes.data     || [],
-        projects:        projectsRes.data || [],
-        messages: (messagesRes.data||[]).map(m=>({ ...m, from:m.sender_role })),
+        projects:        projs,
+        messages: (messagesRes.data||[]).map(msg=>({ ...msg, from:msg.sender_role })),
         gri_summary: s?.score_drivers_json?.gri_summary || {},
         contact_consultant: c.contact_consultant || "THO Consultora",
       });
