@@ -410,7 +410,13 @@ export default function App() {
             color:"#3d4d66", letterSpacing:2 }}>CARGANDO…</div>
         </div>
       );
-      return <ClientDashboard client={{ id: clientViewId }} supabase={auth.supabase}/>;
+      // Módulos RC/DO/ESG abren ClientDashboard con el módulo pre-seleccionado
+      const modPage = ["rc","do","esg"].includes(page) ? page : null;
+      return <ClientDashboard
+        client={{ id: clientViewId }}
+        supabase={auth.supabase}
+        initialModule={modPage}
+        key={page} />;  // key=page fuerza re-mount al cambiar módulo
     }
     return null;
   }

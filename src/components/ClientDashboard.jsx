@@ -997,8 +997,8 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
 }
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
-export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supabase, isConsultant }) {
-  const [activeModule, setActiveModule] = useState(null);
+export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supabase, isConsultant, initialModule }) {
+  const [activeModule, setActiveModule] = useState(initialModule || null);
   const [liveData,     setLiveData]     = useState(null);
   const [loadingData,  setLoadingData]  = useState(false);
   const [msgList,      setMsgList]      = useState([]);
