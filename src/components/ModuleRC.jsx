@@ -1416,14 +1416,14 @@ export default function ModuleRC({ client, supabase }) {
         )}
 
         {/* Línea base */}
-        {selProject && selProject.score?.overall == null && !loading && (
-          <div style={{ padding:"12px 18px",background:`$T.rc08`,
-            border:`1px solid $T.rc25`,borderRadius:10,marginBottom:20,
+        {selProject && !loading && (
+          <div style={{ padding:"12px 18px",background:`${T.rc}08`,
+            border:`1px solid ${T.rc}25`,borderRadius:10,marginBottom:20,
             display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <div>
-              <div style={{ fontSize:13,color:T.t1,fontWeight:600,marginBottom:2 }}>Sin línea base establecida</div>
+              <div style={{ fontSize:13,color:T.t1,fontWeight:600,marginBottom:2 }}>Instrumento de observación directa</div>
               <div style={{ fontSize:12,color:T.t3 }}>
-                Completa el instrumento de observación para generar la primera medición de este proyecto.
+                Genera o actualiza la medición completando el cuestionario de observación.
               </div>
             </div>
             <button onClick={()=>setShowBaseline(true)} style={{
@@ -1431,7 +1431,7 @@ export default function ModuleRC({ client, supabase }) {
               color:"#08090c",fontSize:12,fontWeight:600,cursor:"pointer",
               fontFamily:"'Instrument Sans',sans-serif",whiteSpace:"nowrap",marginLeft:16
             }}>
-              Establecer línea base
+              Aplicar instrumento
             </button>
           </div>
         )}
