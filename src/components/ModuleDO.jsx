@@ -1093,6 +1093,9 @@ function TabUpload({ project, supabase, onApplyScores }) {
     </div>
   );
 }
+
+// ── MAIN EXPORT ────────────────────────────────────────────────
+export default function ModuleDO({ client, supabase }) {
   const [projects,     setProjects]     = useState([]);
   const [selProjId,    setSelProjId]    = useState(null);
   const [instruments,  setInstruments]  = useState([]);
