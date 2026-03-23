@@ -888,73 +888,67 @@ function TabUpload({ project, supabase, onApplyScores }) {
   // Lee el archivo como texto (csv, txt, docx parcial)
   async function readFileText(file) {
     return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result?.slice(0, 8000) || "");
-      reader.onerror = () => resolve("");
       if (file.name.match(/\.pdf$/i)) {
-        resolve("[PDF — contenido binario, se usará nombre del archivo como contexto]");
-      } else {
-        reader.readAsText(file, "utf-8");
+        resolve("[PDF — contenido binario]");
+        return;
       }
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result?.slice(0, 12000) || "");
+      reader.onerror = () => resolve("");
+      reader.readAsText(file.raw || file, "utf-8");
     });
+  }
+
+  async function uploadToStorage(file) {
+    if (!supabase || !project?.client_id) return null;
+    const ts   = Date.now();
+    const path = `${project.client_id}/rc/${project.id}/${ts}_${file.name}`;
+    const { error } = await supabase.storage
+      .from("rc-documents").upload(path, file.raw || file, { upsert: false });
+    if (error) {
+      // Si ya existe (duplicate), retornar el path de todos modos
+      if (error.message?.includes("already exists") || error.statusCode === 409) return path;
+      console.warn("Storage upload warning:", error.message);
+      return null;
+    }
+    return path;
   }
 
   async function analyze() {
     if (!files.length) return;
     setBusy(true); setProp(null);
     try {
-      // Leer contenido de los archivos
+      // 1. Subir archivos al bucket (no re-sube si ya existe)
+      await Promise.all(files.map(f => uploadToStorage(f)));
+
+      // 2. Leer contenido para enviar al servidor
       const fileContents = await Promise.all(
-        files.map(async f => {
-          const text = await readFileText(f.raw);
-          return `### Archivo: ${f.name}\n${text}`;
-        })
+        files.map(async f => ({
+          name:    f.name,
+          content: await readFileText(f),
+        }))
       );
 
-      const scores = project.score || {};
-      const prompt = `Eres un consultor experto en Relacionamiento Comunitario (RC) para proyectos en Chile.
-
-Analiza los siguientes archivos cargados para el proyecto "${project.name}" y propón actualizaciones de scores basadas ÚNICAMENTE en el contenido real de los archivos.
-
-SCORES ACTUALES (escala 0-100):
-- Percepción y confianza: ${scores.percepcion ?? "sin dato"}
-- Gestión de compromisos: ${scores.compromisos ?? "sin dato"}  
-- Calidad del diálogo: ${scores.dialogo ?? "sin dato"}
-- Conflictividad activa: ${scores.conflictividad ?? "sin dato"}
-
-ARCHIVOS:
-${fileContents.join("\n\n")}
-
-Responde SOLO con un objeto JSON con esta estructura exacta (sin texto antes ni después, sin bloques de código markdown):
-{
-  "summary": "Resumen de 2-3 oraciones del contenido analizado",
-  "insights": ["insight 1 basado en datos reales", "insight 2", "insight 3"],
-  "proposed_scores": {
-    "percepcion": { "current": ${scores.percepcion ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" },
-    "compromisos": { "current": ${scores.compromisos ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" },
-    "dialogo": { "current": ${scores.dialogo ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" },
-    "conflictividad": { "current": ${scores.conflictividad ?? 50}, "proposed": <número 0-100>, "reason": "razón basada en datos del archivo" }
-  }
-}`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
+      // 3. Llamar al endpoint de Vercel (evita CORS con Anthropic)
+      const res = await fetch("/api/analyze-rc", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: prompt }],
+          fileContents,
+          projectName:   project.name,
+          currentScores: project.score || {},
         }),
       });
 
-      const data = await res.json();
-      const text = data.content?.[0]?.text || "{}";
-      const clean = text.replace(/```json|```/g, "").trim();
-      const result = JSON.parse(clean);
-      setProp(result);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Error en el servidor");
+      }
+
+      setProp(await res.json());
     } catch(e) {
-      console.error("Analyze error:", e);
-      setProp({ summary: "Error al analizar. Revisa la consola.", insights: [], proposed_scores: {} });
+      console.error("Analyze RC error:", e);
+      setProp({ summary: `Error: ${e.message}`, insights: [], proposed_scores: {} });
     } finally {
       setBusy(false);
     }

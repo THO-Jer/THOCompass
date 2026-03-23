@@ -796,55 +796,48 @@ function TabUpload({ project, supabase, onApplyScores }) {
     return new Promise((resolve) => {
       if (file.name.match(/\.pdf$/i)) { resolve("[PDF]"); return; }
       const r = new FileReader();
-      r.onload = e => resolve(e.target.result?.slice(0, 8000) || "");
+      r.onload = e => resolve(e.target.result?.slice(0, 12000) || "");
       r.onerror = () => resolve("");
       r.readAsText(file.raw || file, "utf-8");
     });
+  }
+
+  async function uploadToStorage(file) {
+    if (!supabase || !project?.client_id) return null;
+    const ts   = Date.now();
+    const path = `${project.client_id}/do/${project.id}/${ts}_${file.name}`;
+    const { error } = await supabase.storage
+      .from("do-documents").upload(path, file.raw || file, { upsert: false });
+    if (error?.message?.includes("already exists") || error?.statusCode === 409) return path;
+    if (error) { console.warn("Storage DO upload:", error.message); return null; }
+    return path;
   }
 
   async function analyze() {
     if (!files.length) return;
     setBusy(true); setProp(null);
     try {
+      await Promise.all(files.map(f => uploadToStorage(f)));
+
       const fileContents = await Promise.all(
-        files.map(async f => `### ${f.name}\n${await readFileText(f)}`)
+        files.map(async f => ({ name: f.name, content: await readFileText(f) }))
       );
-      const scores = project.score || {};
-      const prompt = `Eres un consultor experto en Desarrollo Organizacional (DO) en Chile.
 
-Analiza los siguientes archivos para el proyecto "${project.name}" y propón scores basados ÚNICAMENTE en el contenido real.
-
-SCORES ACTUALES (0-100):
-- Cultura organizacional: ${scores.cultura ?? "sin dato"}
-- Engagement y clima: ${scores.engagement ?? "sin dato"}
-- Liderazgo: ${scores.liderazgo ?? "sin dato"}
-
-ARCHIVOS:
-${fileContents.join("\n\n")}
-
-Responde SOLO con JSON sin texto adicional ni bloques markdown:
-{
-  "summary": "Resumen de 2-3 oraciones",
-  "insights": ["insight 1 del archivo", "insight 2", "insight 3"],
-  "proposed": {
-    "cultura":    { "current": ${scores.cultura ?? 50},    "proposed": <0-100>, "reason": "basado en datos" },
-    "engagement": { "current": ${scores.engagement ?? 50}, "proposed": <0-100>, "reason": "basado en datos" },
-    "liderazgo":  { "current": ${scores.liderazgo ?? 50},  "proposed": <0-100>, "reason": "basado en datos" }
-  }
-}`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/analyze-do", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000,
-          messages:[{ role:"user", content:prompt }] }),
+        body: JSON.stringify({
+          fileContents,
+          projectName:   project.name,
+          currentScores: project.score || {},
+        }),
       });
-      const data = await res.json();
-      const clean = (data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim();
-      setProp(JSON.parse(clean));
+
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Error servidor"); }
+      setProp(await res.json());
     } catch(e) {
       console.error("Analyze DO error:", e);
-      setProp({ summary:"Error al analizar.", insights:[], proposed:{} });
+      setProp({ summary: `Error: ${e.message}`, insights: [], proposed: {} });
     } finally { setBusy(false); }
   }
 

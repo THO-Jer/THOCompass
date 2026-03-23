@@ -375,7 +375,7 @@ export default function App() {
   // ── Render page content ──────────────────────────────────────
   function renderPage() {
     if (isC) {
-      if (page === "dashboard") return <ClientDashboard client={selClient} supabase={auth.supabase}/>;
+      if (page === "dashboard") return <ClientDashboard client={selClient} supabase={auth.supabase} isConsultant={true}/>;
       if (page === "rc")        return <ModuleRC client={selClient} supabase={auth.supabase}/>;
       if (page === "do")        return <ModuleDO client={selClient} supabase={auth.supabase}/>;
       if (page === "esg")       return <ModuleESG client={selClient} supabase={auth.supabase}/>;

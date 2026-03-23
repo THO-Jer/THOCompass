@@ -715,11 +715,14 @@ function ModuleDetail({ modKey, client, onBack }) {
 }
 
 // ── Messages Panel ─────────────────────────────────────────────
-function MessagesPanel({ messages, onSend }) {
+function MessagesPanel({ messages, onSend, senderRole="client" }) {
   const [txt,setTxt] = useState("");
   const endRef = useRef();
   useEffect(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),[messages]);
   const send = () => { if(txt.trim()){onSend(txt);setTxt("");} };
+  const placeholder = senderRole==="client"
+    ? "Escribe un mensaje al equipo consultor…"
+    : "Escribe un mensaje al cliente…";
   return (
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:12,maxHeight:300,
@@ -729,18 +732,18 @@ function MessagesPanel({ messages, onSend }) {
             fontFamily:"'JetBrains Mono',monospace" }}>Sin mensajes aún</div>
         )}
         {messages.map(m=>(
-          <div key={m.id} style={{ alignSelf:m.from==="client"?"flex-start":"flex-end",maxWidth:"76%" }}>
+          <div key={m.id} style={{ alignSelf:m.from===senderRole?"flex-end":"flex-start",maxWidth:"76%" }}>
             <div style={{ padding:"10px 14px",borderRadius:12,fontSize:13,lineHeight:1.55,
-              background:m.from==="client"?T.s2:`${T.blue}18`,
-              border:`1px solid ${m.from==="client"?T.b2:T.blue+"30"}`,
+              background:m.from===senderRole?`${T.blue}18`:T.s2,
+              border:`1px solid ${m.from===senderRole?T.blue+"30":T.b2}`,
               color:T.t2,
-              borderBottomLeftRadius:m.from==="client"?3:12,
-              borderBottomRightRadius:m.from==="client"?12:3 }}>
+              borderBottomRightRadius:m.from===senderRole?3:12,
+              borderBottomLeftRadius:m.from===senderRole?12:3 }}>
               {m.body}
             </div>
             <div style={{ fontSize:10,color:T.t4,fontFamily:"'JetBrains Mono',monospace",
-              marginTop:3,textAlign:m.from==="client"?"left":"right" }}>
-              {m.from==="client"?"Tú":"THO Consultora"} · {fmtDate(m.created_at)}
+              marginTop:3,textAlign:m.from===senderRole?"right":"left" }}>
+              {m.from==="client"?"Cliente":"THO Consultora"} · {fmtDate(m.created_at)}
             </div>
           </div>
         ))}
@@ -749,7 +752,7 @@ function MessagesPanel({ messages, onSend }) {
       <div style={{ display:"flex",gap:9 }}>
         <input value={txt} onChange={e=>setTxt(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&send()}
-          placeholder="Escribe un mensaje al equipo consultor…"
+          placeholder={placeholder}
           style={{ flex:1,background:T.s2,border:`1px solid ${T.b2}`,borderRadius:8,
             padding:"9px 13px",color:T.t1,fontSize:13,outline:"none",
             fontFamily:"'Instrument Sans',sans-serif" }}/>
@@ -760,7 +763,7 @@ function MessagesPanel({ messages, onSend }) {
 }
 
 // ── General Dashboard ──────────────────────────────────────────
-function GeneralDashboard({ client, supabase, onOpenModule }) {
+function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }) {
   const activeModules = Object.entries(client.modules || {}).filter(([,v])=>v);
   const hist = client.history || [];
   const prev = hist[hist.length-2];
@@ -769,8 +772,6 @@ function GeneralDashboard({ client, supabase, onOpenModule }) {
   const radarData = activeModules.flatMap(([k])=>
     MOD[k].dims.map(d=>({ s:d.label.split(" ")[0], A:client.scores?.[k]?.[d.key]||0 }))
   );
-
-  const [msgList, setMsgList] = useState(client.messages || []);
 
   return (
     <div style={{ padding:"32px 36px",maxWidth:1200 }}>
@@ -989,30 +990,19 @@ function GeneralDashboard({ client, supabase, onOpenModule }) {
         <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
           Escribe preguntas, comentarios o solicitudes al equipo consultor.
         </div>
-        <MessagesPanel messages={msgList} onSend={async txt=>{
-          const now = new Date().toISOString();
-          const optimistic = { id:`m${Date.now()}`, from:"client", body:txt, created_at:now };
-          setMsgList(p=>[...p, optimistic]);
-          if (supabase && client?.id) {
-            const { data: { user } } = await supabase.auth.getUser();
-            await supabase.from("client_messages").insert({
-              client_id:      client.id,
-              sender_user_id: user?.id || null,
-              sender_role:    "client",
-              body:           txt,
-            });
-          }
-        }}/>
+        <MessagesPanel messages={msgList||[]} onSend={onSendMsg} senderRole="client"/>
       </Card>
     </div>
   );
 }
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
-export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supabase }) {
+export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supabase, isConsultant }) {
   const [activeModule, setActiveModule] = useState(null);
   const [liveData,     setLiveData]     = useState(null);
   const [loadingData,  setLoadingData]  = useState(false);
+  const [msgList,      setMsgList]      = useState([]);
+  const [showMsgs,     setShowMsgs]     = useState(false);
 
   // Load real client data if supabase + client.id are available
   useEffect(() => {
@@ -1101,13 +1091,108 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
     alerts:          (liveData||rawClient)?.alerts          || [],
     recommendations: (liveData||rawClient)?.recommendations || [],
     projects:        (liveData||rawClient)?.projects        || [],
-    messages:        (liveData||rawClient)?.messages        || [],
     gri_summary:     (liveData||rawClient)?.gri_summary     || {},
   };
+
+  // Sync msgList cuando llegan mensajes reales de Supabase
+  useEffect(() => {
+    const msgs = (liveData || rawClient)?.messages || [];
+    setMsgList(msgs);
+  }, [liveData]);
+
+  // Suscripción en tiempo real a mensajes nuevos
+  useEffect(() => {
+    if (!supabase || !rawClient?.id) return;
+    const channel = supabase
+      .channel(`messages:${rawClient.id}`)
+      .on("postgres_changes", {
+        event:  "INSERT",
+        schema: "public",
+        table:  "client_messages",
+        filter: `client_id=eq.${rawClient.id}`,
+      }, payload => {
+        const m = payload.new;
+        setMsgList(p => {
+          // Evitar duplicados (el mensaje optimista ya está)
+          if (p.some(x => x.id === m.id)) return p;
+          return [...p, { ...m, from: m.sender_role }];
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase, rawClient?.id]);
+
+  // Envío de mensaje — funciona para cliente y consultora
+  async function sendMessage(txt) {
+    const senderRole = isConsultant ? "consultant" : "client";
+    const now        = new Date().toISOString();
+    setMsgList(p => [...p, { id:`m${Date.now()}`, from:senderRole, body:txt, created_at:now }]);
+    if (supabase && client?.id) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from("client_messages").insert({
+        client_id:      client.id,
+        sender_user_id: user?.id || null,
+        sender_role:    senderRole,
+        body:           txt,
+      });
+      if (error) console.error("Messages insert error:", error);
+    }
+  }
+
+  const senderRole = isConsultant ? "consultant" : "client";
 
   return (
     <>
       <style>{CSS}</style>
+
+      {/* Panel de mensajes flotante para la consultora */}
+      {isConsultant && client?.id && (
+        <div style={{ position:"fixed", bottom:24, right:24, zIndex:300 }}>
+          {showMsgs ? (
+            <div style={{ width:360, background:T.s1, border:`1px solid ${T.b2}`,
+              borderRadius:16, boxShadow:"0 16px 48px rgba(0,0,0,.6)", overflow:"hidden" }}>
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",
+                padding:"14px 18px", borderBottom:`1px solid ${T.b1}` }}>
+                <div>
+                  <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1 }}>
+                    Mensajes — {client.name}
+                  </div>
+                  <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,
+                    color:T.t3,letterSpacing:1.5,textTransform:"uppercase",marginTop:2 }}>
+                    Canal directo con el cliente
+                  </div>
+                </div>
+                <button onClick={()=>setShowMsgs(false)} style={{ background:"none",
+                  border:"none",color:T.t3,cursor:"pointer",fontSize:18,padding:4 }}>✕</button>
+              </div>
+              <div style={{ padding:"14px 16px" }}>
+                <MessagesPanel messages={msgList} onSend={sendMessage} senderRole="consultant"/>
+              </div>
+            </div>
+          ) : (
+            <button onClick={()=>setShowMsgs(true)} style={{
+              background:`linear-gradient(135deg,${T.blue},#6366f1)`,
+              border:"none",borderRadius:50,width:52,height:52,
+              cursor:"pointer",color:"white",fontSize:20,
+              boxShadow:"0 4px 20px rgba(59,130,246,.5)",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              position:"relative" }}>
+              ✉
+              {msgList.filter(m=>m.from==="client").length > 0 && (
+                <span style={{ position:"absolute",top:-4,right:-4,
+                  background:T.red,color:"white",fontSize:9,
+                  fontFamily:"'JetBrains Mono',monospace",
+                  width:18,height:18,borderRadius:"50%",
+                  display:"flex",alignItems:"center",justifyContent:"center" }}>
+                  {msgList.filter(m=>m.from==="client").length}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
       {activeModule
         ? <ModuleDetail
             modKey={activeModule}
@@ -1116,7 +1201,9 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
         : <GeneralDashboard
             client={client}
             supabase={supabase}
-            onOpenModule={setActiveModule}/>
+            onOpenModule={setActiveModule}
+            msgList={msgList}
+            onSendMsg={sendMessage}/>
       }
     </>
   );
