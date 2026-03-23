@@ -1107,6 +1107,7 @@ export default function ModuleDO({ client, supabase }) {
   const [instruments,  setInstruments]  = useState([]);
   const [tab,          setTab]          = useState("score");
   const [loading,      setLoading]      = useState(true);
+  const [projCommitments, setProjCommitments] = useState([]);
 
   useEffect(() => {
     if (!supabase || !client?.id) return;

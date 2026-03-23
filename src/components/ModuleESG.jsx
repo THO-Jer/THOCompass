@@ -1328,6 +1328,7 @@ export default function ModuleESG({ client, supabase }) {
   const [selProjId,setSelProjId]= useState(null);
   const [reports,  setReports]  = useState([]);
   const [tab,      setTab]      = useState("score");
+  const [projCommitments, setProjCommitments] = useState([]);
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
