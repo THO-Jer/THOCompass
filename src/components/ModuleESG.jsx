@@ -15,7 +15,6 @@
 
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import ScoreLog from "./ScoreLog.jsx";
-import ScoreLog from "./ScoreLog.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
