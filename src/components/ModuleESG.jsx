@@ -1329,6 +1329,7 @@ export default function ModuleESG({ client, supabase }) {
   const [reports,  setReports]  = useState([]);
   const [tab,      setTab]      = useState("score");
   const [projCommitments, setProjCommitments] = useState([]);
+  const [showBaseline,    setShowBaseline]    = useState(false);
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {

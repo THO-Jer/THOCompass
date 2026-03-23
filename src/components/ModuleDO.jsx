@@ -1108,11 +1108,7 @@ export default function ModuleDO({ client, supabase }) {
   const [tab,          setTab]          = useState("score");
   const [loading,      setLoading]      = useState(true);
   const [projCommitments, setProjCommitments] = useState([]);
-
-  useEffect(() => {
-    if (!supabase || !client?.id) return;
-    loadProjects();
-  }, [supabase, client?.id]);
+  const [showBaseline,    setShowBaseline]    = useState(false);
 
   async function loadProjects() {
     setLoading(true);
