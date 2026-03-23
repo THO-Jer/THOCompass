@@ -120,9 +120,19 @@ function CommitmentModal({ commitment, moduleKey, projectId, onSave, onClose, ac
   async function handleSave() {
     if (!title.trim()) return;
     setLoading(true);
-    onSave({ id:commitment?.id, project_id:projectId, title, description,
-      due_date:dueDate||null, responsible, status });
-    setLoading(false);
+    try {
+      await onSave({
+        ...(commitment?.id ? { id: commitment.id } : {}),
+        project_id:  projectId,
+        title:       title.trim(),
+        description: description.trim(),
+        due_date:    dueDate || null,
+        responsible: responsible.trim(),
+        status,
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   const labelMap = {
@@ -240,11 +250,16 @@ export default function CommitmentsPanel({ projectId, clientId, moduleKey, supab
 
   async function loadCommitments() {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("project_commitments")
       .select("*")
       .eq("project_id", projectId)
       .order("due_date", { ascending: true, nullsLast: true });
+    if (error) {
+      console.error("loadCommitments error:", error);
+      setLoading(false);
+      return;
+    }
     // Auto-mark overdue
     const now = new Date().toISOString().split("T")[0];
     const updated = (data || []).map(c => ({
@@ -272,12 +287,14 @@ export default function CommitmentsPanel({ projectId, clientId, moduleKey, supab
 
   async function handleSave(data) {
     if (data.id) {
-      await supabase.from("project_commitments")
+      const { error } = await supabase.from("project_commitments")
         .update({ ...data, updated_at: new Date().toISOString() })
         .eq("id", data.id);
+      if (error) { console.error("commitments update error:", error); alert("Error al guardar: " + error.message); return; }
     } else {
-      await supabase.from("project_commitments")
+      const { error } = await supabase.from("project_commitments")
         .insert({ ...data, project_id: projectId });
+      if (error) { console.error("commitments insert error:", error); alert("Error al guardar: " + error.message); return; }
     }
     setModal(null);
     await loadCommitments();

@@ -22,6 +22,7 @@ import {
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
 import ScoreLog from "./ScoreLog.jsx";
+import FilesPanel from "./FilesPanel.jsx";
 
 // ── Tokens ────────────────────────────────────────────────────
 const T = {
@@ -393,6 +394,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
     { id:"overview",     label:"Resumen"  },
     { id:"projects",     label:`Proyectos${moduleProjects.length>0?` (${moduleProjects.length})`:""}`},
     { id:"commitments",  label:`Compromisos${moduleCommitments.length>0?` (${moduleCommitments.length})`:""}`},
+    { id:"documents",    label:"Documentos"},
     { id:"history",      label:"Historial de scores"},
     { id:"evolution",    label:"Evolución"},
   ];
@@ -713,6 +715,30 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
                 })}
               </div>
             )}
+          </Card>
+        </div>
+      )}
+
+      {tab==="documents"&&(
+        <div className="cd-fade">
+          <Card>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+              Documentos compartidos
+            </div>
+            <div style={{ fontSize:13,color:T.t3,marginBottom:18,lineHeight:1.6 }}>
+              Archivos que el equipo consultor ha compartido para este módulo. Puedes descargarlos directamente.
+            </div>
+            {firstProject && supabase
+              ? <FilesPanel
+                  projectId={firstProject.id}
+                  moduleKey={modKey}
+                  supabase={supabase}
+                  isConsultant={false}
+                  accentColor={mod.color}/>
+              : <div style={{ textAlign:"center",padding:"28px 0",color:T.t3,fontSize:13 }}>
+                  Sin proyectos activos.
+                </div>
+            }
           </Card>
         </div>
       )}

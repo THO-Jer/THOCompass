@@ -15,6 +15,7 @@
 
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import ScoreLog from "./ScoreLog.jsx";
+import FilesPanel from "./FilesPanel.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
@@ -1496,6 +1497,7 @@ export default function ModuleESG({ client, supabase }) {
     { id:"gri",     label:"Framework GRI" },
     { id:"reports", label:`Reportes${projReports.length>0?` (${projReports.length})`:""}`},
     { id:"upload",  label:"Carga IA"      },
+    { id:"files",       label:"Archivos"     },
     { id:"commitments", label:`Compromisos${projCommitments?.length>0?` (${projCommitments.length})`:""}`},
   ];
 
@@ -1649,6 +1651,14 @@ export default function ModuleESG({ client, supabase }) {
             )}
             {tab==="upload"&&(
               <TabUpload project={selProject} supabase={supabase} onApplyScores={applyScores}/>
+            )}
+            {tab==="files"&&(
+              <FilesPanel
+                projectId={selProject.id}
+                moduleKey="esg"
+                supabase={supabase}
+                isConsultant={true}
+                accentColor={T.esg}/>
             )}
             {tab==="commitments"&&(
               <CommitmentsPanel

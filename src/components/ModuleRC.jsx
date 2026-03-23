@@ -15,6 +15,7 @@
 
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import ScoreLog from "./ScoreLog.jsx";
+import FilesPanel from "./FilesPanel.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
@@ -1442,6 +1443,7 @@ export default function ModuleRC({ client, supabase }) {
     { id:"activities",  label:`Actividades ${projActivities.length>0?`(${projActivities.length})`:""}`  },
     { id:"actors",      label:`Actores ${projActors.length>0?`(${projActors.length})`:""}`      },
     { id:"commitments", label:`Compromisos${projCommitments?.length>0?` (${projCommitments.length})`:""}`},
+    { id:"files",       label:"Archivos"    },
     { id:"upload",      label:"Carga IA"    },
   ];
 
@@ -1594,6 +1596,14 @@ export default function ModuleRC({ client, supabase }) {
             )}
             {tab==="upload"&&(
               <TabUpload project={selProject} supabase={supabase} onApplyScores={applyScores}/>
+            )}
+            {tab==="files"&&(
+              <FilesPanel
+                projectId={selProject.id}
+                moduleKey="rc"
+                supabase={supabase}
+                isConsultant={true}
+                accentColor={T.rc}/>
             )}
             {tab==="commitments"&&(
               <CommitmentsPanel

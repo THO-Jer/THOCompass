@@ -298,3 +298,24 @@ create policy "clients read score log"
         and p.client_visible = true
     )
   );
+
+-- ── 13. CLIENT_FILES — columnas faltantes ────────────────────
+-- project_id y visible_to_client pueden no existir si se usó el schema original
+
+alter table public.client_files
+  add column if not exists project_id       uuid references public.projects(id) on delete cascade,
+  add column if not exists visible_to_client boolean not null default false;
+
+-- Política para que clientes lean archivos visibles
+drop policy if exists "clients read visible files" on public.client_files;
+create policy "clients read visible files"
+  on public.client_files for select
+  using (
+    visible_to_client = true
+    and exists (
+      select 1 from public.client_user_access ua
+      where ua.client_id = client_files.client_id
+        and ua.user_id = auth.uid()
+        and ua.access_status = 'approved'
+    )
+  );

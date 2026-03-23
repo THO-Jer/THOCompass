@@ -16,6 +16,7 @@
 
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import ScoreLog from "./ScoreLog.jsx";
+import FilesPanel from "./FilesPanel.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
@@ -1248,6 +1249,7 @@ export default function ModuleDO({ client, supabase }) {
     { id:"score",       label:"Score ISO"    },
     { id:"diagnostics", label:`Diagnósticos${projInstruments.length>0?` (${projInstruments.length})`:""}`},
     { id:"upload",      label:"Carga IA"     },
+    { id:"files",        label:"Archivos"     },
     { id:"commitments",  label:`Compromisos${projCommitments?.length>0?` (${projCommitments.length})`:""}`},
   ];
 
@@ -1393,6 +1395,14 @@ export default function ModuleDO({ client, supabase }) {
             )}
             {tab==="upload"&&(
               <TabUpload project={selProject} supabase={supabase} onApplyScores={applyScores}/>
+            )}
+            {tab==="files"&&(
+              <FilesPanel
+                projectId={selProject.id}
+                moduleKey="do"
+                supabase={supabase}
+                isConsultant={true}
+                accentColor={T.do}/>
             )}
             {tab==="commitments"&&(
               <CommitmentsPanel
