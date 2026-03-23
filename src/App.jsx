@@ -351,18 +351,35 @@ export default function App() {
       .eq("access_status", "approved")
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => {
-        if (data?.client_id) setSelClientId(data.client_id);
+      .then(async ({ data }) => {
+        if (!data?.client_id) return;
+        setSelClientId(data.client_id);
+        // Load client modules so nav shows correct locked state
+        const [{ data: clientData }, { data: moduleData }] = await Promise.all([
+          auth.supabase.from("clients").select("id, name, published").eq("id", data.client_id).single(),
+          auth.supabase.from("client_modules").select("rc, do_enabled, esg").eq("client_id", data.client_id).maybeSingle(),
+        ]);
+        if (clientData) {
+          setClients([{
+            ...clientData,
+            modules: {
+              rc:  moduleData?.rc         ?? false,
+              do:  moduleData?.do_enabled ?? false,
+              esg: moduleData?.esg        ?? false,
+            },
+          }]);
+        }
       });
   }, [auth.isClient, auth.supabase, auth.profile?.id]);
 
-  const selClient = clients.find(c => c.id === selClientId) || clients[0] || null;
+  const selClient  = clients.find(c => c.id === selClientId) || clients[0] || null;
+  const clientMods = selClient?.modules || {};
 
   // Para usuario cliente: su clientId asignado — puede llegar con delay
   const clientViewId = auth.isClient ? selClientId : null;
 
   const isC = auth.isConsultant;
-  const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV({});
+  const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV(clientMods);
   const ml   = sidebarOpen ? 228 : 56;
 
   // Navigate and reset scroll

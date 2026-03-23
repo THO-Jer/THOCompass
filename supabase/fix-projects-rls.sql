@@ -162,3 +162,26 @@ create policy "consultants read client messages"
 -- Verificar políticas de mensajes
 select policyname, cmd from pg_policies
 where tablename = 'client_messages';
+
+-- ── 10. UNIQUE constraint en project_scores ───────────────────
+-- Sin esto, upsert con onConflict:"project_id" hace INSERT siempre.
+-- Primero eliminar duplicados dejando solo el más reciente por proyecto,
+-- luego agregar la constraint.
+
+-- Eliminar filas duplicadas (mantener la más reciente por project_id)
+DELETE FROM public.project_scores
+WHERE id NOT IN (
+  SELECT DISTINCT ON (project_id) id
+  FROM public.project_scores
+  ORDER BY project_id, updated_at DESC
+);
+
+-- Agregar constraint unique
+ALTER TABLE public.project_scores
+  ADD CONSTRAINT project_scores_project_id_unique
+  UNIQUE (project_id);
+
+-- Verificar
+SELECT COUNT(*) as total_scores,
+       COUNT(DISTINCT project_id) as unique_projects
+FROM public.project_scores;

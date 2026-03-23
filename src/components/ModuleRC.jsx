@@ -13,6 +13,7 @@
 // Supabase queries documentadas en cada función mock.
 // ============================================================
 
+import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import { useState, useRef, useEffect } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -322,13 +323,11 @@ function TabScore({ project, supabase, onUpdate }) {
     setSaving(true);
     try {
       const total = calcTotal(scores);
-      await supabase.from("project_scores")
-        .upsert({
-          project_id: project.id,
+      await saveProjectScore(supabase, project.id, {
           overall_score: total,
           dimension_scores_json: scores,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "project_id" });
+        });
+      await syncClientScore(supabase, project.client_id, "rc", scores, total);
       setSaved(true);
       setTimeout(()=>setSaved(false), 2200);
       onUpdate({ ...project, score:{ ...scores, overall:total } });
@@ -869,6 +868,8 @@ function TabActors({ project, actors, supabase, onAdd, onUpdate }) {
 }
 
 // ── Tab: CARGA IA ──────────────────────────────────────────────
+// saveProjectScore imported from ../lib/scores.js
+
 function TabUpload({ project, supabase, onApplyScores }) {
   const [files,        setFiles]        = useState([]);
   const [busy,         setBusy]         = useState(false);
@@ -877,16 +878,17 @@ function TabUpload({ project, supabase, onApplyScores }) {
   const [uploadedFiles,setUploadedFiles]= useState([]);
   const ref = useRef();
 
-  // Cargar historial de archivos del proyecto al montar
-  useEffect(() => {
+  async function loadUploadedFiles() {
     if (!supabase || !project?.id) return;
-    supabase.from("client_files")
-      .select("id, original_name, mime_type, size_bytes, created_at, storage_path, status")
+    const { data } = await supabase.from("client_files")
+      .select("id, original_name, mime_type, size_bytes, created_at, status")
       .eq("project_id", project.id)
       .eq("module_key", "rc")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => setUploadedFiles(data || []));
-  }, [supabase, project?.id]);
+      .order("created_at", { ascending: false });
+    setUploadedFiles(data || []);
+  }
+
+  useEffect(() => { loadUploadedFiles(); }, [supabase, project?.id]);
 
   const add = list => setFiles(p=>[...p,...Array.from(list).map(f=>({
     name:f.name,
@@ -948,6 +950,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
     try {
       // 1. Subir archivos al bucket y registrar en client_files
       await Promise.all(files.map(f => uploadAndRegister(f)));
+      await loadUploadedFiles(); // Refresh history
 
       // 2. Leer contenido para enviar al servidor
       const fileContents = await Promise.all(
@@ -990,13 +993,13 @@ function TabUpload({ project, supabase, onApplyScores }) {
       const overall = Math.round(
         DIMENSIONS.reduce((acc,d)=>acc+(newScores[d.key]||project.score?.[d.key]||0)*d.weight/100, 0)
       );
-      await supabase.from("project_scores").upsert({
-        project_id:            project.id,
+      await saveProjectScore(supabase, project.id, {
         overall_score:         overall,
         dimension_scores_json: { ...project.score, ...newScores },
         method_notes:          `Análisis IA: ${prop.summary}`,
-        updated_at:            new Date().toISOString(),
-      }, { onConflict: "project_id" });
+      });
+      await syncClientScore(supabase, project.client_id, "rc",
+        { ...project.score, ...newScores }, overall);
     }
     onApplyScores(newScores);
     setProp(null); setFiles([]);
@@ -1309,12 +1312,12 @@ export default function ModuleRC({ client, supabase }) {
     if (supabase && selProjId) {
       const proj    = updated.find(p=>p.id===selProjId);
       const overall = proj?.score?.overall ?? 0;
-      await supabase.from("project_scores").upsert({
-        project_id:            selProjId,
+      await saveProjectScore(supabase, selProjId, {
         overall_score:         overall,
         dimension_scores_json: { ...proj?.score },
-        updated_at:            new Date().toISOString(),
-      }, { onConflict: "project_id" });
+      });
+      await syncClientScore(supabase, proj?.client_id, "rc",
+        proj?.score || {}, overall);
     }
     setTab("score");
   }

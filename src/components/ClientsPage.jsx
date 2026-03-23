@@ -271,6 +271,7 @@ function ConfirmDialog({ message, onConfirm, onClose }) {
 function WeightsEditor({ weights, modules, onChange }) {
   const active = Object.entries(MOD).filter(([k])=>modules[k]);
   const total  = active.reduce((s,[k])=>s+weights[k],0);
+  const isValid = total === 100 || active.length <= 1;
 
   return (
     <div>
@@ -278,6 +279,11 @@ function WeightsEditor({ weights, modules, onChange }) {
         letterSpacing:1.5, textTransform:"uppercase", marginBottom:14 }}>
         Pesos IRCS por módulo
       </div>
+      {active.length === 0 && (
+        <div style={{ fontSize:13, color:T.t3, padding:"12px 0" }}>
+          Activa al menos un módulo para configurar pesos.
+        </div>
+      )}
       {active.map(([k,m])=>(
         <div key={k} style={{ marginBottom:16 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:7 }}>
@@ -286,18 +292,24 @@ function WeightsEditor({ weights, modules, onChange }) {
               {weights[k]}%
             </span>
           </div>
-          <input type="range" min={5} max={90} value={weights[k]}
+          <input type="range" min={5} max={100} value={weights[k]}
             onChange={e=>onChange({ ...weights, [k]:parseInt(e.target.value) })}
             style={{ width:"100%", accentColor:m.color, cursor:"pointer" }}/>
         </div>
       ))}
-      <div style={{ padding:"10px 14px", background:total===100?`${T.green}10`:`${T.amber}10`,
-        border:`1px solid ${total===100?T.green:T.amber}30`, borderRadius:8, marginTop:4 }}>
-        <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:12,
-          color:total===100?T.green:T.amber }}>
-          Total: {total}% {total!==100&&"· Deben sumar 100%"}
-        </span>
-      </div>
+      {active.length > 0 && (
+        <div style={{ padding:"10px 14px",
+          background: isValid ? `${T.green}10` : `${T.amber}10`,
+          border: `1px solid ${isValid ? T.green : T.amber}30`,
+          borderRadius:8, marginTop:4 }}>
+          <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:12,
+            color: isValid ? T.green : T.amber }}>
+            Total: {total}%
+            {active.length === 1 && " · Módulo único, peso automático"}
+            {active.length > 1 && total !== 100 && " · Deben sumar 100%"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -358,7 +370,7 @@ function ProjectCard({ project, onEdit, onArchive }) {
 }
 
 // ── Client Detail View ─────────────────────────────────────────
-function ClientDetail({ client, supabase, onBack, onUpdate }) {
+function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
   const [tab,        setTab]        = useState("projects");
   const [weights,    setWeights]    = useState({ ...client.weights });
   const [modules,    setModules]    = useState({ ...client.modules });
@@ -377,15 +389,25 @@ function ClientDetail({ client, supabase, onBack, onUpdate }) {
   async function saveGeneral() {
     setSaving(true);
     try {
+      // Si solo hay un módulo activo, forzar su peso a 100
+      const activeKeys = Object.entries(modules).filter(([k,v])=>v && ['rc','do','esg'].includes(k)).map(([k])=>k);
+      const finalWeights = { ...weights };
+      if (activeKeys.length === 1) {
+        finalWeights.rc = activeKeys[0]==='rc' ? 100 : 0;
+        finalWeights.do = activeKeys[0]==='do' ? 100 : 0;
+        finalWeights.esg = activeKeys[0]==='esg' ? 100 : 0;
+      }
+
       await supabase.from("clients")
         .update({ name:editName, industry:editInd||null, contact:editCon||null,
                   email:editEmail||null, updated_at:new Date().toISOString() })
         .eq("id", client.id);
 
       await supabase.from("client_modules")
-        .update({ rc:modules.rc, do_enabled:modules.do_enabled||modules.do||false,
-                  esg:modules.esg,
-                  weight_rc:weights.rc, weight_do:weights.do, weight_esg:weights.esg,
+        .update({ rc:modules.rc||false,
+                  do_enabled: modules.do_enabled||modules.do||false,
+                  esg:modules.esg||false,
+                  weight_rc:finalWeights.rc, weight_do:finalWeights.do, weight_esg:finalWeights.esg,
                   updated_at:new Date().toISOString() })
         .eq("client_id", client.id);
 
@@ -393,6 +415,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate }) {
       setTimeout(()=>setSaved(false), 2000);
       onUpdate({ ...client, name:editName, industry:editInd, contact:editCon,
         email:editEmail, modules, weights });
+      onClientsChange?.(); // Refresh topbar + client nav modules
     } finally {
       setSaving(false);
     }
@@ -1032,7 +1055,8 @@ export default function ClientsPage({ supabase, currentUser, onClientsChange }) 
           client={selected}
           supabase={supabase}
           onBack={()=>{ setSelectedId(null); loadClients(); }}
-          onUpdate={handleUpdate}/>
+          onUpdate={handleUpdate}
+          onClientsChange={onClientsChange}/>
       ) : (
         <ClientList
           clients={clients}

@@ -13,6 +13,7 @@
 //         client_files (bucket: esg-documents)
 // ============================================================
 
+import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import { useState, useRef, useEffect } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -343,18 +344,16 @@ function TabScore({ project, supabase, onUpdate }) {
     setSaving(true);
     try {
       const overall = calcOverall();
-      await supabase.from("project_scores")
-        .upsert({
-          project_id: project.id,
-          overall_score: overall,
-          dimension_scores_json: scores,
-          score_drivers_json: {
-            ...(project.score_drivers_json || {}),
-            maturity,
-            active_pillars: project.active_pillars,
-          },
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "project_id" });
+      await saveProjectScore(supabase, project.id, {
+        overall_score:         overall,
+        dimension_scores_json: scores,
+        score_drivers_json: {
+          ...(project.score_drivers_json || {}),
+          maturity,
+          active_pillars: project.active_pillars,
+        },
+      });
+      await syncClientScore(supabase, project.client_id, "esg", scores, overall);
       setSaved(true);
       setTimeout(()=>setSaved(false), 2200);
       onUpdate({ ...project, score:{ ...scores, overall }, maturity });
@@ -607,16 +606,15 @@ function TabGRI({ project, supabase, onUpdate }) {
         .eq("project_id", project.id).order("updated_at", { ascending:false }).limit(1);
       const current = existing?.[0]?.score_drivers_json || {};
 
-      await supabase.from("project_scores")
-        .upsert({
-          project_id: project.id,
-          score_drivers_json: {
-            ...current,
-            gri_compliance: compliance,
-            indicators,
-          },
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "project_id" });
+      await saveProjectScore(supabase, project.id, {
+        score_drivers_json: {
+          ...current,
+          gri_compliance: compliance,
+          indicators,
+        },
+      });
+      await syncClientScore(supabase, project.client_id, "esg",
+        project.score || {}, project.score?.overall ?? null);
       setSaved(true);
       setTimeout(()=>setSaved(false), 2200);
       onUpdate({ ...project, gri_compliance:compliance, indicators });
@@ -983,6 +981,8 @@ function TabReports({ project, reports, supabase, onAdd, onUpdate }) {
 }
 
 // ── Tab: CARGA IA ──────────────────────────────────────────────
+// saveProjectScore imported from ../lib/scores.js
+
 function TabUpload({ project, supabase, onApplyScores }) {
   const [files,         setFiles]         = useState([]);
   const [busy,          setBusy]          = useState(false);
@@ -991,14 +991,16 @@ function TabUpload({ project, supabase, onApplyScores }) {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const ref = useRef();
 
-  useEffect(() => {
+  async function loadUploadedFiles() {
     if (!supabase || !project?.id) return;
-    supabase.from("client_files")
-      .select("id, original_name, mime_type, size_bytes, created_at")
+    const { data } = await supabase.from("client_files")
+      .select("id, original_name, mime_type, size_bytes, created_at, status")
       .eq("project_id", project.id).eq("module_key", "esg")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => setUploadedFiles(data || []));
-  }, [supabase, project?.id]);
+      .order("created_at", { ascending: false });
+    setUploadedFiles(data || []);
+  }
+
+  useEffect(() => { loadUploadedFiles(); }, [supabase, project?.id]);
 
   const add = list => setFiles(p=>[...p,...Array.from(list).map(f=>({
     name:f.name,
@@ -1084,17 +1086,18 @@ function TabUpload({ project, supabase, onApplyScores }) {
         .select("id, score_drivers_json").eq("project_id", project.id)
         .order("updated_at",{ascending:false}).limit(1);
       const current = ex?.[0]?.score_drivers_json || {};
-      await supabase.from("project_scores").upsert({
-        project_id: project.id, overall_score: overall,
+      await saveProjectScore(supabase, project.id, {
+        overall_score:         overall,
         dimension_scores_json: { ...project.score, ...newScores },
         score_drivers_json: {
           ...current,
-          maturity: { ...project.maturity, ...newMaturity },
+          maturity:       { ...project.maturity, ...newMaturity },
           gri_compliance: project.gri_compliance || {},
         },
         method_notes: `Análisis IA: ${prop.summary}`,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "project_id" });
+      });
+      await syncClientScore(supabase, project.client_id, "esg",
+        { ...project.score, ...newScores }, overall);
     }
     onApplyScores(newScores, prop.gri_updates, prop.proposed_maturity);
     setProp(null); setFiles([]);
@@ -1416,16 +1419,17 @@ export default function ModuleESG({ client, supabase }) {
     setProjects(updated);
     if (supabase && selProjId) {
       const pr = updated.find(p=>p.id===selProjId);
-      await supabase.from("project_scores").upsert({
-        project_id: selProjId, overall_score: pr?.score?.overall ?? 0,
+      await saveProjectScore(supabase, selProjId, {
+        overall_score:         pr?.score?.overall ?? 0,
         dimension_scores_json: { ...pr?.score },
         score_drivers_json: {
-          maturity: pr?.maturity || {},
-          gri_compliance: pr?.gri_compliance || {},
-          active_pillars: pr?.active_pillars || {},
+          maturity:       pr?.maturity        || {},
+          gri_compliance: pr?.gri_compliance  || {},
+          active_pillars: pr?.active_pillars  || {},
         },
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "project_id" });
+      });
+      await syncClientScore(supabase, pr?.client_id, "esg",
+        pr?.score || {}, pr?.score?.overall ?? 0);
     }
     setTab("score");
   }
