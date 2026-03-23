@@ -14,6 +14,8 @@
 // ============================================================
 
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
+import ScoreLog from "./ScoreLog.jsx";
+import ScoreLog from "./ScoreLog.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
@@ -438,10 +440,19 @@ function TabScore({ project, supabase, onUpdate }) {
         </Card>
       )}
     </div>
+
+    {/* Historial de cambios */}
+    {supabase && project?.id && (
+      <div style={{ marginTop:24 }}>
+        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
+          Historial de cambios
+        </div>
+        <ScoreLog projectId={project.id} supabase={supabase} accentColor={T.rc}/>
+      </div>
+    )}
+  </div>
   );
 }
-
-// ── Activity Form Modal ────────────────────────────────────────
 function ActivityModal({ activity, projectId, supabase, onSave, onClose }) {
   const isEdit = !!activity;
   const [type,     setType]     = useState(activity?.record_type||"meeting");
@@ -542,9 +553,10 @@ function ActivityModal({ activity, projectId, supabase, onSave, onClose }) {
 }
 
 // ── Tab: ACTIVIDADES ───────────────────────────────────────────
-function TabActivities({ project, activities, supabase, onAddActivity, onUpdateActivity }) {
-  const [modal, setModal] = useState(null); // null | "new" | activity object
+function TabActivities({ project, activities, supabase, onAddActivity, onUpdateActivity, onDeleteActivity }) {
+  const [modal, setModal] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [confirmId, setConfirmId] = useState(null);
 
   const filtered = activities.filter(a=>
     filter==="all" || a.record_type===filter
@@ -554,6 +566,12 @@ function TabActivities({ project, activities, supabase, onAddActivity, onUpdateA
     const exists = activities.some(a=>a.id===saved.id);
     exists ? onUpdateActivity(saved) : onAddActivity(saved);
     setModal(null);
+  }
+
+  async function handleDelete(id) {
+    await supabase.from("project_activities").delete().eq("id", id);
+    onDeleteActivity(id);
+    setConfirmId(null);
   }
 
   const relColor = status => RELATIONSHIP.find(r=>r.value===status)?.color||T.t3;
@@ -645,10 +663,34 @@ function TabActivities({ project, activities, supabase, onAddActivity, onUpdateA
                     </div>
                   )}
                 </div>
-                <Btn variant="ghost" size="sm" onClick={()=>setModal(a)} style={{ flexShrink:0 }}>Editar</Btn>
+                <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                  <Btn variant="ghost" size="sm" onClick={()=>setModal(a)}>Editar</Btn>
+                  <Btn variant="ghost" size="sm" onClick={()=>setConfirmId(a.id)}
+                    style={{ color:T.red,borderColor:T.red+"40" }}>✕</Btn>
+                </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmId && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.7)",
+          display:"flex",alignItems:"center",justifyContent:"center",zIndex:500 }}>
+          <div style={{ background:T.s1,border:`1px solid ${T.b2}`,borderRadius:14,
+            padding:"24px 28px",maxWidth:360,width:"100%",
+            boxShadow:"0 24px 64px rgba(0,0,0,.7)" }}>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:8 }}>
+              ¿Eliminar actividad?
+            </div>
+            <div style={{ fontSize:13,color:T.t3,marginBottom:20 }}>
+              Esta acción no se puede deshacer.
+            </div>
+            <div style={{ display:"flex",gap:10 }}>
+              <Btn variant="danger" onClick={()=>handleDelete(confirmId)}>Eliminar</Btn>
+              <Btn variant="ghost" onClick={()=>setConfirmId(null)}>Cancelar</Btn>
+            </div>
+          </div>
         </div>
       )}
 
@@ -740,7 +782,8 @@ function ActorModal({ actor, projectId, supabase, onSave, onClose }) {
 }
 
 // ── Tab: ACTORES ───────────────────────────────────────────────
-function TabActors({ project, actors, supabase, onAdd, onUpdate }) {
+function TabActors({ project, actors, supabase, onAdd, onUpdate, onDelete }) {
+  const [confirmId, setConfirmId] = useState(null);
   const [modal, setModal] = useState(null);
   const [filter, setFilter] = useState("all");
 
@@ -850,10 +893,31 @@ function TabActors({ project, actors, supabase, onAdd, onUpdate }) {
                       padding:"8px 12px",marginTop:6 }}>{a.notes}</div>
                   )}
                 </div>
-                <Btn variant="ghost" size="sm" onClick={()=>setModal(a)} style={{ flexShrink:0 }}>Editar</Btn>
+                <div style={{ display:"flex",gap:6,flexShrink:0 }}>
+                  <Btn variant="ghost" size="sm" onClick={()=>setModal(a)}>Editar</Btn>
+                  <Btn variant="ghost" size="sm" onClick={()=>setConfirmId(a.id)}
+                    style={{ color:T.red,borderColor:T.red+"40" }}>✕</Btn>
+                </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmId && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.7)",
+          display:"flex",alignItems:"center",justifyContent:"center",zIndex:500 }}>
+          <div style={{ background:T.s1,border:`1px solid ${T.b2}`,borderRadius:14,
+            padding:"24px 28px",maxWidth:360,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,.7)" }}>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:8 }}>
+              ¿Eliminar actor?
+            </div>
+            <div style={{ fontSize:13,color:T.t3,marginBottom:20 }}>Esta acción no se puede deshacer.</div>
+            <div style={{ display:"flex",gap:10 }}>
+              <Btn variant="danger" onClick={async()=>{ await supabase.from("project_actors").delete().eq("id",confirmId); onDelete(confirmId); setConfirmId(null); }}>Eliminar</Btn>
+              <Btn variant="ghost" onClick={()=>setConfirmId(null)}>Cancelar</Btn>
+            </div>
+          </div>
         </div>
       )}
 
@@ -868,8 +932,6 @@ function TabActors({ project, actors, supabase, onAdd, onUpdate }) {
     </div>
   );
 }
-
-// ── Tab: CARGA IA ──────────────────────────────────────────────
 // saveProjectScore imported from ../lib/scores.js
 
 function TabUpload({ project, supabase, onApplyScores }) {
@@ -998,8 +1060,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
       await saveProjectScore(supabase, project.id, {
         overall_score:         overall,
         dimension_scores_json: { ...project.score, ...newScores },
-        method_notes:          `Análisis IA: ${prop.summary}`,
-      });
+      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: fileContents?.[0]?.name });
       await syncClientScore(supabase, project.client_id, "rc",
         { ...project.score, ...newScores }, overall);
     }
@@ -1334,10 +1395,11 @@ export default function ModuleRC({ client, supabase }) {
   };
 
   const TABS = [
-    { id:"score",      label:"Score LSO"   },
-    { id:"activities", label:`Actividades ${projActivities.length>0?`(${projActivities.length})`:""}`   },
-    { id:"actors",     label:`Actores ${projActors.length>0?`(${projActors.length})`:""}`       },
-    { id:"upload",     label:"Carga IA"    },
+    { id:"score",       label:"Score LSO"   },
+    { id:"activities",  label:`Actividades ${projActivities.length>0?`(${projActivities.length})`:""}`  },
+    { id:"actors",      label:`Actores ${projActors.length>0?`(${projActors.length})`:""}`      },
+    { id:"commitments", label:`Compromisos${projCommitments?.length>0?` (${projCommitments.length})`:""}`},
+    { id:"upload",      label:"Carga IA"    },
   ];
 
   return (
@@ -1477,13 +1539,15 @@ export default function ModuleRC({ client, supabase }) {
               <TabActivities project={selProject} activities={projActivities}
                 supabase={supabase}
                 onAddActivity={a=>setActivities(p=>[a,...p])}
-                onUpdateActivity={a=>setActivities(p=>p.map(x=>x.id===a.id?a:x))}/>
+                onUpdateActivity={a=>setActivities(p=>p.map(x=>x.id===a.id?a:x))}
+                onDeleteActivity={id=>setActivities(p=>p.filter(x=>x.id!==id))}/>
             )}
             {tab==="actors"&&(
               <TabActors project={selProject} actors={projActors}
                 supabase={supabase}
                 onAdd={a=>setActors(p=>[...p,a])}
-                onUpdate={a=>setActors(p=>p.map(x=>x.id===a.id?a:x))}/>
+                onUpdate={a=>setActors(p=>p.map(x=>x.id===a.id?a:x))}
+                onDelete={id=>setActors(p=>p.filter(x=>x.id!==id))}/>
             )}
             {tab==="upload"&&(
               <TabUpload project={selProject} supabase={supabase} onApplyScores={applyScores}/>

@@ -14,6 +14,8 @@
 // ============================================================
 
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
+import ScoreLog from "./ScoreLog.jsx";
+import ScoreLog from "./ScoreLog.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
@@ -586,6 +588,17 @@ function TabScore({ project, supabase, onUpdate }) {
         </div>
       </Card>
     </div>
+
+    {/* Historial de cambios */}
+    {supabase && project?.id && (
+      <div style={{ marginTop:24 }}>
+        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
+          Historial de cambios
+        </div>
+        <ScoreLog projectId={project.id} supabase={supabase} accentColor={T.esg}/>
+      </div>
+    )}
+  </div>
   );
 }
 
@@ -1096,8 +1109,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
           maturity:       { ...project.maturity, ...newMaturity },
           gri_compliance: project.gri_compliance || {},
         },
-        method_notes: `Análisis IA: ${prop.summary}`,
-      });
+      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: fileContents?.[0]?.name });
       await syncClientScore(supabase, project.client_id, "esg",
         { ...project.score, ...newScores }, overall);
     }

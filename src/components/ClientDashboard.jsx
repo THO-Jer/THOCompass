@@ -21,6 +21,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
+import ScoreLog from "./ScoreLog.jsx";
 
 // ── Tokens ────────────────────────────────────────────────────
 const T = {
@@ -371,7 +372,7 @@ function ModuleCard({ modKey, scores, active, onClick }) {
 }
 
 // ── Module Detail View ─────────────────────────────────────────
-function ModuleDetail({ modKey, client, onBack }) {
+function ModuleDetail({ modKey, client, onBack, supabase }) {
   const mod = MOD[modKey];
   const scores = client.scores?.[modKey] || {};
   const moduleProjects    = (client.projects     || []).filter(p=>p.module_key===modKey);
@@ -385,10 +386,14 @@ function ModuleDetail({ modKey, client, onBack }) {
   const radarData = mod.dims.map(d=>({ s:d.label.split(" ")[0], A:scores?.[d.key]||0 }));
   const history   = (client.history || []).map(h=>({ period:h.period, score:h[modKey] }));
 
+  // First project of this module for score log
+  const firstProject = moduleProjects[0];
+
   const TABS = [
     { id:"overview",     label:"Resumen"  },
     { id:"projects",     label:`Proyectos${moduleProjects.length>0?` (${moduleProjects.length})`:""}`},
     { id:"commitments",  label:`Compromisos${moduleCommitments.length>0?` (${moduleCommitments.length})`:""}`},
+    { id:"history",      label:"Historial de scores"},
     { id:"evolution",    label:"Evolución"},
   ];
 
@@ -712,6 +717,25 @@ function ModuleDetail({ modKey, client, onBack }) {
         </div>
       )}
 
+      {tab==="history"&&(
+        <div className="cd-fade">
+          <Card>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+              Historial de cambios de score
+            </div>
+            <div style={{ fontSize:13,color:T.t3,marginBottom:18,lineHeight:1.6 }}>
+              Registro de cada actualización: método utilizado, evidencia analizada y variación respecto al período anterior.
+            </div>
+            {firstProject && supabase
+              ? <ScoreLog projectId={firstProject.id} supabase={supabase} accentColor={mod.color}/>
+              : <div style={{ textAlign:"center",padding:"28px 0",color:T.t3,fontSize:13 }}>
+                  Sin proyectos activos para mostrar historial.
+                </div>
+            }
+          </Card>
+        </div>
+      )}
+
       {tab==="evolution"&&(
         <div className="cd-fade">
           <Card style={{ marginBottom:16 }}>
@@ -776,14 +800,16 @@ function ModuleDetail({ modKey, client, onBack }) {
 }
 
 // ── Messages Panel ─────────────────────────────────────────────
-function MessagesPanel({ messages, onSend, senderRole="client" }) {
-  const [txt,setTxt] = useState("");
+function MessagesPanel({ messages, onSend, onDelete, senderRole="client" }) {
+  const [txt,       setTxt]       = useState("");
+  const [hoverId,   setHoverId]   = useState(null);
   const endRef = useRef();
   useEffect(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),[messages]);
   const send = () => { if(txt.trim()){onSend(txt);setTxt("");} };
   const placeholder = senderRole==="client"
     ? "Escribe un mensaje al equipo consultor…"
     : "Escribe un mensaje al cliente…";
+  const canDelete = senderRole === "consultant";
   return (
     <div>
       <div style={{ display:"flex",flexDirection:"column",gap:12,maxHeight:300,
@@ -793,7 +819,11 @@ function MessagesPanel({ messages, onSend, senderRole="client" }) {
             fontFamily:"'JetBrains Mono',monospace" }}>Sin mensajes aún</div>
         )}
         {messages.map(m=>(
-          <div key={m.id} style={{ alignSelf:m.from===senderRole?"flex-end":"flex-start",maxWidth:"76%" }}>
+          <div key={m.id}
+            onMouseEnter={()=>canDelete&&setHoverId(m.id)}
+            onMouseLeave={()=>setHoverId(null)}
+            style={{ alignSelf:m.from===senderRole?"flex-end":"flex-start",
+              maxWidth:"76%", position:"relative" }}>
             <div style={{ padding:"10px 14px",borderRadius:12,fontSize:13,lineHeight:1.55,
               background:m.from===senderRole?`${T.blue}18`:T.s2,
               border:`1px solid ${m.from===senderRole?T.blue+"30":T.b2}`,
@@ -802,9 +832,19 @@ function MessagesPanel({ messages, onSend, senderRole="client" }) {
               borderBottomLeftRadius:m.from===senderRole?12:3 }}>
               {m.body}
             </div>
-            <div style={{ fontSize:10,color:T.t4,fontFamily:"'JetBrains Mono',monospace",
-              marginTop:3,textAlign:m.from===senderRole?"right":"left" }}>
-              {m.from==="client"?"Cliente":"THO Consultora"} · {fmtDate(m.created_at)}
+            <div style={{ display:"flex", alignItems:"center",
+              justifyContent:m.from===senderRole?"flex-end":"flex-start",
+              gap:8, marginTop:3 }}>
+              <div style={{ fontSize:10,color:T.t4,fontFamily:"'JetBrains Mono',monospace" }}>
+                {m.from==="client"?"Cliente":"THO Consultora"} · {fmtDate(m.created_at)}
+              </div>
+              {canDelete && hoverId===m.id && (
+                <button onClick={()=>onDelete?.(m.id)}
+                  style={{ background:"none",border:"none",color:T.red,
+                    cursor:"pointer",fontSize:11,padding:"1px 4px",
+                    fontFamily:"'JetBrains Mono',monospace",opacity:.7 }}
+                  title="Eliminar mensaje">✕</button>
+              )}
             </div>
           </div>
         ))}
@@ -819,6 +859,119 @@ function MessagesPanel({ messages, onSend, senderRole="client" }) {
             fontFamily:"'Instrument Sans',sans-serif" }}/>
         <Btn variant="primary" size="sm" onClick={send}>Enviar</Btn>
       </div>
+    </div>
+  );
+}
+
+// ── Recommendations Card ───────────────────────────────────────
+const REC_META = {
+  urgent:      { color:"#ef4444", bg:"#ef444412", icon:"🚨", label:"Urgente"      },
+  warning:     { color:"#f59e0b", bg:"#f59e0b12", icon:"⚠",  label:"Atención"     },
+  opportunity: { color:"#3b82f6", bg:"#3b82f612", icon:"→",  label:"Oportunidad"  },
+  good:        { color:"#22c55e", bg:"#22c55e12", icon:"✓",  label:"Bien encaminado"},
+};
+
+function RecommendationsCard({ client }) {
+  const [recs,    setRecs]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState(null);
+
+  // Auto-generate on mount if no stored recommendations
+  useEffect(() => {
+    generate();
+  }, [client?.id]);
+
+  async function generate() {
+    setLoading(true); setError(null);
+    try {
+      // Compute last activity date
+      const activities = client.projects?.flatMap(p=>p.activities||[]) || [];
+      const lastAct    = activities.sort((a,b)=>new Date(b.activity_date)-new Date(a.activity_date))[0];
+      const lastDays   = lastAct
+        ? Math.floor((Date.now()-new Date(lastAct.activity_date))/(1000*60*60*24))
+        : null;
+
+      const res = await fetch("/api/generate-recommendations", {
+        method:  "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+          clientName:       client.name,
+          modules:          client.modules,
+          scores:           client.scores,
+          projects:         client.projects,
+          commitments:      client.commitments,
+          lastActivityDays: lastDays,
+        }),
+      });
+      if (!res.ok) { setError("No se pudieron generar recomendaciones"); return; }
+      setRecs(await res.json());
+    } catch(e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1 }}>
+          Recomendaciones estratégicas
+        </div>
+        <button onClick={generate} disabled={loading}
+          style={{ background:"none",border:`1px solid ${T.b2}`,borderRadius:6,
+            color:T.t3,cursor:loading?"not-allowed":"pointer",fontSize:11,
+            padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace" }}>
+          {loading ? "…" : "↺"}
+        </button>
+      </div>
+
+      {loading && (
+        <div style={{ textAlign:"center",padding:"20px 0",color:T.t3,fontSize:12,
+          fontFamily:"'JetBrains Mono',monospace" }}>
+          Analizando estado del proyecto…
+        </div>
+      )}
+
+      {error && !loading && (
+        <div style={{ fontSize:12,color:T.red,padding:"8px 0" }}>{error}</div>
+      )}
+
+      {!loading && recs && recs.length === 0 && (
+        <div style={{ fontSize:13,color:T.t3,textAlign:"center",padding:"16px 0" }}>
+          Sin recomendaciones en este momento.
+        </div>
+      )}
+
+      {!loading && recs && recs.map((r,i) => {
+        const meta = REC_META[r.type] || REC_META.opportunity;
+        const mod  = r.module && MOD[r.module];
+        return (
+          <div key={i} style={{ padding:"12px 14px",marginBottom:10,
+            background:meta.bg,border:`1px solid ${meta.color}25`,
+            borderRadius:10,borderLeft:`3px solid ${meta.color}` }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
+              <span style={{ fontSize:14 }}>{meta.icon}</span>
+              <span style={{ fontSize:12,fontWeight:600,color:meta.color }}>{meta.label}</span>
+              {mod && (
+                <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
+                  color:mod.color,marginLeft:"auto" }}>
+                  {mod.icon} {mod.short}
+                </span>
+              )}
+            </div>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,
+              color:T.t1,marginBottom:5 }}>{r.title}</div>
+            <div style={{ fontSize:12,color:T.t2,lineHeight:1.6,marginBottom:8 }}>{r.body}</div>
+            <div style={{ fontSize:11,color:meta.color,
+              fontFamily:"'JetBrains Mono',monospace",
+              padding:"4px 10px",background:`${meta.color}10`,
+              borderRadius:6,display:"inline-block" }}>
+              → {r.action}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1002,29 +1155,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
           ))}
         </Card>
         <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
-            Recomendaciones estratégicas
-          </div>
-          {client.recommendations.length===0 ? (
-            <div style={{ fontSize:13,color:T.t3,textAlign:"center",padding:"16px 0" }}>
-              Sin recomendaciones publicadas.
-            </div>
-          ) : client.recommendations.map((r,i)=>(
-            <div key={r.id} style={{ display:"flex",gap:12,padding:"10px 0",
-              borderBottom:`1px solid ${T.b1}` }}>
-              <div style={{ width:6,height:6,borderRadius:"50%",background:T.blue,
-                marginTop:6,flexShrink:0 }}/>
-              <div>
-                <div style={{ fontSize:13,color:T.t2,lineHeight:1.55 }}>{r.text}</div>
-                {r.module&&(
-                  <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
-                    color:MOD[r.module]?.color,marginTop:3,display:"block" }}>
-                    {MOD[r.module]?.icon} {MOD[r.module]?.label}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+          <RecommendationsCard client={client}/>
         </Card>
       </div>
 
@@ -1069,7 +1200,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
           Escribe preguntas, comentarios o solicitudes al equipo consultor.
         </div>
-        <MessagesPanel messages={msgList||[]} onSend={onSendMsg} senderRole="client"/>
+        <MessagesPanel messages={msgList||[]} onSend={onSendMsg} onDelete={null} senderRole="client"/>
       </Card>
     </div>
   );
@@ -1233,6 +1364,13 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
     }
   }
 
+  async function deleteMessage(id) {
+    setMsgList(p => p.filter(m => m.id !== id));
+    if (supabase) {
+      await supabase.from("client_messages").delete().eq("id", id);
+    }
+  }
+
   const senderRole = isConsultant ? "consultant" : "client";
 
   return (
@@ -1260,7 +1398,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
                   border:"none",color:T.t3,cursor:"pointer",fontSize:18,padding:4 }}>✕</button>
               </div>
               <div style={{ padding:"14px 16px" }}>
-                <MessagesPanel messages={msgList} onSend={sendMessage} senderRole="consultant"/>
+                <MessagesPanel messages={msgList} onSend={sendMessage} onDelete={deleteMessage} senderRole="consultant"/>
               </div>
             </div>
           ) : (
@@ -1290,6 +1428,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
         ? <ModuleDetail
             modKey={activeModule}
             client={client}
+            supabase={supabase}
             onBack={()=>setActiveModule(null)}/>
         : <GeneralDashboard
             client={client}

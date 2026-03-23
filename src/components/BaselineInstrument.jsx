@@ -210,7 +210,9 @@ export default function BaselineInstrument({ moduleKey, project, supabase, onCom
       await saveProjectScore(supabase, project.id, {
         overall_score:         scores.overall,
         dimension_scores_json: dimOnly,
-        method_notes: `Línea base — instrumento de observación directa (${new Date().toLocaleDateString("es-CL")}). Notas: ${notes||"Sin notas adicionales"}`,
+      }, {
+        method: 'baseline_instrument',
+        notes: `Instrumento de observación directa${notes ? ': ' + notes : ''}`,
       });
 
       await syncClientScore(supabase, project.client_id, moduleKey, dimOnly, scores.overall);

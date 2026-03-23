@@ -1,23 +1,87 @@
 // src/lib/scores.js
 // Utilidades compartidas para persistencia de scores
-// Usadas por ModuleRC, ModuleDO y ModuleESG
+// Usadas por ModuleRC, ModuleDO, ModuleESG y BaselineInstrument
 
-export async function saveProjectScore(sb, projectId, scorePayload) {
+/**
+ * Escribe una entrada en el log de cambios de score.
+ */
+async function writeScoreLog(sb, projectId, method, dimScores, prevScores, overall, notes, sourceFile) {
   if (!sb || !projectId) return;
+  const { data: { user } } = await sb.auth.getUser().catch(()=>({ data:{} }));
+  const entries = [];
+
+  // Log overall
+  if (overall != null) {
+    entries.push({
+      project_id:   projectId,
+      changed_by:   user?.id || null,
+      method,
+      dimension:    "overall",
+      value_before: prevScores?.overall ?? null,
+      value_after:  Math.round(overall),
+      notes,
+      source_file:  sourceFile || null,
+    });
+  }
+
+  // Log each dimension
+  Object.entries(dimScores || {}).forEach(([dim, val]) => {
+    if (val == null || dim === "overall") return;
+    entries.push({
+      project_id:   projectId,
+      changed_by:   user?.id || null,
+      method,
+      dimension:    dim,
+      value_before: prevScores?.[dim] ?? null,
+      value_after:  Math.round(val),
+      notes:        null,
+      source_file:  sourceFile || null,
+    });
+  });
+
+  if (entries.length) {
+    const { error } = await sb.from("project_score_log").insert(entries);
+    if (error) console.warn("score_log insert:", error.message);
+  }
+}
+
+/**
+ * Guarda o actualiza el score de un proyecto.
+ * Registra automáticamente en project_score_log.
+ */
+export async function saveProjectScore(sb, projectId, scorePayload, opts = {}) {
+  if (!sb || !projectId) return;
+
   const { data: existing } = await sb
-    .from("project_scores").select("id")
+    .from("project_scores").select("id, overall_score, dimension_scores_json")
     .eq("project_id", projectId)
     .order("updated_at", { ascending: false }).limit(1);
-  if (existing?.[0]?.id) {
+
+  const prev = existing?.[0];
+  const prevScores = { overall: prev?.overall_score, ...(prev?.dimension_scores_json || {}) };
+
+  if (prev?.id) {
     const { error } = await sb.from("project_scores")
       .update({ ...scorePayload, updated_at: new Date().toISOString() })
-      .eq("id", existing[0].id);
+      .eq("id", prev.id);
     if (error) console.error("project_scores update error:", error);
   } else {
     const { error } = await sb.from("project_scores")
       .insert({ project_id: projectId, ...scorePayload });
     if (error) console.error("project_scores insert error:", error);
   }
+
+  // Write changelog
+  const dimScores = scorePayload.dimension_scores_json || {};
+  await writeScoreLog(
+    sb, projectId,
+    opts.method || "manual",
+    dimScores,
+    prevScores,
+    scorePayload.overall_score,
+    opts.notes || scorePayload.method_notes || null,
+    opts.sourceFile || null
+  );
 }
 
 async function getOrCreateCurrentPeriod(sb) {
@@ -60,7 +124,6 @@ export async function syncClientScore(sb, clientId, moduleKey, dimScores, overal
   });
   if (Object.keys(payload).length === 0) return;
 
-  // 1. Actualizar client_scores (snapshot actual)
   const { data: existingScore } = await sb
     .from("client_scores").select("client_id")
     .eq("client_id", clientId).maybeSingle();
@@ -75,7 +138,6 @@ export async function syncClientScore(sb, clientId, moduleKey, dimScores, overal
     if (error) console.error("client_scores insert error:", error);
   }
 
-  // 2. Registrar punto histórico (upsert por trimestre)
   try {
     const periodId = await getOrCreateCurrentPeriod(sb);
     if (!periodId) return;

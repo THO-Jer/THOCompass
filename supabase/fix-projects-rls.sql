@@ -262,3 +262,39 @@ create policy "clients read own alerts"
         and ua.access_status = 'approved'
     )
   );
+
+-- ── 12. SCORE CHANGELOG ──────────────────────────────────────────
+-- Registra cada cambio de score: quién lo hizo, por qué método,
+-- cuál fue el valor anterior y el nuevo.
+
+create table if not exists public.project_score_log (
+  id             uuid        primary key default gen_random_uuid(),
+  project_id     uuid        not null references public.projects(id) on delete cascade,
+  changed_by     uuid        references public.user_profiles(id),
+  method         text        not null,  -- "baseline_instrument" | "ai_analysis" | "manual"
+  dimension      text,                  -- null = overall, o "percepcion", "cultura", etc.
+  value_before   integer,
+  value_after    integer,
+  notes          text,                  -- resumen del análisis o descripción del cambio
+  source_file    text,                  -- nombre del archivo si fue por IA
+  created_at     timestamptz not null default now()
+);
+
+alter table public.project_score_log enable row level security;
+
+create policy "consultants manage score log"
+  on public.project_score_log for all
+  using (is_consultant());
+
+create policy "clients read score log"
+  on public.project_score_log for select
+  using (
+    exists (
+      select 1 from public.projects p
+      join public.client_user_access ua on ua.client_id = p.client_id
+      where p.id = project_id
+        and ua.user_id = auth.uid()
+        and ua.access_status = 'approved'
+        and p.client_visible = true
+    )
+  );
