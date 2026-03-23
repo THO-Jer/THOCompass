@@ -211,7 +211,7 @@ export async function fetchClientDashboardData(clientId) {
     ...client,
     modules: {
       rc:  modules?.rc         ?? false,
-      do:  modules?.["do"] ?? false,
+      do:  modules?.do ?? false,
       esg: modules?.esg        ?? false,
     },
     scores: {
@@ -239,7 +239,7 @@ export async function fetchClientDashboardData(clientId) {
     history: (historyRes.data || []).map(h => ({
       period: h.reporting_periods?.label || h.reporting_period_id,
       rc:     h.rc,
-      do:     h["do"],
+      do:     h.do,
       esg:    h.esg,
     })),
     alerts:          alertsRes.data   || [],

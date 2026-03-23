@@ -1046,7 +1046,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
       // Inferir módulos activos desde proyectos si client_modules está vacío
       const projs = projectsRes.data || [];
       const hasRC  = m ? (m.rc ?? false)         : projs.some(p=>p.module_key==="rc");
-      const hasDO  = m ? (m?.["do"] ?? false)  : projs.some(p=>p.module_key==="do");
+      const hasDO  = m ? (m?.do ?? false)  : projs.some(p=>p.module_key==="do");
       const hasESG = m ? (m.esg ?? false)          : projs.some(p=>p.module_key==="esg");
 
       setLiveData({
@@ -1057,7 +1057,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
           rc:  { total:s?.rc       ?? null, percepcion:s?.rc_percepcion ?? null,
                  compromisos:s?.rc_compromisos ?? null, dialogo:s?.rc_dialogo ?? null,
                  conflictividad:s?.rc_conflictividad ?? null },
-          do:  { total:s?.["do"] ?? null, cultura:s?.do_cultura ?? null,
+          do:  { total:s?.do ?? null, cultura:s?.do_cultura ?? null,
                  engagement:s?.do_engagement ?? null, liderazgo:s?.do_liderazgo ?? null },
           esg: { total:s?.esg      ?? null, ambiental:s?.esg_ambiental ?? null,
                  social:s?.esg_social ?? null, gobernanza:s?.esg_gobernanza ?? null,
@@ -1065,7 +1065,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
         },
         history: (historyRes.data||[]).map(h=>({
           period: h.reporting_periods?.label || "Período",
-          rc: h.rc, do: h["do"], esg: h.esg,
+          rc: h.rc, do: h.do, esg: h.esg,
         })),
         alerts:          alertsRes.data   || [],
         recommendations: recsRes.data     || [],

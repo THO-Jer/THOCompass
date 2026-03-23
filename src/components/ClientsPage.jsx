@@ -405,7 +405,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
 
       await supabase.from("client_modules")
         .update({ rc:modules.rc||false,
-                  "do": modules.do || modules["do"] || false,
+                  "do": modules.do || modules.do || false,
                   esg:modules.esg||false,
                   weight_rc:finalWeights.rc, weight_do:finalWeights.do, weight_esg:finalWeights.esg,
                   updated_at:new Date().toISOString() })
@@ -968,7 +968,7 @@ export default function ClientsPage({ supabase, currentUser, onClientsChange }) 
     try {
       const [clientsRes, modulesRes, scoresRes, accessRes, projectsRes] = await Promise.all([
         supabase.from("clients").select("*").order("name"),
-        supabase.from("client_modules").select("client_id, rc, "do", esg, weight_rc, weight_do, weight_esg"),
+        supabase.from("client_modules").select("client_id, rc, do, esg, weight_rc, weight_do, weight_esg"),
         supabase.from("client_scores").select("client_id, rc, do_score, esg"),
         supabase.from("client_user_access").select(`
           client_id, user_id, access_status,
@@ -987,8 +987,8 @@ export default function ClientsPage({ supabase, currentUser, onClientsChange }) 
           ...c,
           modules: {
             rc:         m?.rc         ?? false,
-            do:         m?.["do"] ?? false,
-            "do": m?.["do"] ?? false,
+            do:         m?.do ?? false,
+            "do": m?.do ?? false,
             esg:        m?.esg        ?? false,
           },
           weights: {

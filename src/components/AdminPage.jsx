@@ -553,7 +553,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
   async function loadClients() {
     const [clientsRes, modulesRes, accessRes] = await Promise.all([
       supabase.from("clients").select("*").order("name"),
-      supabase.from("client_modules").select("client_id, rc, "do", esg"),
+      supabase.from("client_modules").select("client_id, rc, do, esg"),
       supabase.from("client_user_access").select("client_id, access_status"),
     ]);
     if (!clientsRes.error) {
@@ -561,7 +561,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
         ...c,
         modules: {
           rc:         modulesRes.data?.find(m=>m.client_id===c.id)?.rc         ?? false,
-          "do":       modulesRes.data?.find(m=>m.client_id===c.id)?.["do"] ?? false,
+          "do":       modulesRes.data?.find(m=>m.client_id===c.id)?.do ?? false,
           esg:        modulesRes.data?.find(m=>m.client_id===c.id)?.esg        ?? false,
         },
         user_count: (accessRes.data||[])
