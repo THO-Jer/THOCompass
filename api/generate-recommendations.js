@@ -64,7 +64,7 @@ ${activityContext}
 - Siempre priorizar por urgencia e impacto
 - Si todo está bien, reconocerlo y sugerir próximos pasos de mejora continua
 
-Genera entre 2 y 5 recomendaciones. Responde ÚNICAMENTE con JSON válido sin texto adicional:
+Genera entre 1 y 3 recomendaciones (máximo 3), priorizando las más urgentes e impactantes. Responde ÚNICAMENTE con JSON válido sin texto adicional:
 [
   {
     "type": "urgent|warning|opportunity|good",

@@ -16,6 +16,7 @@
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import ScoreLog from "./ScoreLog.jsx";
 import FilesPanel from "./FilesPanel.jsx";
+import SurveyManager from "./SurveyManager.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
@@ -1289,6 +1290,20 @@ function TabUpload({ project, supabase, onApplyScores }) {
         </Card>
       )}
 
+      {/* Encuestas externas */}
+      {supabase && project?.id && (
+        <div style={{ marginTop:24 }}>
+          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
+            Encuestas externas
+          </div>
+          <SurveyManager
+            project={project}
+            moduleKey="rc"
+            supabase={supabase}
+            accentColor={T.rc}/>
+        </div>
+      )}
+
       {/* Historial de archivos subidos */}
       {uploadedFiles.length > 0 && (
         <Card>
@@ -1444,6 +1459,7 @@ export default function ModuleRC({ client, supabase }) {
     { id:"actors",      label:`Actores ${projActors.length>0?`(${projActors.length})`:""}`      },
     { id:"commitments", label:`Compromisos${projCommitments?.length>0?` (${projCommitments.length})`:""}`},
     { id:"files",       label:"Archivos"    },
+    { id:"surveys",     label:"Encuestas"    },
     { id:"upload",      label:"Carga IA"    },
   ];
 
@@ -1604,6 +1620,23 @@ export default function ModuleRC({ client, supabase }) {
                 supabase={supabase}
                 isConsultant={true}
                 accentColor={T.rc}/>
+            )}
+            {tab==="surveys"&&(
+              <SurveyManager
+                projectId={selProject.id}
+                moduleKey="rc"
+                supabase={supabase}
+                accentColor={T.rc}
+                onApplyScores={(scores, notes) => {
+                  applyScores(scores);
+                  // Also save with source info
+                  if (supabase && selProject.id) {
+                    saveProjectScore(supabase, selProject.id, {
+                      overall_score: scores.overall,
+                      dimension_scores_json: scores,
+                    }, { method: 'baseline_instrument', notes });
+                  }
+                }}/>
             )}
             {tab==="commitments"&&(
               <CommitmentsPanel

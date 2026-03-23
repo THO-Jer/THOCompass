@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { supabase, isSupabaseConfigured, getOAuthRedirectUrl } from "./lib/supabase";
 import { useAuthGuard } from "./hooks/useAuthGuard";
-import AdminPage      from "./components/AdminPage";
-import ClientsPage    from "./components/ClientsPage";
+import AdminPage       from "./components/AdminPage";
+import ClientsPage     from "./components/ClientsPage";
 import ClientDashboard from "./components/ClientDashboard";
 import ModuleRC        from "./components/ModuleRC";
 import ModuleDO        from "./components/ModuleDO";
 import ModuleESG       from "./components/ModuleESG";
 import PendingAccess   from "./components/PendingAccess";
+import SurveyPage      from "./components/SurveyPage";
 
 // ── Design tokens ─────────────────────────────────────────────
 const T = {
@@ -299,6 +300,13 @@ function LoadingScreen() {
 
 // ── Main App ───────────────────────────────────────────────────
 export default function App() {
+  // Check for public survey route FIRST — no auth needed
+  const hash = window.location.hash;
+  const surveyMatch = hash.match(/^#\/survey\/([a-zA-Z0-9-]+)$/);
+  if (surveyMatch) {
+    return <SurveyPage token={surveyMatch[1]} />;
+  }
+
   const auth = useAuthGuard();
   const [page,        setPage]        = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);

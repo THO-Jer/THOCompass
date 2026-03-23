@@ -321,3 +321,125 @@ create policy "clients read visible files"
         and ua.access_status = 'approved'
     )
   );
+
+-- ── 14. SURVEY LINKS & RESPONSES ─────────────────────────────
+-- Permite generar links externos para que stakeholders respondan
+-- el instrumento de línea base sin necesitar cuenta.
+
+create table if not exists public.survey_links (
+  id           uuid        primary key default gen_random_uuid(),
+  token        text        not null unique default encode(gen_random_bytes(24), 'base64url'),
+  project_id   uuid        not null references public.projects(id) on delete cascade,
+  module_key   text        not null check (module_key in ('rc','do','esg')),
+  label        text,                    -- ej. "Encuesta comunidad sector norte"
+  role_hint    text,                    -- ej. "Líder comunitario", "Trabajador", "Encargado sostenibilidad"
+  expires_at   timestamptz,
+  max_responses integer default 100,
+  active       boolean not null default true,
+  created_by   uuid    references public.user_profiles(id),
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists public.survey_responses (
+  id           uuid        primary key default gen_random_uuid(),
+  link_id      uuid        not null references public.survey_links(id) on delete cascade,
+  project_id   uuid        not null references public.projects(id) on delete cascade,
+  module_key   text        not null,
+  respondent_label text,               -- nombre opcional (anónimo por defecto)
+  answers_json jsonb       not null,   -- { "p1": 4, "p2": 3, ... }
+  scores_json  jsonb,                  -- scores calculados de las respuestas
+  overall_score integer,
+  ip_hash      text,                   -- hash del IP para deduplicación (no PII)
+  created_at   timestamptz not null default now()
+);
+
+-- RLS: consultores gestionan sus links y ven respuestas
+alter table public.survey_links     enable row level security;
+alter table public.survey_responses enable row level security;
+
+drop policy if exists "consultants manage survey links" on public.survey_links;
+create policy "consultants manage survey links"
+  on public.survey_links for all using (is_consultant());
+
+drop policy if exists "public read active survey links" on public.survey_links;
+create policy "public read active survey links"
+  on public.survey_links for select
+  using (active = true and (expires_at is null or expires_at > now()));
+
+drop policy if exists "consultants read survey responses" on public.survey_responses;
+create policy "consultants read survey responses"
+  on public.survey_responses for all using (is_consultant());
+
+drop policy if exists "public insert survey responses" on public.survey_responses;
+create policy "public insert survey responses"
+  on public.survey_responses for insert
+  with check (
+    exists (
+      select 1 from public.survey_links sl
+      where sl.id = link_id
+        and sl.active = true
+        and (sl.expires_at is null or sl.expires_at > now())
+    )
+  );
+
+-- ── 14. SURVEY LINKS & RESPONSES ─────────────────────────────
+-- Permite generar links públicos para que stakeholders respondan
+-- el instrumento de línea base sin necesidad de login.
+
+create table if not exists public.survey_links (
+  id           uuid        primary key default gen_random_uuid(),
+  token        text        unique not null default gen_random_uuid()::text,
+  project_id   uuid        not null references public.projects(id) on delete cascade,
+  module_key   text        not null check (module_key in ('rc','do','esg')),
+  title        text,                    -- ej. "Encuesta comunidad Villa El Bosque"
+  description  text,                    -- instrucciones para el encuestado
+  target_group text,                    -- ej. "Comunidad", "Trabajadores", "Líderes"
+  active       boolean     not null default true,
+  expires_at   timestamptz,
+  created_by   uuid        references public.user_profiles(id),
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists public.survey_responses (
+  id           uuid        primary key default gen_random_uuid(),
+  survey_link_id uuid      not null references public.survey_links(id) on delete cascade,
+  answers_json jsonb       not null,    -- { "p1": 4, "p2": 3, ... }
+  respondent_name  text,               -- opcional, puede ser anónimo
+  respondent_role  text,               -- ej. "Dirigente vecinal"
+  ip_hash      text,                   -- para evitar duplicados
+  created_at   timestamptz not null default now()
+);
+
+alter table public.survey_links     enable row level security;
+alter table public.survey_responses enable row level security;
+
+-- Consultores gestionan sus links
+drop policy if exists "consultants manage survey links" on public.survey_links;
+create policy "consultants manage survey links"
+  on public.survey_links for all using (is_consultant());
+
+-- Cualquiera puede leer un link activo (para la página pública /survey/:token)
+drop policy if exists "public read active survey links" on public.survey_links;
+create policy "public read active survey links"
+  on public.survey_links for select
+  using (active = true and (expires_at is null or expires_at > now()));
+
+-- Cualquiera puede insertar una respuesta (sin login)
+drop policy if exists "public insert survey responses" on public.survey_responses;
+create policy "public insert survey responses"
+  on public.survey_responses for insert
+  with check (true);
+
+-- Solo consultores leen respuestas
+drop policy if exists "consultants read survey responses" on public.survey_responses;
+create policy "consultants read survey responses"
+  on public.survey_responses for select
+  using (is_consultant());
+
+-- ── 15. RECOMMENDATIONS CACHE ────────────────────────────────
+-- Guarda las recomendaciones generadas para no regenerar en cada carga.
+
+alter table public.client_recommendations
+  add column if not exists generated_at  timestamptz,
+  add column if not exists source        text default 'manual',
+  add column if not exists expires_at    timestamptz;

@@ -905,20 +905,56 @@ const REC_META = {
   good:        { color:"#22c55e", bg:"#22c55e12", icon:"✓",  label:"Bien encaminado"},
 };
 
-function RecommendationsCard({ client }) {
-  const [recs,    setRecs]    = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
+const RECS_TTL_DAYS = 7; // Regenerate after 7 days
 
-  // Auto-generate on mount if no stored recommendations
+function RecommendationsCard({ client, supabase }) {
+  const [recs,       setRecs]       = useState(null);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState(null);
+  const [generatedAt,setGeneratedAt]= useState(null);
+
   useEffect(() => {
-    generate();
+    if (client?.id) loadOrGenerate(false);
   }, [client?.id]);
 
-  async function generate() {
+  async function loadOrGenerate(forceRefresh = false) {
     setLoading(true); setError(null);
+
+    // 1. Try loading cached recommendations from Supabase
+    if (supabase && client?.id && !forceRefresh) {
+      const { data } = await supabase
+        .from("client_recommendations")
+        .select("id, text, module, source, generated_at, expires_at")
+        .eq("client_id", client.id)
+        .eq("source", "ai")
+        .eq("visible_to_client", true)
+        .order("generated_at", { ascending: false })
+        .limit(10);
+
+      if (data?.length > 0) {
+        const freshest   = data[0];
+        const genDate    = new Date(freshest.generated_at || freshest.created_at || 0);
+        const ageInDays  = (Date.now() - genDate) / (1000*60*60*24);
+        const expired    = freshest.expires_at && new Date(freshest.expires_at) < new Date();
+
+        if (!expired && ageInDays < RECS_TTL_DAYS) {
+          // Use cached
+          setRecs(data.map(r => ({
+            type:   r.module === "rc" ? "opportunity" : "opportunity",
+            module: r.module,
+            title:  r.text?.split(".")[0]?.slice(0,60) || "Recomendación",
+            body:   r.text,
+            action: "",
+          })));
+          setGeneratedAt(genDate);
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
+    // 2. Generate new recommendations via API
     try {
-      // Compute last activity date
       const activities = client.projects?.flatMap(p=>p.activities||[]) || [];
       const lastAct    = activities.sort((a,b)=>new Date(b.activity_date)-new Date(a.activity_date))[0];
       const lastDays   = lastAct
@@ -926,19 +962,38 @@ function RecommendationsCard({ client }) {
         : null;
 
       const res = await fetch("/api/generate-recommendations", {
-        method:  "POST",
-        headers: { "Content-Type":"application/json" },
+        method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
-          clientName:       client.name,
-          modules:          client.modules,
-          scores:           client.scores,
-          projects:         client.projects,
-          commitments:      client.commitments,
-          lastActivityDays: lastDays,
+          clientName: client.name, modules: client.modules,
+          scores: client.scores, projects: client.projects,
+          commitments: client.commitments, lastActivityDays: lastDays,
         }),
       });
       if (!res.ok) { setError("No se pudieron generar recomendaciones"); return; }
-      setRecs(await res.json());
+      const newRecs = await res.json();
+      setRecs(Array.isArray(newRecs) ? newRecs.slice(0, 3) : []);
+      setGeneratedAt(new Date());
+
+      // 3. Save to client_recommendations for future caching
+      if (supabase && client?.id && newRecs?.length) {
+        // Delete old AI recs
+        await supabase.from("client_recommendations")
+          .delete().eq("client_id", client.id).eq("source", "ai");
+        // Insert new ones
+        const expires = new Date();
+        expires.setDate(expires.getDate() + RECS_TTL_DAYS);
+        await supabase.from("client_recommendations").insert(
+          newRecs.map(r => ({
+            client_id:         client.id,
+            text:              `${r.title}. ${r.body}${r.action ? " → " + r.action : ""}`,
+            module:            r.module !== "general" ? r.module : null,
+            source:            "ai",
+            visible_to_client: true,
+            generated_at:      new Date().toISOString(),
+            expires_at:        expires.toISOString(),
+          }))
+        );
+      }
     } catch(e) {
       setError(e.message);
     } finally {
@@ -952,10 +1007,11 @@ function RecommendationsCard({ client }) {
         <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1 }}>
           Recomendaciones estratégicas
         </div>
-        <button onClick={generate} disabled={loading}
+        <button onClick={()=>loadOrGenerate(true)} disabled={loading}
           style={{ background:"none",border:`1px solid ${T.b2}`,borderRadius:6,
             color:T.t3,cursor:loading?"not-allowed":"pointer",fontSize:11,
-            padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace" }}>
+            padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace" }}
+          title="Regenerar recomendaciones">
           {loading ? "…" : "↺"}
         </button>
       </div>
@@ -1014,24 +1070,18 @@ function RecommendationsCard({ client }) {
 function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }) {
   const activeModules = Object.entries(client.modules || {}).filter(([,v])=>v);
 
-  // Construir historial: datos reales + punto actual siempre visible
   const rawHist = client.history || [];
   const currentPoint = activeModules.length > 0 ? {
     period: new Date().toLocaleDateString("es-CL", { month:"short", year:"numeric" }),
     ...Object.fromEntries(activeModules.map(([k]) => [k, client.scores?.[k]?.total ?? null])),
   } : null;
-
-  // Si el último punto histórico ya tiene la fecha actual, no duplicar
   const lastPeriod = rawHist[rawHist.length - 1]?.period;
   const hist = currentPoint
     ? (lastPeriod === currentPoint.period ? rawHist : [...rawHist, currentPoint])
     : rawHist;
-
-  // Para el gráfico necesitamos al menos 2 puntos — si solo hay 1, duplicarlo
   const chartData = hist.length === 1
     ? [{ ...hist[0], period: "Anterior" }, hist[0]]
     : hist;
-
   const prev = hist[hist.length-2];
   const curr = hist[hist.length-1];
 
@@ -1039,206 +1089,240 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
     MOD[k].dims.map(d=>({ s:d.label.split(" ")[0], A:client.scores?.[k]?.[d.key]||0 }))
   );
 
+  const ircsScores = activeModules.map(([k])=>client.scores?.[k]?.total).filter(v=>v!=null);
+  const ircs       = ircsScores.length ? Math.round(ircsScores.reduce((s,v)=>s+v,0)/ircsScores.length) : null;
+  const ircsColor  = ircs==null ? T.t3 : ircs>=70 ? T.green : ircs>=50 ? T.amber : T.red;
+  const ircsLabel  = ircs==null ? "Sin medición" : ircs>=70 ? "Favorable" : ircs>=50 ? "En desarrollo" : "Requiere atención";
+  const completedCommitments = (client.commitments||[]).filter(c=>["completed","resolved","closed"].includes(c.status)).length;
+
   return (
-    <div style={{ padding:"32px 36px",maxWidth:1200 }}>
-      {/* Header */}
-      <div className="cd-fade" style={{ marginBottom:24 }}>
-        <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:T.t3,
-          letterSpacing:2,textTransform:"uppercase",marginBottom:8 }}>
-          Dashboard · {client.period}
-        </div>
-        <div style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",
-          flexWrap:"wrap",gap:14 }}>
-          <div>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:30,color:T.t1,
-              letterSpacing:-.5,marginBottom:5 }}>{client.name}</div>
-            <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-              <span style={{ fontSize:13,color:T.t2 }}>{client.industry}</span>
-              {activeModules.map(([k])=>(
-                <span key={k} style={{ padding:"2px 9px",borderRadius:20,fontSize:11,
-                  fontFamily:"'JetBrains Mono',monospace",
-                  border:`1px solid ${MOD[k].color}40`,color:MOD[k].color }}>
-                  {MOD[k].short}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div style={{ fontSize:12,color:T.t3 }}>
-            Asesoría a cargo: <span style={{ color:T.t2 }}>{client.contact_consultant}</span>
-          </div>
-        </div>
-      </div>
+    <div style={{ maxWidth:1200 }}>
 
-      {/* Auto summary */}
-      <div className="cd-fade cd-d1">
-        <AutoSummary client={client}/>
-      </div>
+      {/* ── HERO ── */}
+      <div style={{ position:"relative", overflow:"hidden",
+        background:"linear-gradient(135deg,#0d0f14 0%,#111520 60%,#161b28 100%)",
+        borderBottom:`1px solid ${T.b1}` }}>
+        <div style={{ position:"absolute",top:-60,right:-60,width:300,height:300,borderRadius:"50%",
+          background:`radial-gradient(circle,${T.rc}08 0%,transparent 70%)`,pointerEvents:"none" }}/>
+        <div style={{ position:"absolute",bottom:-40,left:100,width:200,height:200,borderRadius:"50%",
+          background:`radial-gradient(circle,${T.do}06 0%,transparent 70%)`,pointerEvents:"none" }}/>
 
-      {/* Module score cards */}
-      <div className="cd-fade cd-d2" style={{ display:"grid",
-        gridTemplateColumns:`repeat(${activeModules.length},1fr)`,gap:16,marginBottom:20 }}>
-        {Object.keys(MOD).map(k=>(
-          client.modules[k]
-            ? <ModuleCard key={k} modKey={k} scores={client.scores} active={true}
-                onClick={()=>onOpenModule(k)}/>
-            : null
-        ))}
-      </div>
-
-      {/* Evolution + Radar */}
-      <div className="cd-fade cd-d3" style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20 }}>
-        <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>
-            Evolución histórica
-          </div>
-          <div style={{ height:210 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  {activeModules.map(([k])=>(
-                    <linearGradient key={k} id={`cg-${k}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={MOD[k].color} stopOpacity={.15}/>
-                      <stop offset="95%" stopColor={MOD[k].color} stopOpacity={0}/>
-                    </linearGradient>
-                  ))}
-                </defs>
-                <XAxis dataKey="period" tick={{ fill:T.t3,fontSize:10,fontFamily:"JetBrains Mono" }}
-                  axisLine={false} tickLine={false}/>
-                <YAxis domain={[30,100]} tick={{ fill:T.t3,fontSize:10 }} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{ background:T.s2,border:`1px solid ${T.b2}`,
-                  borderRadius:8,fontSize:12,fontFamily:"Instrument Sans" }}/>
-                {activeModules.map(([k])=>(
-                  <Area key={k} type="monotone" dataKey={k} stroke={MOD[k].color}
-                    strokeWidth={2} fill={`url(#cg-${k})`} name={MOD[k].short}/>
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          {/* Period comparison */}
-          {prev&&curr&&(
-            <>
-              <div style={{ height:1,background:T.b1,margin:"16px 0" }}/>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,color:T.t1,marginBottom:12 }}>
-                {prev.period} → {curr.period}
+        <div style={{ padding:"36px 40px 32px",position:"relative" }}>
+          <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:24 }}>
+            <div style={{ flex:1,minWidth:260 }}>
+              <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:T.t3,
+                letterSpacing:3,textTransform:"uppercase",marginBottom:10 }}>
+                {client.period} · THO Compass
               </div>
-              {activeModules.map(([k])=>{
-                const diff=(curr[k]||0)-(prev[k]||0);
-                return (
-                  <div key={k} style={{ display:"flex",alignItems:"center",gap:12,
-                    padding:"8px 0",borderBottom:`1px solid ${T.b1}` }}>
-                    <span style={{ fontSize:15 }}>{MOD[k].icon}</span>
-                    <div style={{ flex:1,fontSize:12,color:T.t2 }}>{MOD[k].label}</div>
-                    <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:15,
-                      color:sc(curr[k]) }}>{curr[k]}</div>
-                    <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:11,
-                      color:diff>0?T.green:diff<0?T.red:T.t4 }}>
-                      {diff>0?`↑ +${diff}`:diff<0?`↓ ${diff}`:"→"}
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </Card>
-        <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
-            Perfil de indicadores
+              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:34,color:T.t1,
+                letterSpacing:-.5,marginBottom:8,lineHeight:1.1 }}>{client.name}</div>
+              <div style={{ display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:16 }}>
+                {client.industry&&<span style={{ fontSize:13,color:T.t2 }}>{client.industry}</span>}
+                {activeModules.map(([k])=>(
+                  <span key={k} style={{ padding:"3px 10px",borderRadius:20,fontSize:11,
+                    fontFamily:"'JetBrains Mono',monospace",
+                    background:`${MOD[k].color}12`,border:`1px solid ${MOD[k].color}35`,color:MOD[k].color }}>
+                    {MOD[k].icon} {MOD[k].short}
+                  </span>
+                ))}
+              </div>
+              <div style={{ fontSize:12,color:T.t3 }}>
+                Asesoría a cargo: <span style={{ color:T.t2,fontWeight:500 }}>{client.contact_consultant}</span>
+              </div>
+            </div>
+
+            {ircs!==null&&(
+              <div style={{ textAlign:"center",padding:"20px 28px",
+                background:"rgba(255,255,255,.03)",
+                border:`1px solid ${ircsColor}25`,borderRadius:16,flexShrink:0 }}>
+                <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:T.t3,
+                  letterSpacing:2,textTransform:"uppercase",marginBottom:6 }}>Índice IRCS</div>
+                <div style={{ fontFamily:"'Playfair Display',serif",fontSize:56,color:ircsColor,
+                  fontWeight:700,lineHeight:1,marginBottom:4 }}>{ircs}</div>
+                <div style={{ fontSize:12,color:ircsColor,fontWeight:500 }}>{ircsLabel}</div>
+              </div>
+            )}
           </div>
-          <div style={{ height:260 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData}>
-                <PolarGrid stroke={T.b2}/>
-                <PolarAngleAxis dataKey="s" tick={{ fill:T.t3,fontSize:9,fontFamily:"JetBrains Mono" }}/>
-                <Radar dataKey="A" stroke={T.rc} fill={T.rc} fillOpacity={.08} strokeWidth={2}/>
-              </RadarChart>
-            </ResponsiveContainer>
+
+          <div style={{ marginTop:20,padding:"14px 18px",
+            background:"rgba(255,255,255,.03)",border:`1px solid ${T.b1}`,borderRadius:12 }}>
+            <AutoSummary client={client}/>
           </div>
-        </Card>
+        </div>
       </div>
 
-      {/* Alerts + Recommendations */}
-      <div className="cd-fade cd-d4" style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20 }}>
-        <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
-            Alertas del período
-          </div>
-          {client.alerts.length===0 ? (
-            <div style={{ fontSize:13,color:T.t3,textAlign:"center",padding:"16px 0" }}>
-              Sin alertas activas.
+      <div style={{ padding:"24px 40px 40px" }}>
+
+        {/* Module cards */}
+        <div className="cd-fade" style={{ display:"grid",
+          gridTemplateColumns:`repeat(${Math.max(activeModules.length,1)},1fr)`,
+          gap:14,marginBottom:24 }}>
+          {Object.keys(MOD).map(k=>(
+            client.modules[k]
+              ? <ModuleCard key={k} modKey={k} scores={client.scores} active={true} onClick={()=>onOpenModule(k)}/>
+              : null
+          ))}
+        </div>
+
+        {/* Achievements */}
+        {completedCommitments>0&&(
+          <div className="cd-fade" style={{ padding:"14px 20px",marginBottom:20,
+            background:`${T.green}08`,border:`1px solid ${T.green}20`,
+            borderRadius:12,display:"flex",alignItems:"center",gap:14 }}>
+            <div style={{ fontSize:28 }}>🏆</div>
+            <div>
+              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.green,marginBottom:2 }}>
+                {completedCommitments} compromiso{completedCommitments>1?"s":""} completado{completedCommitments>1?"s":""}
+              </div>
+              <div style={{ fontSize:12,color:T.t3 }}>Acuerdos cumplidos con sus grupos de interés.</div>
             </div>
-          ) : client.alerts.map(a=>(
-            <div key={a.id} style={{ display:"flex",gap:10,padding:"10px 12px",
-              borderRadius:8,marginBottom:7,
-              background:a.type==="red"?`${T.red}0e`:a.type==="amber"?`${T.amber}0e`:`${T.green}0e`,
-              border:`1px solid ${a.type==="red"?T.red:a.type==="amber"?T.amber:T.green}22` }}>
-              <span style={{ fontSize:13,marginTop:1,flexShrink:0 }}>
-                {a.type==="red"?"✕":a.type==="amber"?"⚠":"✓"}
-              </span>
-              <div>
-                <div style={{ fontSize:12,color:T.t2,lineHeight:1.5 }}>{a.text}</div>
-                <div style={{ fontSize:10,color:T.t4,fontFamily:"'JetBrains Mono',monospace",marginTop:2 }}>
-                  {a.date}
+          </div>
+        )}
+
+        {/* Evolution + Radar */}
+        <div className="cd-fade cd-d2" style={{ display:"grid",gridTemplateColumns:"3fr 2fr",gap:16,marginBottom:20 }}>
+          <Card>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>Evolución histórica</div>
+            <div style={{ height:200 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    {activeModules.map(([k])=>(
+                      <linearGradient key={k} id={`cg-${k}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={MOD[k].color} stopOpacity={.15}/>
+                        <stop offset="95%" stopColor={MOD[k].color} stopOpacity={0}/>
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <XAxis dataKey="period" tick={{ fill:T.t3,fontSize:10,fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false}/>
+                  <YAxis domain={[0,100]} tick={{ fill:T.t3,fontSize:10 }} axisLine={false} tickLine={false}/>
+                  <Tooltip contentStyle={{ background:T.s2,border:`1px solid ${T.b2}`,borderRadius:8,fontSize:12 }}/>
+                  {activeModules.map(([k])=>(
+                    <Area key={k} type="monotone" dataKey={k} stroke={MOD[k].color}
+                      strokeWidth={2.5} fill={`url(#cg-${k})`} name={MOD[k].short} dot={{ fill:MOD[k].color,r:3 }}/>
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            {prev&&curr&&(
+              <>
+                <div style={{ height:1,background:T.b1,margin:"14px 0" }}/>
+                <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:T.t3,
+                  letterSpacing:1.5,textTransform:"uppercase",marginBottom:10 }}>
+                  Variación {prev.period} → {curr.period}
+                </div>
+                <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
+                  {activeModules.map(([k])=>{
+                    const diff=(curr[k]||0)-(prev[k]||0);
+                    return (
+                      <div key={k} style={{ display:"flex",alignItems:"center",gap:8,
+                        padding:"6px 12px",background:T.s2,borderRadius:8,border:`1px solid ${T.b1}` }}>
+                        <span style={{ fontSize:13 }}>{MOD[k].icon}</span>
+                        <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:14,color:sc(curr[k]) }}>{curr[k]}</span>
+                        <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:11,
+                          color:diff>0?T.green:diff<0?T.red:T.t4 }}>
+                          {diff>0?`↑+${diff}`:diff<0?`↓${diff}`:"—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </Card>
+          <Card>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>Perfil de indicadores</div>
+            <div style={{ height:240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData}>
+                  <PolarGrid stroke={T.b2}/>
+                  <PolarAngleAxis dataKey="s" tick={{ fill:T.t3,fontSize:9,fontFamily:"JetBrains Mono" }}/>
+                  <Radar dataKey="A" stroke={T.rc} fill={T.rc} fillOpacity={.08} strokeWidth={2}/>
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        {/* Alerts + Recommendations */}
+        <div className="cd-fade cd-d3" style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20 }}>
+          <Card>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>Alertas del período</div>
+            {client.alerts.length===0 ? (
+              <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",
+                background:`${T.green}08`,border:`1px solid ${T.green}20`,borderRadius:10 }}>
+                <span style={{ fontSize:20 }}>✓</span>
+                <div>
+                  <div style={{ fontSize:13,color:T.green,fontWeight:500 }}>Sin alertas activas</div>
+                  <div style={{ fontSize:11,color:T.t3,marginTop:2 }}>Todo en orden en este período.</div>
+                </div>
+              </div>
+            ) : client.alerts.map((a,i)=>(
+              <div key={a.id||i} style={{ display:"flex",gap:12,padding:"10px 0",borderBottom:`1px solid ${T.b1}` }}>
+                <div style={{ width:6,height:6,borderRadius:"50%",flexShrink:0,marginTop:6,
+                  background:a.type==="red"?T.red:a.type==="green"?T.green:T.amber }}/>
+                <div>
+                  <div style={{ fontSize:13,color:T.t2,lineHeight:1.55 }}>{a.text}</div>
                   {a.module&&(
-                    <span style={{ marginLeft:6,color:MOD[a.module]?.color }}>
-                      · {MOD[a.module]?.short}
+                    <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
+                      color:MOD[a.module]?.color,marginTop:3,display:"block" }}>
+                      {MOD[a.module]?.icon} {MOD[a.module]?.label}
                     </span>
                   )}
                 </div>
               </div>
+            ))}
+          </Card>
+          <Card><RecommendationsCard client={client} supabase={supabase}/></Card>
+        </div>
+
+        {/* Active projects */}
+        {client.projects.length>0&&(
+          <Card cls="cd-fade cd-d4" style={{ marginBottom:20 }}>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>Proyectos activos</div>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12 }}>
+              {client.projects.map(p=>{
+                const mod=MOD[p.module_key];
+                return (
+                  <div key={p.id} style={{ background:T.s2,border:`1px solid ${T.b1}`,
+                    borderRadius:12,padding:"14px 16px",cursor:"pointer",transition:"all .15s" }}
+                    onClick={()=>onOpenModule(p.module_key)}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor=mod?.color+"40";e.currentTarget.style.transform="translateY(-1px)"}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=T.b1;e.currentTarget.style.transform="none"}}>
+                    <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
+                      <span style={{ fontSize:15 }}>{mod?.icon}</span>
+                      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,color:T.t1 }}>{p.name}</div>
+                    </div>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                      <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
+                        color:p.status==="active"?T.green:T.amber }}>
+                        ● {p.status==="active"?"Activo":"En curso"}
+                      </span>
+                      <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:mod?.color }}>→ ver</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          </Card>
+        )}
+
+        {/* Messages */}
+        <Card cls="cd-fade cd-d5">
+          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+            Canal con THO Consultora
+          </div>
+          <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
+            Escribe preguntas, comentarios o solicitudes al equipo consultor.
+          </div>
+          <MessagesPanel messages={msgList||[]} onSend={onSendMsg} onDelete={null} senderRole="client"/>
         </Card>
-        <Card>
-          <RecommendationsCard client={client}/>
-        </Card>
+
       </div>
-
-      {/* Active projects */}
-      {client.projects.length>0&&(
-        <Card cls="cd-fade cd-d5" style={{ marginBottom:20 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
-            Proyectos activos
-          </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12 }}>
-            {client.projects.map(p=>{
-              const mod = MOD[p.module_key];
-              return (
-                <div key={p.id} style={{ background:T.s2,border:`1px solid ${T.b1}`,
-                  borderRadius:10,padding:"14px 16px",cursor:"pointer",transition:"all .15s" }}
-                  onClick={()=>onOpenModule(p.module_key)}
-                  onMouseEnter={e=>e.currentTarget.style.borderColor=mod?.color+"40"}
-                  onMouseLeave={e=>e.currentTarget.style.borderColor=T.b1}>
-                  <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
-                    <span style={{ fontSize:15 }}>{mod?.icon}</span>
-                    <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,
-                      color:T.t1 }}>{p.name}</div>
-                  </div>
-                  <div style={{ fontSize:11,color:T.t3,lineHeight:1.5,marginBottom:8 }}>
-                    {p.description}
-                  </div>
-                  <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
-                    color:mod?.color,background:`${mod?.color}12`,
-                    padding:"2px 8px",borderRadius:20 }}>{mod?.short}</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {/* Messages */}
-      <Card cls="cd-fade cd-d5">
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
-          Canal con THO Consultora
-        </div>
-        <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
-          Escribe preguntas, comentarios o solicitudes al equipo consultor.
-        </div>
-        <MessagesPanel messages={msgList||[]} onSend={onSendMsg} onDelete={null} senderRole="client"/>
-      </Card>
     </div>
   );
 }
+
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
 export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supabase, isConsultant, initialModule }) {
