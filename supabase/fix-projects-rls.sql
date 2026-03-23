@@ -185,3 +185,80 @@ ALTER TABLE public.project_scores
 SELECT COUNT(*) as total_scores,
        COUNT(DISTINCT project_id) as unique_projects
 FROM public.project_scores;
+
+-- ── 11. COMMITMENTS & ALERTS ─────────────────────────────────
+
+-- project_commitments table
+create table if not exists public.project_commitments (
+  id           uuid        primary key default gen_random_uuid(),
+  project_id   uuid        not null references public.projects(id) on delete cascade,
+  title        text        not null,
+  description  text,
+  due_date     date,
+  responsible  text,
+  status       text        not null default 'pending'
+                           check (status in ('pending','in_progress','completed','overdue')),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+alter table public.project_commitments enable row level security;
+
+drop policy if exists "consultants manage commitments" on public.project_commitments;
+create policy "consultants manage commitments"
+  on public.project_commitments for all
+  using (
+    exists (
+      select 1 from public.projects p
+      join public.clients c on c.id = p.client_id
+      where p.id = project_id and is_consultant()
+    )
+  );
+
+drop policy if exists "clients read commitments" on public.project_commitments;
+create policy "clients read commitments"
+  on public.project_commitments for select
+  using (
+    exists (
+      select 1 from public.projects p
+      join public.client_user_access ua on ua.client_id = p.client_id
+      where p.id = project_id
+        and ua.user_id = auth.uid()
+        and ua.access_status = 'approved'
+        and p.client_visible = true
+    )
+  );
+
+-- client_alerts table (for overdue commitment notifications)
+create table if not exists public.client_alerts (
+  id                 uuid        primary key default gen_random_uuid(),
+  client_id          uuid        not null references public.clients(id) on delete cascade,
+  type               text        not null default 'amber' check (type in ('red','amber','green')),
+  text               text        not null,
+  module             text,
+  visible_to_client  boolean     not null default false,
+  resolved           boolean     not null default false,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  unique (client_id, text)
+);
+
+alter table public.client_alerts enable row level security;
+
+drop policy if exists "consultants manage alerts" on public.client_alerts;
+create policy "consultants manage alerts"
+  on public.client_alerts for all
+  using (is_consultant());
+
+drop policy if exists "clients read own alerts" on public.client_alerts;
+create policy "clients read own alerts"
+  on public.client_alerts for select
+  using (
+    visible_to_client = true
+    and exists (
+      select 1 from public.client_user_access ua
+      where ua.client_id = client_id
+        and ua.user_id = auth.uid()
+        and ua.access_status = 'approved'
+    )
+  );

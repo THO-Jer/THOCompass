@@ -374,18 +374,22 @@ function ModuleCard({ modKey, scores, active, onClick }) {
 function ModuleDetail({ modKey, client, onBack }) {
   const mod = MOD[modKey];
   const scores = client.scores?.[modKey] || {};
-  const moduleProjects = (client.projects || []).filter(p=>p.module_key===modKey);
-  const moduleAlerts   = (client.alerts   || []).filter(a=>a.module===modKey);
-  const moduleRecs     = (client.recommendations || []).filter(r=>r.module===modKey);
+  const moduleProjects    = (client.projects     || []).filter(p=>p.module_key===modKey);
+  const moduleAlerts      = (client.alerts       || []).filter(a=>a.module===modKey);
+  const moduleRecs        = (client.recommendations || []).filter(r=>r.module===modKey);
+  const moduleCommitments = (client.commitments  || []).filter(c=>
+    moduleProjects.some(p=>p.id===c.project_id)
+  );
   const [tab, setTab]  = useState("overview");
 
   const radarData = mod.dims.map(d=>({ s:d.label.split(" ")[0], A:scores?.[d.key]||0 }));
   const history   = (client.history || []).map(h=>({ period:h.period, score:h[modKey] }));
 
   const TABS = [
-    { id:"overview",  label:"Resumen"  },
-    { id:"projects",  label:`Proyectos${moduleProjects.length>0?` (${moduleProjects.length})`:""}`},
-    { id:"evolution", label:"Evolución"},
+    { id:"overview",     label:"Resumen"  },
+    { id:"projects",     label:`Proyectos${moduleProjects.length>0?` (${moduleProjects.length})`:""}`},
+    { id:"commitments",  label:`Compromisos${moduleCommitments.length>0?` (${moduleCommitments.length})`:""}`},
+    { id:"evolution",    label:"Evolución"},
   ];
 
   const STATUS_COLOR = { active:T.green, draft:T.t3, paused:T.amber, closed:T.t4 };
@@ -651,6 +655,63 @@ function ModuleDetail({ modKey, client, onBack }) {
       )}
 
       {/* Evolution */}
+      {tab==="commitments"&&(
+        <div className="cd-fade">
+          <Card>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+              Compromisos activos
+            </div>
+            <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
+              Acuerdos vigentes entre la organización y sus grupos de interés para este módulo.
+            </div>
+            {moduleCommitments.length === 0 ? (
+              <div style={{ textAlign:"center",padding:"32px 0",
+                background:T.s2,borderRadius:12,border:`1px dashed ${T.b2}` }}>
+                <div style={{ fontSize:28,marginBottom:8 }}>📋</div>
+                <div style={{ fontSize:13,color:T.t2 }}>Sin compromisos activos registrados</div>
+              </div>
+            ) : (
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                {moduleCommitments.map(c=>{
+                  const daysLeft = c.due_date
+                    ? Math.ceil((new Date(c.due_date)-new Date())/(1000*60*60*24)) : null;
+                  const isOverdue = daysLeft !== null && daysLeft < 0;
+                  const ST = { pending:{l:"Pendiente",col:T.t3}, in_progress:{l:"En curso",col:T.blue},
+                    completed:{l:"Completado",col:T.green}, overdue:{l:"Atrasado",col:T.red} };
+                  const st = ST[c.status] || ST.pending;
+                  return (
+                    <div key={c.id} style={{ padding:"13px 16px",background:T.s2,
+                      border:`1px solid ${isOverdue?T.red+"40":T.b1}`,borderRadius:11 }}>
+                      <div style={{ display:"flex",alignItems:"flex-start",gap:10 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13,fontWeight:600,color:T.t1,marginBottom:3 }}>{c.title}</div>
+                          {c.description&&<div style={{ fontSize:12,color:T.t3,marginBottom:5 }}>{c.description}</div>}
+                          <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center" }}>
+                            {c.due_date&&(
+                              <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
+                                color:isOverdue?T.red:daysLeft<=7?T.amber:T.t3 }}>
+                                {isOverdue?`⚠ Atrasado ${Math.abs(daysLeft)}d`
+                                 :daysLeft===0?"⚡ Vence hoy"
+                                 :daysLeft<=7?`⏰ ${daysLeft}d restantes`
+                                 :`📅 ${new Date(c.due_date).toLocaleDateString("es-CL",{day:"numeric",month:"short"})}`}
+                              </span>
+                            )}
+                            {c.responsible&&<span style={{ fontSize:11,color:T.t3 }}>👤 {c.responsible}</span>}
+                            <span style={{ padding:"2px 8px",borderRadius:20,fontSize:10,
+                              fontFamily:"'JetBrains Mono',monospace",
+                              background:`${st.col}12`,color:st.col }}>{st.l}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
       {tab==="evolution"&&(
         <div className="cd-fade">
           <Card style={{ marginBottom:16 }}>
@@ -1031,7 +1092,6 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
   async function loadClientData() {
     setLoadingData(true);
     try {
-      // Queries separadas para evitar que .single() lance 406 si no hay fila
       const [
         clientRes, modulesRes, scoresRes, historyRes,
         alertsRes, recsRes, projectsRes, messagesRes,
@@ -1044,6 +1104,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
           .eq("client_id", rawClient.id).order("created_at", { ascending:true }),
         supabase.from("client_alerts").select("*")
           .eq("client_id", rawClient.id).eq("visible_to_client", true)
+          .eq("resolved", false)
           .order("created_at", { ascending:false }),
         supabase.from("client_recommendations").select("*")
           .eq("client_id", rawClient.id).eq("visible_to_client", true)
@@ -1061,11 +1122,23 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
 
       if (!c) { setLoadingData(false); return; }
 
-      // Inferir módulos activos desde proyectos si client_modules está vacío
       const projs = projectsRes.data || [];
-      const hasRC  = m ? (m.rc ?? false)         : projs.some(p=>p.module_key==="rc");
-      const hasDO  = m ? (m?.do ?? false)  : projs.some(p=>p.module_key==="do");
-      const hasESG = m ? (m.esg ?? false)          : projs.some(p=>p.module_key==="esg");
+
+      // Load commitments for visible projects
+      let commitments = [];
+      if (projs.length > 0) {
+        const { data: comData } = await supabase
+          .from("project_commitments")
+          .select("*")
+          .in("project_id", projs.map(p=>p.id))
+          .neq("status", "completed")
+          .order("due_date", { ascending: true, nullsLast: true });
+        commitments = comData || [];
+      }
+
+      const hasRC  = m ? (m.rc ?? false)  : projs.some(p=>p.module_key==="rc");
+      const hasDO  = m ? (m?.do ?? false) : projs.some(p=>p.module_key==="do");
+      const hasESG = m ? (m.esg ?? false) : projs.some(p=>p.module_key==="esg");
 
       setLiveData({
         ...c,
@@ -1088,6 +1161,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
         alerts:          alertsRes.data   || [],
         recommendations: recsRes.data     || [],
         projects:        projs,
+        commitments:     commitments,
         messages: (messagesRes.data||[]).map(msg=>({ ...msg, from:msg.sender_role })),
         gri_summary: s?.score_drivers_json?.gri_summary || {},
         contact_consultant: c.contact_consultant || "THO Consultora",
@@ -1109,6 +1183,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
     alerts:          (liveData||rawClient)?.alerts          || [],
     recommendations: (liveData||rawClient)?.recommendations || [],
     projects:        (liveData||rawClient)?.projects        || [],
+    commitments:     (liveData||rawClient)?.commitments     || [],
     gri_summary:     (liveData||rawClient)?.gri_summary     || {},
   };
 

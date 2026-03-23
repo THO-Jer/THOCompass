@@ -14,6 +14,8 @@
 // ============================================================
 
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
+import CommitmentsPanel from "./CommitmentsPanel.jsx";
+import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -1228,7 +1230,9 @@ export default function ModuleRC({ client, supabase }) {
   const [activities,  setActivities]  = useState([]);
   const [actors,      setActors]      = useState([]);
   const [tab,         setTab]         = useState("score");
+  const [projCommitments, setProjCommitments] = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [showBaseline, setShowBaseline] = useState(false);
 
   useEffect(() => {
     if (!supabase || !client?.id) return;
@@ -1411,6 +1415,27 @@ export default function ModuleRC({ client, supabase }) {
           </div>
         )}
 
+        {/* Línea base */}
+        {selProject && selProject.score?.overall == null && !loading && (
+          <div style={{ padding:"12px 18px",background:`$T.rc08`,
+            border:`1px solid $T.rc25`,borderRadius:10,marginBottom:20,
+            display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:13,color:T.t1,fontWeight:600,marginBottom:2 }}>Sin línea base establecida</div>
+              <div style={{ fontSize:12,color:T.t3 }}>
+                Completa el instrumento de observación para generar la primera medición de este proyecto.
+              </div>
+            </div>
+            <button onClick={()=>setShowBaseline(true)} style={{
+              padding:"8px 16px",background:T.rc,border:"none",borderRadius:8,
+              color:"#08090c",fontSize:12,fontWeight:600,cursor:"pointer",
+              fontFamily:"'Instrument Sans',sans-serif",whiteSpace:"nowrap",marginLeft:16
+            }}>
+              Establecer línea base
+            </button>
+          </div>
+        )}
+
         {/* Tabs */}
         <div style={{ display:"flex",gap:3,marginBottom:24,background:T.s2,
           borderRadius:10,padding:4,width:"fit-content" }}>
@@ -1463,9 +1488,32 @@ export default function ModuleRC({ client, supabase }) {
             {tab==="upload"&&(
               <TabUpload project={selProject} supabase={supabase} onApplyScores={applyScores}/>
             )}
+            {tab==="commitments"&&(
+              <CommitmentsPanel
+                projectId={selProject.id}
+                clientId={selProject.client_id}
+                moduleKey="rc"
+                supabase={supabase}
+                isConsultant={true}
+                accentColor={T.rc}/>
+            )}
           </>
         )}
       </div>
+      {showBaseline && selProject && (
+        <BaselineInstrument
+          moduleKey="rc"
+          project={selProject}
+          supabase={supabase}
+          onComplete={(scores) => {
+            setShowBaseline(false);
+            // Update local state with new scores
+            setProjects(p=>p.map(pr=>pr.id===selProjId
+              ? {...pr, score:scores}
+              : pr));
+          }}
+          onClose={()=>setShowBaseline(false)}/>
+      )}
     </>
   );
 }
