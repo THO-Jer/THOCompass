@@ -765,7 +765,25 @@ function MessagesPanel({ messages, onSend, senderRole="client" }) {
 // ── General Dashboard ──────────────────────────────────────────
 function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }) {
   const activeModules = Object.entries(client.modules || {}).filter(([,v])=>v);
-  const hist = client.history || [];
+
+  // Construir historial: datos reales + punto actual siempre visible
+  const rawHist = client.history || [];
+  const currentPoint = activeModules.length > 0 ? {
+    period: new Date().toLocaleDateString("es-CL", { month:"short", year:"numeric" }),
+    ...Object.fromEntries(activeModules.map(([k]) => [k, client.scores?.[k]?.total ?? null])),
+  } : null;
+
+  // Si el último punto histórico ya tiene la fecha actual, no duplicar
+  const lastPeriod = rawHist[rawHist.length - 1]?.period;
+  const hist = currentPoint
+    ? (lastPeriod === currentPoint.period ? rawHist : [...rawHist, currentPoint])
+    : rawHist;
+
+  // Para el gráfico necesitamos al menos 2 puntos — si solo hay 1, duplicarlo
+  const chartData = hist.length === 1
+    ? [{ ...hist[0], period: "Anterior" }, hist[0]]
+    : hist;
+
   const prev = hist[hist.length-2];
   const curr = hist[hist.length-1];
 
@@ -827,7 +845,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
           </div>
           <div style={{ height:210 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={hist}>
+              <AreaChart data={chartData}>
                 <defs>
                   {activeModules.map(([k])=>(
                     <linearGradient key={k} id={`cg-${k}`} x1="0" y1="0" x2="0" y2="1">
