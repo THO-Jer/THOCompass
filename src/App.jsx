@@ -309,24 +309,31 @@ export default function App() {
   // Load clients list for consultant
   useEffect(() => {
     if (!auth.isConsultant || !auth.supabase) return;
-    auth.supabase
-      .from("clients")
-      .select("id, name, published, client_modules(rc, do_enabled, esg)")
-      .order("name")
-      .then(({ data }) => {
-        if (data?.length) {
-          setClients(data.map(c => ({
-            ...c,
-            modules: {
-              rc:  c.client_modules?.rc         ?? false,
-              do:  c.client_modules?.do_enabled ?? false,
-              esg: c.client_modules?.esg        ?? false,
-            },
-          })));
-          setSelClientId(prev => prev || data[0]?.id);
-        }
-      });
+    loadConsultantClients();
   }, [auth.isConsultant, auth.supabase]);
+
+  async function loadConsultantClients() {
+    const sb = auth.supabase;
+    const [{ data: clientData }, { data: moduleData }] = await Promise.all([
+      sb.from("clients").select("id, name, published").order("name"),
+      sb.from("client_modules").select("client_id, rc, do_enabled, esg"),
+    ]);
+    if (clientData?.length) {
+      const mapped = clientData.map(c => {
+        const m = moduleData?.find(m => m.client_id === c.id);
+        return {
+          ...c,
+          modules: {
+            rc:  m?.rc         ?? false,
+            do:  m?.do_enabled ?? false,
+            esg: m?.esg        ?? false,
+          },
+        };
+      });
+      setClients(mapped);
+      setSelClientId(prev => prev || mapped[0]?.id);
+    }
+  }
 
   // Load assigned client for client users
   useEffect(() => {
@@ -366,8 +373,8 @@ export default function App() {
       if (page === "rc")        return <ModuleRC client={selClient} supabase={auth.supabase}/>;
       if (page === "do")        return <ModuleDO client={selClient} supabase={auth.supabase}/>;
       if (page === "esg")       return <ModuleESG client={selClient} supabase={auth.supabase}/>;
-      if (page === "clients")   return <ClientsPage supabase={auth.supabase} currentUser={auth.profile}/>;
-      if (page === "admin")     return <AdminPage   supabase={auth.supabase} currentUser={auth.profile}/>;
+      if (page === "clients")   return <ClientsPage supabase={auth.supabase} currentUser={auth.profile} onClientsChange={loadConsultantClients}/>;
+      if (page === "admin")     return <AdminPage   supabase={auth.supabase} currentUser={auth.profile} onClientsChange={loadConsultantClients}/>;
     } else {
       return <ClientDashboard client={clientViewData} supabase={auth.supabase}/>;
     }

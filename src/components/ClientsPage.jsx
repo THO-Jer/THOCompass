@@ -929,7 +929,7 @@ function CreateClientModal({ supabase, onSave, onClose }) {
 }
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
-export default function ClientsPage({ supabase, currentUser }) {
+export default function ClientsPage({ supabase, currentUser, onClientsChange }) {
   const [clients,     setClients]     = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [selectedId,  setSelectedId]  = useState(null);
@@ -943,44 +943,47 @@ export default function ClientsPage({ supabase, currentUser }) {
   async function loadClients() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("clients")
-        .select(`
-          *,
-          client_modules ( rc, do_enabled, esg, weight_rc, weight_do, weight_esg ),
-          client_scores ( rc, do_score, esg ),
-          client_user_access ( id, user_id, access_status,
-            user_profiles ( id, full_name, email ) ),
-          projects ( * )
-        `)
-        .order("name");
+      const [clientsRes, modulesRes, scoresRes, accessRes, projectsRes] = await Promise.all([
+        supabase.from("clients").select("*").order("name"),
+        supabase.from("client_modules").select("client_id, rc, do_enabled, esg, weight_rc, weight_do, weight_esg"),
+        supabase.from("client_scores").select("client_id, rc, do_score, esg"),
+        supabase.from("client_user_access").select(`
+          client_id, user_id, access_status,
+          user_profiles ( id, full_name, email )
+        `),
+        supabase.from("projects").select("*").order("starts_on", { ascending:false }),
+      ]);
 
-      if (error) throw error;
+      if (clientsRes.error) throw clientsRes.error;
 
-      setClients((data || []).map(c => ({
-        ...c,
-        modules: {
-          rc:         c.client_modules?.rc         ?? false,
-          do:         c.client_modules?.do_enabled ?? false,
-          do_enabled: c.client_modules?.do_enabled ?? false,
-          esg:        c.client_modules?.esg        ?? false,
-        },
-        weights: {
-          rc:  c.client_modules?.weight_rc  ?? 40,
-          do:  c.client_modules?.weight_do  ?? 35,
-          esg: c.client_modules?.weight_esg ?? 25,
-        },
-        scores: {
-          rc:  c.client_scores?.rc       ?? null,
-          do:  c.client_scores?.do_score ?? null,
-          esg: c.client_scores?.esg      ?? null,
-        },
-        user_count: (c.client_user_access || []).filter(a=>a.access_status==="approved").length,
-        users: (c.client_user_access || [])
-          .filter(a=>a.access_status==="approved")
-          .map(a=>({ id:a.user_id, ...a.user_profiles, access_status:a.access_status })),
-        projects: c.projects || [],
-      })));
+      setClients((clientsRes.data || []).map(c => {
+        const m  = modulesRes.data?.find(x=>x.client_id===c.id);
+        const s  = scoresRes.data?.find(x=>x.client_id===c.id);
+        const ua = (accessRes.data||[]).filter(x=>x.client_id===c.id);
+        return {
+          ...c,
+          modules: {
+            rc:         m?.rc         ?? false,
+            do:         m?.do_enabled ?? false,
+            do_enabled: m?.do_enabled ?? false,
+            esg:        m?.esg        ?? false,
+          },
+          weights: {
+            rc:  m?.weight_rc  ?? 40,
+            do:  m?.weight_do  ?? 35,
+            esg: m?.weight_esg ?? 25,
+          },
+          scores: {
+            rc:  s?.rc       ?? null,
+            do:  s?.do_score ?? null,
+            esg: s?.esg      ?? null,
+          },
+          user_count: ua.filter(a=>a.access_status==="approved").length,
+          users: ua.filter(a=>a.access_status==="approved")
+            .map(a=>({ id:a.user_id, ...a.user_profiles, access_status:a.access_status })),
+          projects: (projectsRes.data||[]).filter(p=>p.client_id===c.id),
+        };
+      }));
     } finally {
       setLoading(false);
     }
@@ -1004,6 +1007,7 @@ export default function ClientsPage({ supabase, currentUser }) {
     setClients(p=>[...p, newClient]);
     setCreateModal(false);
     setSelectedId(newClient.id);
+    onClientsChange?.(); // refresh topbar selector in App
   }
 
   if (loading) return (

@@ -484,7 +484,7 @@ function TD({ children, mono=false }) {
 }
 
 // ── MAIN COMPONENT ─────────────────────────────────────────────
-export default function AdminPage({ supabase, currentUser }) {
+export default function AdminPage({ supabase, currentUser, onClientsChange }) {
   // State
   const [pending,     setPending]     = useState([]);
   const [users,       setUsers]       = useState([]);
@@ -551,23 +551,21 @@ export default function AdminPage({ supabase, currentUser }) {
   }
 
   async function loadClients() {
-    const { data, error } = await supabase
-      .from("clients")
-      .select(`
-        *,
-        client_modules ( rc, do_enabled, esg ),
-        client_user_access ( id, access_status )
-      `)
-      .order("name");
-    if (!error) {
-      setClients((data || []).map(c => ({
+    const [clientsRes, modulesRes, accessRes] = await Promise.all([
+      supabase.from("clients").select("*").order("name"),
+      supabase.from("client_modules").select("client_id, rc, do_enabled, esg"),
+      supabase.from("client_user_access").select("client_id, access_status"),
+    ]);
+    if (!clientsRes.error) {
+      setClients((clientsRes.data || []).map(c => ({
         ...c,
         modules: {
-          rc:         c.client_modules?.rc         ?? false,
-          do_enabled: c.client_modules?.do_enabled ?? false,
-          esg:        c.client_modules?.esg        ?? false,
+          rc:         modulesRes.data?.find(m=>m.client_id===c.id)?.rc         ?? false,
+          do_enabled: modulesRes.data?.find(m=>m.client_id===c.id)?.do_enabled ?? false,
+          esg:        modulesRes.data?.find(m=>m.client_id===c.id)?.esg        ?? false,
         },
-        user_count: (c.client_user_access || []).filter(a => a.access_status === "approved").length,
+        user_count: (accessRes.data||[])
+          .filter(a=>a.client_id===c.id && a.access_status==="approved").length,
       })));
     }
   }
@@ -680,6 +678,7 @@ export default function AdminPage({ supabase, currentUser }) {
 
     setCreateClient(false);
     await loadClients();
+    onClientsChange?.();
   }
 
   async function handleSaveClient(updated) {
@@ -715,6 +714,7 @@ export default function AdminPage({ supabase, currentUser }) {
         await supabase.from("clients").delete().eq("id", clientId);
         setConfirmDlg(null);
         await loadClients();
+        onClientsChange?.();
       }
     });
   }
