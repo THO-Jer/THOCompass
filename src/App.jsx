@@ -323,7 +323,7 @@ export default function App() {
     const ids = clientData.map(c => c.id);
     const { data: moduleData } = await sb
       .from("client_modules")
-      .select("client_id, rc, do_enabled, esg")
+      .select("client_id, rc, "do", esg")
       .in("client_id", ids);
 
     const mapped = clientData.map(c => {
@@ -332,7 +332,7 @@ export default function App() {
         ...c,
         modules: {
           rc:  m?.rc         ?? false,
-          do:  m?.do_enabled ?? false,
+          do:  m?.["do"] ?? false,
           esg: m?.esg        ?? false,
         },
       };
@@ -357,14 +357,14 @@ export default function App() {
         // Load client modules so nav shows correct locked state
         const [{ data: clientData }, { data: moduleData }] = await Promise.all([
           auth.supabase.from("clients").select("id, name, published").eq("id", data.client_id).single(),
-          auth.supabase.from("client_modules").select("rc, do_enabled, esg").eq("client_id", data.client_id).maybeSingle(),
+          auth.supabase.from("client_modules").select("rc, "do", esg").eq("client_id", data.client_id).maybeSingle(),
         ]);
         if (clientData) {
           setClients([{
             ...clientData,
             modules: {
               rc:  moduleData?.rc         ?? false,
-              do:  moduleData?.do_enabled ?? false,
+              do:  moduleData?.["do"] ?? false,
               esg: moduleData?.esg        ?? false,
             },
           }]);

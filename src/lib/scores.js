@@ -54,7 +54,7 @@ export async function syncClientScore(sb, clientId, moduleKey, dimScores, overal
       conflictividad:"rc_conflictividad",
     },
     do: {
-      total:      "do_score",   // columna real: do_score en client_scores
+      total:      "do",          // columna real en client_scores es "do" (palabra reservada)
       cultura:    "do_cultura",
       engagement: "do_engagement",
       liderazgo:  "do_liderazgo",

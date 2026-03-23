@@ -331,7 +331,7 @@ function CreateClientModal({ onSave, onClose }) {
   const [industry, setIndustry] = useState("");
   const [contact,  setContact]  = useState("");
   const [email,    setEmail]    = useState("");
-  const [modules,  setModules]  = useState({ rc:true, do_enabled:true, esg:false });
+  const [modules,  setModules]  = useState({ rc:true, do:true, esg:false });
   const [loading,  setLoading]  = useState(false);
 
   async function handleCreate() {
@@ -341,8 +341,8 @@ function CreateClientModal({ onSave, onClose }) {
     setLoading(false);
   }
 
-  const MOD_LABELS = { rc:"Relacionamiento (RC)", do_enabled:"Desarrollo Org. (DO)", esg:"Sostenibilidad (ESG)" };
-  const MOD_COLORS = { rc:T.rc, do_enabled:T.do, esg:T.esg };
+  const MOD_LABELS = { rc:"Relacionamiento (RC)", do:"Desarrollo Org. (DO)", esg:"Sostenibilidad (ESG)" };
+  const MOD_COLORS = { rc:T.rc, do:T.do, esg:T.esg };
 
   return (
     <Modal title="Crear nueva empresa cliente" onClose={onClose} width={520}>
@@ -395,8 +395,8 @@ function EditClientModal({ client, onSave, onClose }) {
     setLoading(false);
   }
 
-  const MOD_LABELS = { rc:"Relacionamiento (RC)", do_enabled:"Desarrollo Org. (DO)", esg:"Sostenibilidad (ESG)" };
-  const MOD_COLORS = { rc:T.rc, do_enabled:T.do, esg:T.esg };
+  const MOD_LABELS = { rc:"Relacionamiento (RC)", do:"Desarrollo Org. (DO)", esg:"Sostenibilidad (ESG)" };
+  const MOD_COLORS = { rc:T.rc, do:T.do, esg:T.esg };
 
   return (
     <Modal title="Editar empresa cliente" onClose={onClose} width={520}>
@@ -553,7 +553,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
   async function loadClients() {
     const [clientsRes, modulesRes, accessRes] = await Promise.all([
       supabase.from("clients").select("*").order("name"),
-      supabase.from("client_modules").select("client_id, rc, do_enabled, esg"),
+      supabase.from("client_modules").select("client_id, rc, "do", esg"),
       supabase.from("client_user_access").select("client_id, access_status"),
     ]);
     if (!clientsRes.error) {
@@ -561,7 +561,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
         ...c,
         modules: {
           rc:         modulesRes.data?.find(m=>m.client_id===c.id)?.rc         ?? false,
-          do_enabled: modulesRes.data?.find(m=>m.client_id===c.id)?.do_enabled ?? false,
+          "do":       modulesRes.data?.find(m=>m.client_id===c.id)?.["do"] ?? false,
           esg:        modulesRes.data?.find(m=>m.client_id===c.id)?.esg        ?? false,
         },
         user_count: (accessRes.data||[])
@@ -671,7 +671,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
     await supabase.from("client_modules").insert({
       client_id:  clientData.id,
       rc:         newClient.modules?.rc         ?? true,
-      do_enabled: newClient.modules?.do_enabled ?? true,
+      "do":       newClient.modules?.do ?? true,
       esg:        newClient.modules?.esg        ?? false,
       weight_rc:  40, weight_do: 35, weight_esg: 25,
     });
@@ -697,7 +697,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
     await supabase.from("client_modules")
       .update({
         rc:         updated.modules?.rc         ?? true,
-        do_enabled: updated.modules?.do_enabled ?? true,
+        "do":       updated.modules?.do ?? true,
         esg:        updated.modules?.esg        ?? false,
         updated_at: new Date().toISOString(),
       })
@@ -950,7 +950,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
                     </div>
                     {/* Module tags */}
                     <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-                      {[["rc","RC",T.rc],["do_enabled","DO",T.do],["esg","ESG",T.esg]].map(([key,lbl,color])=>(
+                      {[["rc","RC",T.rc],["do","DO",T.do],["esg","ESG",T.esg]].map(([key,lbl,color])=>(
                         <span key={key} style={{
                           padding:"2px 9px", borderRadius:20, fontSize:11,
                           fontFamily:"'JetBrains Mono',monospace",
