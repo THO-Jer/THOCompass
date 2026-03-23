@@ -986,10 +986,9 @@ export default function ClientsPage({ supabase, currentUser, onClientsChange }) 
         return {
           ...c,
           modules: {
-            rc:         m?.rc         ?? false,
-            do:         m?.do ?? false,
-            "do": m?.do ?? false,
-            esg:        m?.esg        ?? false,
+            rc:  m?.rc  ?? false,
+            do:  m?.do  ?? false,
+            esg: m?.esg ?? false,
           },
           weights: {
             rc:  m?.weight_rc  ?? 40,

@@ -527,18 +527,17 @@ function TabScore({ project, supabase, onUpdate }) {
           </span>
         </div>
       </Card>
-    </div>
 
-    {/* Historial de cambios */}
-    {supabase && project?.id && (
-      <div style={{ marginTop:24 }}>
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
-          Historial de cambios
+      {/* Historial de cambios */}
+      {supabase && project?.id && (
+        <div style={{ marginTop:24 }}>
+          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
+            Historial de cambios
+          </div>
+          <ScoreLog projectId={project.id} supabase={supabase} accentColor={T.do}/>
         </div>
-        <ScoreLog projectId={project.id} supabase={supabase} accentColor={T.do}/>
-      </div>
-    )}
-  </div>
+      )}
+    </div>
   );
 }
 
