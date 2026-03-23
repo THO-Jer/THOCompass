@@ -984,11 +984,21 @@ function TabReports({ project, reports, supabase, onAdd, onUpdate }) {
 
 // ── Tab: CARGA IA ──────────────────────────────────────────────
 function TabUpload({ project, supabase, onApplyScores }) {
-  const [files,  setFiles]  = useState([]);
-  const [busy,   setBusy]   = useState(false);
-  const [prop,   setProp]   = useState(null);
-  const [drag,   setDrag]   = useState(false);
+  const [files,         setFiles]         = useState([]);
+  const [busy,          setBusy]          = useState(false);
+  const [prop,          setProp]          = useState(null);
+  const [drag,          setDrag]          = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const ref = useRef();
+
+  useEffect(() => {
+    if (!supabase || !project?.id) return;
+    supabase.from("client_files")
+      .select("id, original_name, mime_type, size_bytes, created_at")
+      .eq("project_id", project.id).eq("module_key", "esg")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setUploadedFiles(data || []));
+  }, [supabase, project?.id]);
 
   const add = list => setFiles(p=>[...p,...Array.from(list).map(f=>({
     name:f.name,
@@ -1011,14 +1021,21 @@ function TabUpload({ project, supabase, onApplyScores }) {
     });
   }
 
-  async function uploadToStorage(file) {
+  async function uploadAndRegister(file) {
     if (!supabase || !project?.client_id) return null;
     const ts   = Date.now();
     const path = `${project.client_id}/esg/${project.id}/${ts}_${file.name}`;
-    const { error } = await supabase.storage
+    const { error: uploadErr } = await supabase.storage
       .from("esg-documents").upload(path, file.raw || file, { upsert: false });
-    if (error?.message?.includes("already exists") || error?.statusCode === 409) return path;
-    if (error) { console.warn("Storage ESG upload:", error.message); return null; }
+    if (uploadErr && !uploadErr.message?.includes("already exists") && uploadErr.statusCode !== 409) {
+      console.warn("Storage ESG upload:", uploadErr.message); return null;
+    }
+    await supabase.from("client_files").insert({
+      client_id: project.client_id, project_id: project.id, module_key: "esg",
+      storage_bucket: "esg-documents", storage_path: path,
+      original_name: file.name, mime_type: file.raw?.type || "application/octet-stream",
+      size_bytes: file.raw?.size || 0, status: "uploaded",
+    });
     return path;
   }
 
@@ -1026,7 +1043,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
     if (!files.length) return;
     setBusy(true); setProp(null);
     try {
-      await Promise.all(files.map(f => uploadToStorage(f)));
+      await Promise.all(files.map(f => uploadAndRegister(f)));
 
       const fileContents = await Promise.all(
         files.map(async f => ({ name: f.name, content: await readFileText(f) }))
@@ -1052,10 +1069,34 @@ function TabUpload({ project, supabase, onApplyScores }) {
     } finally { setBusy(false); }
   }
 
-  function handleApply() {
-    const scores={};
-    Object.entries(prop.proposed_scores).forEach(([k,v])=>{ scores[k]=v.proposed; });
-    onApplyScores(scores, prop.gri_updates, prop.proposed_maturity);
+  async function handleApply() {
+    const newScores = {};
+    Object.entries(prop.proposed_scores||{}).forEach(([k,v])=>{ if(v.proposed!=null) newScores[k]=v.proposed; });
+    const newMaturity = {};
+    Object.entries(prop.proposed_maturity||{}).forEach(([k,v])=>{ if(v.proposed!=null) newMaturity[k]=v.proposed; });
+
+    if (supabase && project?.id) {
+      const active = Object.entries(project.active_pillars||{}).filter(([,v])=>v).map(([k])=>k);
+      const overall = active.length
+        ? Math.round(active.reduce((s,k)=>s+(newScores[k]??project.score?.[k]??0),0)/active.length) : 0;
+      // Fetch current score_drivers_json to merge
+      const { data: ex } = await supabase.from("project_scores")
+        .select("id, score_drivers_json").eq("project_id", project.id)
+        .order("updated_at",{ascending:false}).limit(1);
+      const current = ex?.[0]?.score_drivers_json || {};
+      await supabase.from("project_scores").upsert({
+        project_id: project.id, overall_score: overall,
+        dimension_scores_json: { ...project.score, ...newScores },
+        score_drivers_json: {
+          ...current,
+          maturity: { ...project.maturity, ...newMaturity },
+          gri_compliance: project.gri_compliance || {},
+        },
+        method_notes: `Análisis IA: ${prop.summary}`,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "project_id" });
+    }
+    onApplyScores(newScores, prop.gri_updates, prop.proposed_maturity);
     setProp(null); setFiles([]);
   }
 
@@ -1238,6 +1279,40 @@ function TabUpload({ project, supabase, onApplyScores }) {
           </div>
         </Card>
       )}
+
+      {uploadedFiles.length > 0 && (
+        <Card>
+          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+            Archivos subidos ({uploadedFiles.length})
+          </div>
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {uploadedFiles.map(f => (
+              <div key={f.id} style={{ display:"flex",alignItems:"center",gap:12,
+                padding:"10px 14px",background:T.s2,borderRadius:9,border:`1px solid ${T.b1}` }}>
+                <span style={{ fontSize:18,flexShrink:0 }}>
+                  {f.mime_type?.includes("pdf")?"📄":f.mime_type?.includes("sheet")?"📊":
+                   f.mime_type?.includes("word")?"📝":"📋"}
+                </span>
+                <div style={{ flex:1,overflow:"hidden" }}>
+                  <div style={{ fontSize:13,color:T.t1,fontWeight:500,
+                    whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                    {f.original_name}
+                  </div>
+                  <div style={{ fontSize:11,color:T.t3,fontFamily:"'JetBrains Mono',monospace",marginTop:2 }}>
+                    {new Date(f.created_at).toLocaleDateString("es-CL",{day:"numeric",month:"short",year:"numeric"})}
+                    {f.size_bytes ? ` · ${(f.size_bytes/1024).toFixed(1)} KB` : ""}
+                  </div>
+                </div>
+                <span style={{ padding:"2px 8px",borderRadius:20,fontSize:10,
+                  fontFamily:"'JetBrains Mono',monospace",
+                  background:`${T.green}12`,color:T.green,border:`1px solid ${T.green}25` }}>
+                  ✓ subido
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1321,13 +1396,12 @@ export default function ModuleESG({ client, supabase }) {
     }
   }
 
-  function applyScores(newScores, griUpdates, maturityUpdates) {
-    setProjects(p=>p.map(pr=>{
+  async function applyScores(newScores, griUpdates, maturityUpdates) {
+    const updated = projects.map(pr=>{
       if (pr.id!==selProjId) return pr;
-      const active = Object.entries(pr.active_pillars).filter(([,v])=>v).map(([k])=>k);
+      const active = Object.entries(pr.active_pillars||{}).filter(([,v])=>v).map(([k])=>k);
       const overall = active.length
-        ? Math.round(active.reduce((s,k)=>s+(newScores[k]??pr.score[k]??0),0)/active.length)
-        : 0;
+        ? Math.round(active.reduce((s,k)=>s+(newScores[k]??pr.score[k]??0),0)/active.length) : 0;
       let newCompliance = { ...pr.gri_compliance };
       if (griUpdates) griUpdates.forEach(g=>{
         Object.keys(newCompliance).forEach(pk=>{
@@ -1338,7 +1412,21 @@ export default function ModuleESG({ client, supabase }) {
       if (maturityUpdates) Object.entries(maturityUpdates).forEach(([k,v])=>{ newMaturity[k]=v.proposed; });
       return { ...pr, score:{ ...pr.score, ...newScores, overall },
         maturity:newMaturity, gri_compliance:newCompliance };
-    }));
+    });
+    setProjects(updated);
+    if (supabase && selProjId) {
+      const pr = updated.find(p=>p.id===selProjId);
+      await supabase.from("project_scores").upsert({
+        project_id: selProjId, overall_score: pr?.score?.overall ?? 0,
+        dimension_scores_json: { ...pr?.score },
+        score_drivers_json: {
+          maturity: pr?.maturity || {},
+          gri_compliance: pr?.gri_compliance || {},
+          active_pillars: pr?.active_pillars || {},
+        },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "project_id" });
+    }
     setTab("score");
   }
 
