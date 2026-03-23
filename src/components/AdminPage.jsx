@@ -763,7 +763,9 @@ export default function AdminPage({ supabase, currentUser }) {
               animation:"admSpin .8s linear infinite", display:"inline-block" }}/>
             Cargando datos…
           </div>
-        ) : (<>
+        ) : null}
+
+        {!loading && (<>
 
         {/* Stats strip */}
         <div className="adm-fade adm-d1" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)",
@@ -1014,7 +1016,7 @@ export default function AdminPage({ supabase, currentUser }) {
 
       </div>
 
-      {/* Loading closes here */}
+      {/* !loading block closes here */}
       </>)}
 
       {/* ── MODALS ── */}
