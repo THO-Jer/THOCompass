@@ -14,7 +14,7 @@
 //                    client_files (bucket: do-documents)
 // ============================================================
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -352,7 +352,7 @@ function DimScoreBlock({ dim, scores, onChange }) {
 }
 
 // ── Tab: SCORE ISO ─────────────────────────────────────────────
-function TabScore({ project, onUpdate }) {
+function TabScore({ project, supabase, onUpdate }) {
   const [scores, setScores] = useState({ ...project.score });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
@@ -369,15 +369,21 @@ function TabScore({ project, onUpdate }) {
 
   async function handleSave() {
     setSaving(true);
-    // Supabase:
-    // UPSERT project_scores SET
-    //   overall_score = calcTotal(scores),
-    //   dimension_scores_json = { cultura, engagement, liderazgo, sub:{...} }
-    // WHERE project_id = project.id
-    await new Promise(r=>setTimeout(r,700));
-    setSaving(false); setSaved(true);
-    setTimeout(()=>setSaved(false),2200);
-    onUpdate({ ...project, score:{ ...scores, overall:calcTotal(scores) } });
+    try {
+      const total = calcTotal(scores);
+      await supabase.from("project_scores")
+        .upsert({
+          project_id: project.id,
+          overall_score: total,
+          dimension_scores_json: scores,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "project_id" });
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 2200);
+      onUpdate({ ...project, score:{ ...scores, overall:total } });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const total = calcTotal(scores);
@@ -524,7 +530,7 @@ function TabScore({ project, onUpdate }) {
 }
 
 // ── Instrument Form Modal ──────────────────────────────────────
-function InstrumentModal({ instrument, projectId, onSave, onClose }) {
+function InstrumentModal({ instrument, projectId, supabase, onSave, onClose }) {
   const isEdit = !!instrument;
   const [type,      setType]      = useState(instrument?.record_type||"survey_clima");
   const [title,     setTitle]     = useState(instrument?.title||"");
@@ -543,27 +549,31 @@ function InstrumentModal({ instrument, projectId, onSave, onClose }) {
   async function handleSave() {
     if (!title.trim()||!date) return;
     setLoading(true);
-    // Supabase:
-    // isEdit:
-    //   UPDATE project_activities SET record_type, title, activity_date,
-    //   participants_count, evaluation_score, qualitative_summary,
-    //   tensions_text, opportunities_text, consultant_notes, visible_to_client
-    //   WHERE id = instrument.id
-    // !isEdit:
-    //   INSERT INTO project_activities (project_id, record_type, title,
-    //   activity_date, participants_count, evaluation_score, qualitative_summary,
-    //   tensions_text, opportunities_text, consultant_notes, visible_to_client)
-    await new Promise(r=>setTimeout(r,700));
-    setLoading(false);
-    onSave({
-      id:instrument?.id||`i${Date.now()}`, project_id:projectId,
-      record_type:type, title, activity_date:date,
-      participants_count:partic||null, organizations_count:null,
-      evaluation_score:evalScore||null,
-      qualitative_summary:summary, tensions_text:tensions,
-      opportunities_text:opps, consultant_notes:notes,
-      visible_to_client:visible,
-    });
+    try {
+      const payload = {
+        project_id: projectId, record_type:type, title, activity_date:date,
+        participants_count:  partic    ? parseInt(partic)      : null,
+        evaluation_score:    evalScore ? parseFloat(evalScore) : null,
+        qualitative_summary: summary, tensions_text: tensions,
+        opportunities_text:  opps,    consultant_notes: notes,
+        visible_to_client:   visible,
+      };
+      if (isEdit) {
+        const { data, error } = await supabase
+          .from("project_activities")
+          .update({ ...payload, updated_at:new Date().toISOString() })
+          .eq("id", instrument.id).select().single();
+        if (error) throw error;
+        onSave(data);
+      } else {
+        const { data, error } = await supabase
+          .from("project_activities").insert(payload).select().single();
+        if (error) throw error;
+        onSave(data);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -622,7 +632,7 @@ function InstrumentModal({ instrument, projectId, onSave, onClose }) {
 }
 
 // ── Tab: DIAGNÓSTICOS ──────────────────────────────────────────
-function TabDiagnostics({ project, instruments, onAdd, onUpdate }) {
+function TabDiagnostics({ project, instruments, supabase, onAdd, onUpdate }) {
   const [modal,  setModal]  = useState(null);
   const [filter, setFilter] = useState("all");
 
@@ -758,6 +768,7 @@ function TabDiagnostics({ project, instruments, onAdd, onUpdate }) {
         <InstrumentModal
           instrument={modal==="new"?null:modal}
           projectId={project.id}
+          supabase={supabase}
           onSave={handleSave}
           onClose={()=>setModal(null)}/>
       )}
@@ -766,7 +777,7 @@ function TabDiagnostics({ project, instruments, onAdd, onUpdate }) {
 }
 
 // ── Tab: CARGA IA ──────────────────────────────────────────────
-function TabUpload({ project, onApplyScores }) {
+function TabUpload({ project, supabase, onApplyScores }) {
   const [files,  setFiles]  = useState([]);
   const [busy,   setBusy]   = useState(false);
   const [prop,   setProp]   = useState(null);
@@ -997,17 +1008,70 @@ function TabUpload({ project, onApplyScores }) {
 }
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
-export default function ModuleDO({ client }) {
-  const [projects,     setProjects]     = useState(MOCK_PROJECTS);
-  const [selProjId,    setSelProjId]    = useState(MOCK_PROJECTS[0]?.id);
-  const [instruments,  setInstruments]  = useState(MOCK_INSTRUMENTS);
+export default function ModuleDO({ client, supabase }) {
+  const [projects,     setProjects]     = useState([]);
+  const [selProjId,    setSelProjId]    = useState(null);
+  const [instruments,  setInstruments]  = useState([]);
   const [tab,          setTab]          = useState("score");
+  const [loading,      setLoading]      = useState(true);
 
-  const selProject      = projects.find(p=>p.id===selProjId)||projects[0];
+  useEffect(() => {
+    if (!supabase || !client?.id) return;
+    loadProjects();
+  }, [supabase, client?.id]);
+
+  async function loadProjects() {
+    setLoading(true);
+    try {
+      const { data: projs, error: pErr } = await supabase
+        .from("projects").select("*")
+        .eq("client_id", client.id).eq("module_key", "do")
+        .order("starts_on", { ascending: false });
+      if (pErr) throw pErr;
+      if (!projs?.length) { setProjects([]); setLoading(false); return; }
+
+      const ids = projs.map(p=>p.id);
+      const [scoresRes, instrRes] = await Promise.all([
+        supabase.from("project_scores").select("*").in("project_id", ids)
+          .order("updated_at", { ascending: false }),
+        supabase.from("project_activities").select("*").in("project_id", ids)
+          .order("activity_date", { ascending: false }),
+      ]);
+
+      const projectsWithScores = projs.map(p => {
+        const ps = scoresRes.data?.find(s=>s.project_id===p.id);
+        const d  = ps?.dimension_scores_json || {};
+        return {
+          ...p,
+          score: {
+            overall:    ps?.overall_score ?? null,
+            cultura:    d.cultura    ?? null,
+            engagement: d.engagement ?? null,
+            liderazgo:  d.liderazgo  ?? null,
+          },
+          history: [],
+          participants: { total:0, responded:0, rate:0 },
+        };
+      });
+
+      setProjects(projectsWithScores);
+      setSelProjId(projectsWithScores[0]?.id || null);
+      setInstruments(instrRes.data || []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const selProject      = projects.find(p=>p.id===selProjId) || projects[0];
   const projInstruments = instruments.filter(i=>i.project_id===selProjId);
 
   function updateProject(updated) {
     setProjects(p=>p.map(pr=>pr.id===updated.id?updated:pr));
+    if (supabase && updated.client_visible !== undefined) {
+      supabase.from("projects")
+        .update({ client_visible:updated.client_visible, updated_at:new Date().toISOString() })
+        .eq("id", updated.id);
+    }
   }
 
   function applyScores(newScores) {
@@ -1115,18 +1179,36 @@ export default function ModuleDO({ client }) {
         </div>
 
         {/* Content */}
-        {selProject&&(
+        {loading ? (
+          <div style={{ display:"flex",alignItems:"center",gap:10,color:T.t3,
+            fontFamily:"'JetBrains Mono',monospace",fontSize:13,padding:"48px 0" }}>
+            <span style={{ width:14,height:14,border:`2px solid ${T.b2}`,borderTopColor:T.do,
+              borderRadius:"50%",animation:"doSpin .8s linear infinite",display:"inline-block" }}/>
+            Cargando proyectos…
+          </div>
+        ) : !selProject ? (
+          <div style={{ textAlign:"center",padding:"48px 0",background:T.s2,
+            border:`1px dashed ${T.b2}`,borderRadius:14 }}>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:6 }}>
+              Sin proyectos DO
+            </div>
+            <div style={{ fontSize:13,color:T.t3 }}>
+              Crea el primer proyecto DO desde Gestión de Clientes.
+            </div>
+          </div>
+        ) : (
           <>
             {tab==="score"&&(
-              <TabScore project={selProject} onUpdate={updateProject}/>
+              <TabScore project={selProject} supabase={supabase} onUpdate={updateProject}/>
             )}
             {tab==="diagnostics"&&(
               <TabDiagnostics project={selProject} instruments={projInstruments}
+                supabase={supabase}
                 onAdd={i=>setInstruments(p=>[i,...p])}
                 onUpdate={i=>setInstruments(p=>p.map(x=>x.id===i.id?i:x))}/>
             )}
             {tab==="upload"&&(
-              <TabUpload project={selProject} onApplyScores={applyScores}/>
+              <TabUpload project={selProject} supabase={supabase} onApplyScores={applyScores}/>
             )}
           </>
         )}

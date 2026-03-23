@@ -356,17 +356,17 @@ export default function App() {
   // ── Render page content ──────────────────────────────────────
   function renderPage() {
     if (isC) {
-      if (page === "dashboard") return <ClientDashboard client={MOCK_CLIENT}/>;
-      if (page === "rc")        return <ModuleRC client={MOCK_CLIENT}/>;
-      if (page === "do")        return <ModuleDO client={MOCK_CLIENT}/>;
-      if (page === "esg")       return <ModuleESG client={MOCK_CLIENT}/>;
+      if (page === "dashboard") return <ClientDashboard client={MOCK_CLIENT} supabase={auth.supabase}/>;
+      if (page === "rc")        return <ModuleRC client={MOCK_CLIENT} supabase={auth.supabase}/>;
+      if (page === "do")        return <ModuleDO client={MOCK_CLIENT} supabase={auth.supabase}/>;
+      if (page === "esg")       return <ModuleESG client={MOCK_CLIENT} supabase={auth.supabase}/>;
       if (page === "clients")   return <ClientsPage supabase={auth.supabase} currentUser={auth.profile}/>;
       if (page === "admin")     return <AdminPage   supabase={auth.supabase} currentUser={auth.profile}/>;
     } else {
       if (page === "dashboard" || page === "rc" || page === "do" || page === "esg")
-        return <ClientDashboard client={CLIENT_VIEW_DATA}/>;
+        return <ClientDashboard client={CLIENT_VIEW_DATA} supabase={auth.supabase}/>;
       if (page === "messages")
-        return <ClientDashboard client={CLIENT_VIEW_DATA}/>;
+        return <ClientDashboard client={CLIENT_VIEW_DATA} supabase={auth.supabase}/>;
     }
     return null;
   }

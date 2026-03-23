@@ -10,7 +10,7 @@
 // El dev reemplaza MOCK_* y setTimeout por queries reales.
 // ============================================================
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // ── Design tokens ──────────────────────────────────────────────
 const T = {
@@ -52,51 +52,7 @@ const STATUS_META = {
 //        array_agg(p.*) as projects
 //        FROM clients c
 //        LEFT JOIN client_modules cm ON cm.client_id = c.id
-//        LEFT JOIN client_user_access cua ON cua.client_id = c.id AND cua.access_status='approved'
-//        LEFT JOIN projects p ON p.client_id = c.id
-//        GROUP BY c.id, cm.client_id
-//        ORDER BY c.name
-const MOCK_CLIENTS = [
-  {
-    id:"c1", name:"Minera Los Andes", industry:"Minería",
-    contact:"Rosa Fernández", email:"rfernandez@mlosandes.cl",
-    published:true, user_count:2,
-    modules:{ rc:true, do:true, esg:true },
-    weights:{ rc:40, do:35, esg:25 },
-    scores:{ rc:68, do:78, esg:71 },
-    projects:[
-      { id:"p1", client_id:"c1", name:"Proyecto Coronel",   module_key:"rc",  project_type:"territorial",
-        status:"active", description:"Gestión territorial zona costera Coronel.", starts_on:"2024-10-01", ends_on:"2025-06-30" },
-      { id:"p2", client_id:"c1", name:"Proyecto Caimanes",  module_key:"rc",  project_type:"territorial",
-        status:"active", description:"Relacionamiento comunidades sector Caimanes.", starts_on:"2025-01-01", ends_on:null },
-      { id:"p3", client_id:"c1", name:"Clima Laboral 2025", module_key:"do",  project_type:"organizational",
-        status:"active", description:"Diagnóstico de clima y cultura Q1-Q2 2025.", starts_on:"2025-02-01", ends_on:"2025-07-31" },
-      { id:"p4", client_id:"c1", name:"Reporte GRI 2024",   module_key:"esg", project_type:"programmatic",
-        status:"closed", description:"Elaboración reporte de sostenibilidad GRI 2024.", starts_on:"2024-11-01", ends_on:"2025-03-31" },
-    ],
-    users:[
-      { id:"u3", full_name:"Carmen López",  email:"jefa@mlosandes.cl",  access_status:"approved" },
-      { id:"u1", full_name:"Rosa Fernández",email:"rfernandez@mlosandes.cl", access_status:"approved" },
-    ],
-  },
-  {
-    id:"c2", name:"Constructora BíoBío", industry:"Construcción",
-    contact:"Andrés Mora", email:"amora@biobio.cl",
-    published:false, user_count:1,
-    modules:{ rc:true, do:true, esg:false },
-    weights:{ rc:50, do:50, esg:0 },
-    scores:{ rc:52, do:65, esg:null },
-    projects:[
-      { id:"p5", client_id:"c2", name:"RC Proyecto Concepción", module_key:"rc",  project_type:"territorial",
-        status:"draft", description:"Inicio de relacionamiento proyecto inmobiliario.", starts_on:"2025-03-01", ends_on:null },
-      { id:"p6", client_id:"c2", name:"Diagnóstico Cultura",    module_key:"do",  project_type:"organizational",
-        status:"active", description:"Diagnóstico organizacional inicial.", starts_on:"2025-02-15", ends_on:"2025-05-30" },
-    ],
-    users:[
-      { id:"u2", full_name:"Andrés Mora", email:"amora@biobio.cl", access_status:"approved" },
-    ],
-  },
-];
+// Datos cargados desde Supabase en el export default (ver loadClients)
 
 // ── Atoms ──────────────────────────────────────────────────────
 const Card = ({ children, style={}, cls="" }) => (
@@ -216,7 +172,7 @@ function Modal({ title, onClose, children, width=500 }) {
 }
 
 // ── Project Form Modal ─────────────────────────────────────────
-function ProjectModal({ project, clientId, moduleKey, onSave, onClose }) {
+function ProjectModal({ project, clientId, moduleKey, supabase, onSave, onClose }) {
   const isEdit = !!project;
   const mod = MOD[moduleKey];
 
@@ -231,23 +187,30 @@ function ProjectModal({ project, clientId, moduleKey, onSave, onClose }) {
   async function handleSave() {
     if (!name.trim()) return;
     setLoading(true);
-    // Supabase:
-    // isEdit:
-    //   UPDATE projects SET name, project_type, status, description, starts_on, ends_on
-    //   WHERE id = project.id
-    // !isEdit:
-    //   INSERT INTO projects (client_id, name, module_key, project_type, status,
-    //                         description, starts_on, ends_on, created_by)
-    //   VALUES (clientId, name, moduleKey, type, status, desc, startsOn, endsOn, auth.uid())
-    await new Promise(r=>setTimeout(r,700));
-    setLoading(false);
-    const saved = {
-      id: project?.id || `p${Date.now()}`,
-      client_id: clientId, module_key: moduleKey,
-      name, project_type:type, status, description:desc,
-      starts_on:startsOn||null, ends_on:endsOn||null,
-    };
-    onSave(saved);
+    try {
+      if (isEdit) {
+        const { data, error } = await supabase
+          .from("projects")
+          .update({ name, project_type:type, status, description:desc,
+                    starts_on:startsOn||null, ends_on:endsOn||null,
+                    updated_at:new Date().toISOString() })
+          .eq("id", project.id)
+          .select().single();
+        if (error) throw error;
+        onSave(data);
+      } else {
+        const { data, error } = await supabase
+          .from("projects")
+          .insert({ client_id:clientId, name, module_key:moduleKey,
+                    project_type:type, status, description:desc,
+                    starts_on:startsOn||null, ends_on:endsOn||null })
+          .select().single();
+        if (error) throw error;
+        onSave(data);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -395,7 +358,7 @@ function ProjectCard({ project, onEdit, onArchive }) {
 }
 
 // ── Client Detail View ─────────────────────────────────────────
-function ClientDetail({ client, onBack, onUpdate }) {
+function ClientDetail({ client, supabase, onBack, onUpdate }) {
   const [tab,        setTab]        = useState("projects");
   const [weights,    setWeights]    = useState({ ...client.weights });
   const [modules,    setModules]    = useState({ ...client.modules });
@@ -413,24 +376,33 @@ function ClientDetail({ client, onBack, onUpdate }) {
 
   async function saveGeneral() {
     setSaving(true);
-    // Supabase:
-    // UPDATE clients SET name=editName, industry=editInd, contact=editCon, email=editEmail
-    // WHERE id = client.id
-    // UPDATE client_modules SET rc=modules.rc, do_enabled=modules.do, esg=modules.esg,
-    //   weight_rc=weights.rc, weight_do=weights.do, weight_esg=weights.esg
-    // WHERE client_id = client.id
-    await new Promise(r=>setTimeout(r,700));
-    setSaving(false); setSaved(true);
-    setTimeout(()=>setSaved(false),2000);
-    onUpdate({ ...client, name:editName, industry:editInd, contact:editCon,
-      email:editEmail, modules, weights });
+    try {
+      await supabase.from("clients")
+        .update({ name:editName, industry:editInd||null, contact:editCon||null,
+                  email:editEmail||null, updated_at:new Date().toISOString() })
+        .eq("id", client.id);
+
+      await supabase.from("client_modules")
+        .update({ rc:modules.rc, do_enabled:modules.do_enabled||modules.do||false,
+                  esg:modules.esg,
+                  weight_rc:weights.rc, weight_do:weights.do, weight_esg:weights.esg,
+                  updated_at:new Date().toISOString() })
+        .eq("client_id", client.id);
+
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 2000);
+      onUpdate({ ...client, name:editName, industry:editInd, contact:editCon,
+        email:editEmail, modules, weights });
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveProject(saved) {
-    const exists = projects.some(p=>p.id===saved.id);
+  function handleSaveProject(savedProject) {
+    const exists = projects.some(p=>p.id===savedProject.id);
     const updated = exists
-      ? projects.map(p=>p.id===saved.id?saved:p)
-      : [...projects, saved];
+      ? projects.map(p=>p.id===savedProject.id?savedProject:p)
+      : [...projects, savedProject];
     onUpdate({ ...client, projects:updated });
     setProjModal(null);
   }
@@ -438,8 +410,10 @@ function ClientDetail({ client, onBack, onUpdate }) {
   function handleArchiveProject(projectId) {
     setConfirmDlg({
       message:"¿Cerrar este proyecto? Quedará archivado y no recibirá más actualizaciones.",
-      onConfirm:()=>{
-        // Supabase: UPDATE projects SET status='closed' WHERE id=projectId
+      onConfirm: async () => {
+        await supabase.from("projects")
+          .update({ status:"closed", updated_at:new Date().toISOString() })
+          .eq("id", projectId);
         onUpdate({ ...client, projects:projects.map(p=>p.id===projectId?{...p,status:"closed"}:p) });
         setConfirmDlg(null);
       }
@@ -726,6 +700,7 @@ function ClientDetail({ client, onBack, onUpdate }) {
           project={projModal.mode==="edit"?projModal.project:null}
           clientId={client.id}
           moduleKey={projModal.moduleKey}
+          supabase={supabase}
           onSave={handleSaveProject}
           onClose={()=>setProjModal(null)}/>
       )}
@@ -873,7 +848,7 @@ function ClientList({ clients, onSelect, onCreateClient }) {
 }
 
 // ── Create Client Modal ────────────────────────────────────────
-function CreateClientModal({ onSave, onClose }) {
+function CreateClientModal({ supabase, onSave, onClose }) {
   const [name,    setName]    = useState("");
   const [ind,     setInd]     = useState("");
   const [contact, setContact] = useState("");
@@ -884,22 +859,36 @@ function CreateClientModal({ onSave, onClose }) {
   async function handleCreate() {
     if (!name.trim()) return;
     setLoading(true);
-    // Supabase:
-    // 1. const { data:client } = await supabase.from('clients')
-    //      .insert({ name, industry:ind, contact, email }).select().single()
-    // 2. await supabase.from('client_modules')
-    //      .insert({ client_id:client.id, rc:modules.rc,
-    //                do_enabled:modules.do, esg:modules.esg,
-    //                weight_rc:40, weight_do:35, weight_esg:25 })
-    await new Promise(r=>setTimeout(r,700));
-    setLoading(false);
-    onSave({
-      id:`c${Date.now()}`, name, industry:ind, contact, email,
-      published:false, user_count:0,
-      modules, weights:{ rc:40, do:35, esg:25 },
-      scores:{ rc:null, do:null, esg:null },
-      projects:[], users:[],
-    });
+    try {
+      const { data:clientData, error:clientErr } = await supabase
+        .from("clients")
+        .insert({ name, industry:ind||null, contact:contact||null, email:email||null })
+        .select().single();
+      if (clientErr) throw clientErr;
+
+      await supabase.from("client_modules").insert({
+        client_id:  clientData.id,
+        rc:         modules.rc  || false,
+        do_enabled: modules.do  || false,
+        esg:        modules.esg || false,
+        weight_rc:40, weight_do:35, weight_esg:25,
+      });
+
+      onSave({
+        ...clientData,
+        published:  false,
+        user_count: 0,
+        modules:    { rc:modules.rc||false, do_enabled:modules.do||false, esg:modules.esg||false },
+        weights:    { rc:40, do:35, esg:25 },
+        scores:     { rc:null, do:null, esg:null },
+        projects:   [],
+        users:      [],
+      });
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -941,21 +930,95 @@ function CreateClientModal({ onSave, onClose }) {
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
 export default function ClientsPage({ supabase, currentUser }) {
-  const [clients,      setClients]      = useState(MOCK_CLIENTS);
-  const [selectedId,   setSelectedId]   = useState(null);
-  const [createModal,  setCreateModal]  = useState(false);
+  const [clients,     setClients]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [selectedId,  setSelectedId]  = useState(null);
+  const [createModal, setCreateModal] = useState(false);
+
+  useEffect(() => {
+    if (!supabase) return;
+    loadClients();
+  }, [supabase]);
+
+  async function loadClients() {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .select(`
+          *,
+          client_modules ( rc, do_enabled, esg, weight_rc, weight_do, weight_esg ),
+          client_scores ( rc, do_score, esg ),
+          client_user_access ( id, user_id, access_status,
+            user_profiles ( id, full_name, email ) ),
+          projects ( * )
+        `)
+        .order("name");
+
+      if (error) throw error;
+
+      setClients((data || []).map(c => ({
+        ...c,
+        modules: {
+          rc:         c.client_modules?.rc         ?? false,
+          do:         c.client_modules?.do_enabled ?? false,
+          do_enabled: c.client_modules?.do_enabled ?? false,
+          esg:        c.client_modules?.esg        ?? false,
+        },
+        weights: {
+          rc:  c.client_modules?.weight_rc  ?? 40,
+          do:  c.client_modules?.weight_do  ?? 35,
+          esg: c.client_modules?.weight_esg ?? 25,
+        },
+        scores: {
+          rc:  c.client_scores?.rc       ?? null,
+          do:  c.client_scores?.do_score ?? null,
+          esg: c.client_scores?.esg      ?? null,
+        },
+        user_count: (c.client_user_access || []).filter(a=>a.access_status==="approved").length,
+        users: (c.client_user_access || [])
+          .filter(a=>a.access_status==="approved")
+          .map(a=>({ id:a.user_id, ...a.user_profiles, access_status:a.access_status })),
+        projects: c.projects || [],
+      })));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const selected = clients.find(c=>c.id===selectedId);
 
-  function handleUpdate(updated) {
+  async function handleUpdate(updated) {
+    // Refleja cambio local inmediatamente; la persistencia está en ClientDetail
     setClients(p=>p.map(c=>c.id===updated.id?updated:c));
+    // Si cambia published, persiste en Supabase
+    const original = clients.find(c=>c.id===updated.id);
+    if (original?.published !== updated.published) {
+      await supabase.from("clients")
+        .update({ published:updated.published, updated_at:new Date().toISOString() })
+        .eq("id", updated.id);
+    }
   }
 
   function handleCreate(newClient) {
-    setClients(p=>[...p,newClient]);
+    setClients(p=>[...p, newClient]);
     setCreateModal(false);
-    setSelectedId(newClient.id); // go directly to detail
+    setSelectedId(newClient.id);
   }
+
+  if (loading) return (
+    <>
+      <style>{CSS}</style>
+      <div style={{ padding:"32px 36px", display:"flex", alignItems:"center", gap:10,
+        color:"#3d4d66", fontFamily:"'JetBrains Mono',monospace", fontSize:13 }}>
+        <span style={{ width:14, height:14, border:"2px solid #1d2535",
+          borderTopColor:"#f97316", borderRadius:"50%",
+          animation:"cpFade 0s,cpSpin .8s linear infinite",
+          display:"inline-block" }}/>
+        Cargando clientes…
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -963,7 +1026,8 @@ export default function ClientsPage({ supabase, currentUser }) {
       {selected ? (
         <ClientDetail
           client={selected}
-          onBack={()=>setSelectedId(null)}
+          supabase={supabase}
+          onBack={()=>{ setSelectedId(null); loadClients(); }}
           onUpdate={handleUpdate}/>
       ) : (
         <ClientList
@@ -972,7 +1036,10 @@ export default function ClientsPage({ supabase, currentUser }) {
           onCreateClient={()=>setCreateModal(true)}/>
       )}
       {createModal && (
-        <CreateClientModal onSave={handleCreate} onClose={()=>setCreateModal(false)}/>
+        <CreateClientModal
+          supabase={supabase}
+          onSave={handleCreate}
+          onClose={()=>setCreateModal(false)}/>
       )}
     </>
   );

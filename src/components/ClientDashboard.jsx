@@ -760,7 +760,7 @@ function MessagesPanel({ messages, onSend }) {
 }
 
 // ── General Dashboard ──────────────────────────────────────────
-function GeneralDashboard({ client, onOpenModule }) {
+function GeneralDashboard({ client, supabase, onOpenModule }) {
   const activeModules = Object.entries(client.modules || {}).filter(([,v])=>v);
   const hist = client.history || [];
   const prev = hist[hist.length-2];
@@ -989,12 +989,19 @@ function GeneralDashboard({ client, onOpenModule }) {
         <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
           Escribe preguntas, comentarios o solicitudes al equipo consultor.
         </div>
-        <MessagesPanel messages={msgList} onSend={txt=>{
-          // Supabase: INSERT INTO client_messages
-          //   (client_id, sender_user_id, sender_role, body)
-          //   VALUES (:clientId, auth.uid(), 'client', :txt)
+        <MessagesPanel messages={msgList} onSend={async txt=>{
           const now = new Date().toISOString();
-          setMsgList(p=>[...p,{ id:`m${Date.now()}`,from:"client",body:txt,created_at:now }]);
+          const optimistic = { id:`m${Date.now()}`, from:"client", body:txt, created_at:now };
+          setMsgList(p=>[...p, optimistic]);
+          if (supabase && client?.id) {
+            const { data: { user } } = await supabase.auth.getUser();
+            await supabase.from("client_messages").insert({
+              client_id:      client.id,
+              sender_user_id: user?.id || null,
+              sender_role:    "client",
+              body:           txt,
+            });
+          }
         }}/>
       </Card>
     </div>
@@ -1002,22 +1009,88 @@ function GeneralDashboard({ client, onOpenModule }) {
 }
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
-export default function ClientDashboard({ client: rawClient = MOCK_CLIENT }) {
+export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supabase }) {
   const [activeModule, setActiveModule] = useState(null);
+  const [liveData,     setLiveData]     = useState(null);
+  const [loadingData,  setLoadingData]  = useState(false);
 
-  // Normalize: garantiza que todos los arrays y objetos existan
-  // aunque el prop llegue incompleto desde Supabase o desde App.jsx
+  // Load real client data if supabase + client.id are available
+  useEffect(() => {
+    if (!supabase || !rawClient?.id) return;
+    loadClientData();
+  }, [supabase, rawClient?.id]);
+
+  async function loadClientData() {
+    setLoadingData(true);
+    try {
+      const [
+        clientRes, modulesRes, scoresRes, historyRes,
+        alertsRes, recsRes,   projectsRes, messagesRes,
+      ] = await Promise.all([
+        supabase.from("clients").select("*").eq("id", rawClient.id).single(),
+        supabase.from("client_modules").select("*").eq("client_id", rawClient.id).single(),
+        supabase.from("client_scores").select("*").eq("client_id", rawClient.id).single(),
+        supabase.from("client_score_history")
+          .select("*, reporting_periods(label)")
+          .eq("client_id", rawClient.id).order("created_at", { ascending:true }),
+        supabase.from("client_alerts").select("*")
+          .eq("client_id", rawClient.id).eq("visible_to_client", true)
+          .order("created_at", { ascending:false }),
+        supabase.from("client_recommendations").select("*")
+          .eq("client_id", rawClient.id).eq("visible_to_client", true)
+          .order("sort_order"),
+        supabase.from("projects").select("*")
+          .eq("client_id", rawClient.id).eq("client_visible", true).eq("status", "active"),
+        supabase.from("client_messages").select("*")
+          .eq("client_id", rawClient.id).order("created_at", { ascending:true }),
+      ]);
+
+      const c = clientRes.data;
+      const m = modulesRes.data;
+      const s = scoresRes.data;
+
+      setLiveData({
+        ...c,
+        modules: { rc: m?.rc??false, do: m?.do_enabled??false, esg: m?.esg??false },
+        scores: {
+          rc:  { total:s?.rc,       percepcion:s?.rc_percepcion,    compromisos:s?.rc_compromisos,
+                 dialogo:s?.rc_dialogo, conflictividad:s?.rc_conflictividad },
+          do:  { total:s?.do_score, cultura:s?.do_cultura,          engagement:s?.do_engagement,
+                 liderazgo:s?.do_liderazgo },
+          esg: { total:s?.esg,      ambiental:s?.esg_ambiental,     social:s?.esg_social,
+                 gobernanza:s?.esg_gobernanza,
+                 maturity: s?.score_drivers_json?.maturity || { ambiental:1, social:1, gobernanza:1 } },
+        },
+        history: (historyRes.data||[]).map(h=>({
+          period: h.reporting_periods?.label || h.reporting_period_id,
+          rc: h.rc, do: h.do_score, esg: h.esg,
+        })),
+        alerts:          alertsRes.data   || [],
+        recommendations: recsRes.data     || [],
+        projects:        projectsRes.data || [],
+        messages: (messagesRes.data||[]).map(m=>({ ...m, from:m.sender_role })),
+        gri_summary: s?.score_drivers_json?.gri_summary || {},
+        contact_consultant: c.contact_consultant || "THO Consultora",
+      });
+    } catch(e) {
+      console.error("ClientDashboard load error:", e);
+    } finally {
+      setLoadingData(false);
+    }
+  }
+
+  // Normalize: usa datos reales si están disponibles, si no el prop
   const client = {
     ...MOCK_CLIENT,
-    ...rawClient,
-    modules:         { rc:false, do:false, esg:false, ...(rawClient?.modules || {}) },
-    scores:          { rc:{}, do:{}, esg:{},            ...(rawClient?.scores  || {}) },
-    history:         rawClient?.history         || [],
-    alerts:          rawClient?.alerts          || [],
-    recommendations: rawClient?.recommendations || [],
-    projects:        rawClient?.projects        || [],
-    messages:        rawClient?.messages        || [],
-    gri_summary:     rawClient?.gri_summary     || {},
+    ...(liveData || rawClient),
+    modules:         { rc:false, do:false, esg:false, ...((liveData||rawClient)?.modules || {}) },
+    scores:          { rc:{}, do:{}, esg:{},            ...((liveData||rawClient)?.scores  || {}) },
+    history:         (liveData||rawClient)?.history         || [],
+    alerts:          (liveData||rawClient)?.alerts          || [],
+    recommendations: (liveData||rawClient)?.recommendations || [],
+    projects:        (liveData||rawClient)?.projects        || [],
+    messages:        (liveData||rawClient)?.messages        || [],
+    gri_summary:     (liveData||rawClient)?.gri_summary     || {},
   };
 
   return (
@@ -1030,6 +1103,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT }) {
             onBack={()=>setActiveModule(null)}/>
         : <GeneralDashboard
             client={client}
+            supabase={supabase}
             onOpenModule={setActiveModule}/>
       }
     </>

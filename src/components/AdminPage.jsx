@@ -34,50 +34,9 @@ const CSS = `
 `;
 
 // ── Mock data — reemplazar con Supabase queries ────────────────
-// Query: SELECT * FROM user_profiles WHERE approval_status = 'pending' ORDER BY created_at DESC
-const MOCK_PENDING = [
-  { id:"u1", email:"rosa.fernandez@mlosandes.cl", full_name:"Rosa Fernández",
-    role:"client", approval_status:"pending", created_at:"2025-03-17T14:23:00Z", provider:"microsoft" },
-  { id:"u2", email:"andres.mora@biobio.cl",       full_name:"Andrés Mora",
-    role:"client", approval_status:"pending", created_at:"2025-03-18T09:11:00Z", provider:"google"    },
-];
 
-// Query: SELECT up.*, cua.access_status, c.name as client_name, c.id as client_id
-//        FROM user_profiles up
-//        LEFT JOIN client_user_access cua ON cua.user_id = up.id AND cua.access_status = 'approved'
-//        LEFT JOIN clients c ON c.id = cua.client_id
-//        WHERE up.role = 'client'
-//        ORDER BY up.created_at DESC
-const MOCK_USERS = [
-  { id:"u3", email:"jefa@mlosandes.cl",   full_name:"Carmen López",  role:"client",
-    approval_status:"approved",  client_name:"Minera Los Andes",  client_id:"c1", created_at:"2025-02-10T10:00:00Z" },
-  { id:"u4", email:"rrhh@biobio.cl",      full_name:"Felipe Torres", role:"client",
-    approval_status:"disabled",  client_name:"Constructora BíoBío", client_id:"c2", created_at:"2025-01-20T08:00:00Z" },
-  { id:"u5", email:"javier@tho.cl",       full_name:"Javier Reyes",  role:"consultant",
-    approval_status:"approved",  client_name:null, client_id:null, created_at:"2025-01-05T09:00:00Z" },
-];
 
-// Query: SELECT c.*, cm.rc, cm.do_enabled, cm.esg,
-//        COUNT(cua.id) FILTER (WHERE cua.access_status='approved') as user_count
-//        FROM clients c
-//        LEFT JOIN client_modules cm ON cm.client_id = c.id
-//        LEFT JOIN client_user_access cua ON cua.client_id = c.id
-//        GROUP BY c.id, cm.rc, cm.do_enabled, cm.esg
-//        ORDER BY c.name
-const MOCK_CLIENTS = [
-  { id:"c1", name:"Minera Los Andes",     industry:"Minería",       published:true,
-    modules:{ rc:true, do_enabled:true, esg:true  }, user_count:1,
-    contact:"Rosa Fernández", email:"rfernandez@mlosandes.cl" },
-  { id:"c2", name:"Constructora BíoBío",  industry:"Construcción",  published:false,
-    modules:{ rc:true, do_enabled:true, esg:false }, user_count:1,
-    contact:"Andrés Mora",    email:"amora@biobio.cl" },
-];
 
-// Query: SELECT * FROM user_profiles WHERE role IN ('consultant','super_consultant') ORDER BY created_at
-const MOCK_CONSULTANTS = [
-  { id:"u0", email:"jeremias@tho.cl", full_name:"Jeremías",     role:"super_consultant", approval_status:"approved", created_at:"2024-12-01T00:00:00Z" },
-  { id:"u5", email:"javier@tho.cl",   full_name:"Javier Reyes", role:"consultant",       approval_status:"approved", created_at:"2025-01-05T09:00:00Z" },
-];
 
 // ── Helpers ────────────────────────────────────────────────────
 const initials = (name, email) =>
@@ -261,14 +220,8 @@ function ApproveModal({ user, clients, onConfirm, onClose }) {
   async function handleConfirm() {
     if (selRole === "client" && !selClient) return;
     setLoading(true);
-    // Supabase queries:
-    // 1. UPDATE user_profiles SET approval_status='approved', role=selRole WHERE id=user.id
-    // 2. If selRole==='client':
-    //    INSERT INTO client_user_access (client_id, user_id, access_status='approved')
-    //    ON CONFLICT (client_id, user_id) DO UPDATE SET access_status='approved'
-    await new Promise(r=>setTimeout(r,800)); // remove when connecting Supabase
+    await onConfirm(user.id, selRole, selClient);
     setLoading(false);
-    onConfirm(user.id, selRole, selClient);
   }
 
   return (
@@ -328,13 +281,8 @@ function EditUserModal({ user, clients, onSave, onClose }) {
 
   async function handleSave() {
     setLoading(true);
-    // Supabase:
-    // UPDATE user_profiles SET role=role, approval_status=status WHERE id=user.id
-    // If role==='client' && selClient:
-    //   UPSERT client_user_access (client_id=selClient, user_id=user.id, access_status='approved')
-    await new Promise(r=>setTimeout(r,600));
+    await onSave({ ...user, role, approval_status:status, client_id:selClient });
     setLoading(false);
-    onSave({ ...user, role, approval_status:status, client_id:selClient });
   }
 
   return (
@@ -389,12 +337,8 @@ function CreateClientModal({ onSave, onClose }) {
   async function handleCreate() {
     if (!name.trim()) return;
     setLoading(true);
-    // Supabase:
-    // 1. INSERT INTO clients (name, industry, contact, email) → returns { id }
-    // 2. INSERT INTO client_modules (client_id, rc, do_enabled, esg, weight_rc, weight_do, weight_esg)
-    await new Promise(r=>setTimeout(r,700));
+    await onSave({ name, industry, contact, email, modules });
     setLoading(false);
-    onSave({ id:`c${Date.now()}`, name, industry, contact, email, modules, published:false, user_count:0 });
   }
 
   const MOD_LABELS = { rc:"Relacionamiento (RC)", do_enabled:"Desarrollo Org. (DO)", esg:"Sostenibilidad (ESG)" };
@@ -447,12 +391,8 @@ function EditClientModal({ client, onSave, onClose }) {
 
   async function handleSave() {
     setLoading(true);
-    // Supabase:
-    // UPDATE clients SET name, industry, contact, email WHERE id=client.id
-    // UPDATE client_modules SET rc, do_enabled, esg WHERE client_id=client.id
-    await new Promise(r=>setTimeout(r,600));
+    await onSave({ ...client, name, industry, contact, email, modules });
     setLoading(false);
-    onSave({ ...client, name, industry, contact, email, modules });
   }
 
   const MOD_LABELS = { rc:"Relacionamiento (RC)", do_enabled:"Desarrollo Org. (DO)", esg:"Sostenibilidad (ESG)" };
@@ -546,83 +486,235 @@ function TD({ children, mono=false }) {
 // ── MAIN COMPONENT ─────────────────────────────────────────────
 export default function AdminPage({ supabase, currentUser }) {
   // State
-  const [pending,     setPending]     = useState(MOCK_PENDING);
-  const [users,       setUsers]       = useState(MOCK_USERS);
-  const [clients,     setClients]     = useState(MOCK_CLIENTS);
-  const [consultants, setConsultants] = useState(MOCK_CONSULTANTS);
+  const [pending,     setPending]     = useState([]);
+  const [users,       setUsers]       = useState([]);
+  const [clients,     setClients]     = useState([]);
+  const [consultants, setConsultants] = useState([]);
+  const [loading,     setLoading]     = useState(true);
   const [tab,         setTab]         = useState("pending");
   const [search,      setSearch]      = useState("");
   const [filterRole,  setFilterRole]  = useState("all");
   const [filterStatus,setFilterStatus]= useState("all");
 
   // Modals
-  const [approveModal, setApproveModal] = useState(null);  // user object
-  const [editModal,    setEditModal]    = useState(null);  // user object
-  const [editClient,   setEditClient]   = useState(null);  // client object
+  const [approveModal, setApproveModal] = useState(null);
+  const [editModal,    setEditModal]    = useState(null);
+  const [editClient,   setEditClient]   = useState(null);
   const [createClient, setCreateClient] = useState(false);
-  const [confirmDlg,   setConfirmDlg]   = useState(null);  // { message, onConfirm }
+  const [confirmDlg,   setConfirmDlg]   = useState(null);
 
-  // ── Handlers ──
-  function handleApprove(userId, role, clientId) {
-    setPending(p=>p.filter(u=>u.id!==userId));
-    const approved = pending.find(u=>u.id===userId);
-    if (approved) {
-      const newUser = { ...approved, role, approval_status:"approved",
-        client_name: clients.find(c=>c.id===clientId)?.name||null, client_id:clientId||null };
-      setUsers(p=>[newUser,...p]);
+  // ── Load data from Supabase ────────────────────────────────────
+  useEffect(() => {
+    if (!supabase) return;
+    loadAll();
+  }, [supabase]);
+
+  async function loadAll() {
+    setLoading(true);
+    try {
+      await Promise.all([loadPending(), loadUsers(), loadClients(), loadConsultants()]);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  async function loadPending() {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .eq("approval_status", "pending")
+      .order("created_at", { ascending: false });
+    if (!error) setPending(data || []);
+  }
+
+  async function loadUsers() {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select(`
+        *,
+        client_user_access (
+          access_status,
+          client_id,
+          clients ( id, name )
+        )
+      `)
+      .eq("role", "client")
+      .in("approval_status", ["approved", "disabled"])
+      .order("created_at", { ascending: false });
+    if (!error) {
+      setUsers((data || []).map(u => ({
+        ...u,
+        client_id:   u.client_user_access?.[0]?.client_id   || null,
+        client_name: u.client_user_access?.[0]?.clients?.name || null,
+      })));
+    }
+  }
+
+  async function loadClients() {
+    const { data, error } = await supabase
+      .from("clients")
+      .select(`
+        *,
+        client_modules ( rc, do_enabled, esg ),
+        client_user_access ( id, access_status )
+      `)
+      .order("name");
+    if (!error) {
+      setClients((data || []).map(c => ({
+        ...c,
+        modules: {
+          rc:         c.client_modules?.rc         ?? false,
+          do_enabled: c.client_modules?.do_enabled ?? false,
+          esg:        c.client_modules?.esg        ?? false,
+        },
+        user_count: (c.client_user_access || []).filter(a => a.access_status === "approved").length,
+      })));
+    }
+  }
+
+  async function loadConsultants() {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .in("role", ["consultant", "super_consultant"])
+      .order("created_at", { ascending: true });
+    if (!error) setConsultants(data || []);
+  }
+
+  // ── Handlers ──────────────────────────────────────────────────
+  async function handleApprove(userId, role, clientId) {
+    // 1. Actualizar rol y estado en user_profiles
+    await supabase.from("user_profiles")
+      .update({ approval_status: "approved", role, updated_at: new Date().toISOString() })
+      .eq("id", userId);
+
+    // 2. Si es cliente, crear acceso a la empresa
+    if (role === "client" && clientId) {
+      await supabase.from("client_user_access")
+        .upsert({ client_id: clientId, user_id: userId, access_status: "approved" },
+                 { onConflict: "client_id,user_id" });
+    }
+
     setApproveModal(null);
+    await loadPending();
+    await loadUsers();
+    await loadConsultants();
   }
 
   function handleReject(userId) {
     setConfirmDlg({
-      message:"¿Rechazar y eliminar este usuario? No podrá ingresar a la plataforma.",
-      onConfirm:()=>{
-        // Supabase: UPDATE user_profiles SET approval_status='disabled' WHERE id=userId
-        setPending(p=>p.filter(u=>u.id!==userId));
+      message: "¿Rechazar este usuario? Su cuenta quedará desactivada y no podrá ingresar.",
+      onConfirm: async () => {
+        await supabase.from("user_profiles")
+          .update({ approval_status: "disabled", updated_at: new Date().toISOString() })
+          .eq("id", userId);
         setConfirmDlg(null);
+        await loadPending();
       }
     });
   }
 
-  function handleSaveUser(updated) {
-    setUsers(p=>p.map(u=>u.id===updated.id?updated:u));
+  async function handleSaveUser(updated) {
+    // Actualizar rol y estado
+    await supabase.from("user_profiles")
+      .update({ role: updated.role, approval_status: updated.approval_status,
+                updated_at: new Date().toISOString() })
+      .eq("id", updated.id);
+
+    // Si cambió la empresa asignada
+    if (updated.role === "client" && updated.client_id) {
+      await supabase.from("client_user_access")
+        .upsert({ client_id: updated.client_id, user_id: updated.id, access_status: "approved" },
+                 { onConflict: "client_id,user_id" });
+    }
+
     setEditModal(null);
+    await loadUsers();
+    await loadConsultants();
   }
 
   function handleDisableUser(userId) {
     setConfirmDlg({
-      message:"¿Desactivar este usuario? No podrá ingresar hasta que lo reactives.",
-      onConfirm:()=>{
-        // Supabase: UPDATE user_profiles SET approval_status='disabled' WHERE id=userId
-        setUsers(p=>p.map(u=>u.id===userId?{...u,approval_status:"disabled"}:u));
+      message: "¿Desactivar este usuario? No podrá ingresar hasta que lo reactives.",
+      onConfirm: async () => {
+        await supabase.from("user_profiles")
+          .update({ approval_status: "disabled", updated_at: new Date().toISOString() })
+          .eq("id", userId);
         setConfirmDlg(null);
+        await loadUsers();
+        await loadConsultants();
       }
     });
   }
 
-  function handleReactivateUser(userId) {
-    // Supabase: UPDATE user_profiles SET approval_status='approved' WHERE id=userId
-    setUsers(p=>p.map(u=>u.id===userId?{...u,approval_status:"approved"}:u));
+  async function handleReactivateUser(userId) {
+    await supabase.from("user_profiles")
+      .update({ approval_status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", userId);
+    await loadUsers();
+    await loadConsultants();
   }
 
-  function handleCreateClient(newClient) {
-    setClients(p=>[...p,newClient]);
+  async function handleCreateClient(newClient) {
+    // Insert client
+    const { data: clientData, error: clientErr } = await supabase
+      .from("clients")
+      .insert({
+        name:     newClient.name,
+        industry: newClient.industry || null,
+        contact:  newClient.contact  || null,
+        email:    newClient.email    || null,
+      })
+      .select()
+      .single();
+    if (clientErr) { console.error(clientErr); return; }
+
+    // Insert modules
+    await supabase.from("client_modules").insert({
+      client_id:  clientData.id,
+      rc:         newClient.modules?.rc         ?? true,
+      do_enabled: newClient.modules?.do_enabled ?? true,
+      esg:        newClient.modules?.esg        ?? false,
+      weight_rc:  40, weight_do: 35, weight_esg: 25,
+    });
+
     setCreateClient(false);
+    await loadClients();
   }
 
-  function handleSaveClient(updated) {
-    setClients(p=>p.map(c=>c.id===updated.id?updated:c));
+  async function handleSaveClient(updated) {
+    // Update client
+    await supabase.from("clients")
+      .update({
+        name:     updated.name,
+        industry: updated.industry || null,
+        contact:  updated.contact  || null,
+        email:    updated.email    || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", updated.id);
+
+    // Update modules
+    await supabase.from("client_modules")
+      .update({
+        rc:         updated.modules?.rc         ?? true,
+        do_enabled: updated.modules?.do_enabled ?? true,
+        esg:        updated.modules?.esg        ?? false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("client_id", updated.id);
+
     setEditClient(null);
+    await loadClients();
   }
 
   function handleDeleteClient(clientId) {
     setConfirmDlg({
-      message:"¿Eliminar esta empresa? Se eliminarán todos sus datos y accesos asociados. Esta acción no se puede deshacer.",
-      onConfirm:()=>{
-        // Supabase: DELETE FROM clients WHERE id=clientId (cascade eliminará todo)
-        setClients(p=>p.filter(c=>c.id!==clientId));
+      message: "¿Eliminar esta empresa? Se eliminarán todos sus datos y accesos asociados. Esta acción no se puede deshacer.",
+      onConfirm: async () => {
+        await supabase.from("clients").delete().eq("id", clientId);
         setConfirmDlg(null);
+        await loadClients();
       }
     });
   }
@@ -662,6 +754,16 @@ export default function AdminPage({ supabase, currentUser }) {
             Gestión de usuarios, empresas, accesos y equipo consultor.
           </div>
         </div>
+
+        {loading ? (
+          <div style={{ display:"flex", alignItems:"center", gap:10, color:T.t3, fontSize:13,
+            fontFamily:"'JetBrains Mono',monospace", padding:"48px 0" }}>
+            <span style={{ width:14, height:14, border:`2px solid ${T.b2}`,
+              borderTopColor:T.rc, borderRadius:"50%",
+              animation:"admSpin .8s linear infinite", display:"inline-block" }}/>
+            Cargando datos…
+          </div>
+        ) : (<>
 
         {/* Stats strip */}
         <div className="adm-fade adm-d1" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)",
@@ -911,6 +1013,9 @@ export default function AdminPage({ supabase, currentUser }) {
         )}
 
       </div>
+
+      {/* Loading closes here */}
+      </>)}
 
       {/* ── MODALS ── */}
       {approveModal && (

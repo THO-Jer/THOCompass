@@ -13,7 +13,7 @@
 //         client_files (bucket: esg-documents)
 // ============================================================
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -324,7 +324,7 @@ function ComplianceBadge({ status }) {
 }
 
 // ── Tab: SCORE ESG ─────────────────────────────────────────────
-function TabScore({ project, onUpdate }) {
+function TabScore({ project, supabase, onUpdate }) {
   const [scores,   setScores]   = useState({ ...project.score });
   const [maturity, setMaturity] = useState({ ...project.maturity });
   const [saving,   setSaving]   = useState(false);
@@ -341,16 +341,26 @@ function TabScore({ project, onUpdate }) {
 
   async function handleSave() {
     setSaving(true);
-    // Supabase:
-    // UPSERT project_scores SET
-    //   overall_score = calcOverall(),
-    //   dimension_scores_json = { ambiental, social, gobernanza },
-    //   score_drivers_json = { maturity: { ambiental, social, gobernanza } }
-    // WHERE project_id = project.id
-    await new Promise(r=>setTimeout(r,700));
-    setSaving(false); setSaved(true);
-    setTimeout(()=>setSaved(false),2200);
-    onUpdate({ ...project, score:{ ...scores, overall:calcOverall() }, maturity });
+    try {
+      const overall = calcOverall();
+      await supabase.from("project_scores")
+        .upsert({
+          project_id: project.id,
+          overall_score: overall,
+          dimension_scores_json: scores,
+          score_drivers_json: {
+            ...(project.score_drivers_json || {}),
+            maturity,
+            active_pillars: project.active_pillars,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "project_id" });
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 2200);
+      onUpdate({ ...project, score:{ ...scores, overall }, maturity });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const overall = calcOverall();
@@ -579,7 +589,7 @@ function TabScore({ project, onUpdate }) {
 }
 
 // ── Tab: GRI FRAMEWORK ─────────────────────────────────────────
-function TabGRI({ project, onUpdate }) {
+function TabGRI({ project, supabase, onUpdate }) {
   const [compliance, setCompliance] = useState({ ...project.gri_compliance });
   const [indicators, setIndicators] = useState({ ...project.indicators });
   const [activePillar, setActivePillar] = useState(
@@ -590,17 +600,29 @@ function TabGRI({ project, onUpdate }) {
 
   async function handleSave() {
     setSaving(true);
-    // Supabase:
-    // UPDATE project_scores SET
-    //   score_drivers_json = {
-    //     gri_compliance: compliance,
-    //     indicators: indicators
-    //   }
-    // WHERE project_id = project.id
-    await new Promise(r=>setTimeout(r,700));
-    setSaving(false); setSaved(true);
-    setTimeout(()=>setSaved(false),2200);
-    onUpdate({ ...project, gri_compliance:compliance, indicators });
+    try {
+      // Fetch current score_drivers_json to merge
+      const { data: existing } = await supabase
+        .from("project_scores").select("id, score_drivers_json")
+        .eq("project_id", project.id).order("updated_at", { ascending:false }).limit(1);
+      const current = existing?.[0]?.score_drivers_json || {};
+
+      await supabase.from("project_scores")
+        .upsert({
+          project_id: project.id,
+          score_drivers_json: {
+            ...current,
+            gri_compliance: compliance,
+            indicators,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "project_id" });
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 2200);
+      onUpdate({ ...project, gri_compliance:compliance, indicators });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const activePillars = Object.entries(project.active_pillars)
@@ -731,7 +753,7 @@ function TabGRI({ project, onUpdate }) {
 }
 
 // ── Report Form Modal ──────────────────────────────────────────
-function ReportModal({ report, projectId, activePillars, onSave, onClose }) {
+function ReportModal({ report, projectId, activePillars, supabase, onSave, onClose }) {
   const isEdit = !!report;
   const [pillar,    setPillar]    = useState(report?.pillar||activePillars[0]);
   const [type,      setType]      = useState(report?.record_type||"audit");
@@ -748,19 +770,31 @@ function ReportModal({ report, projectId, activePillars, onSave, onClose }) {
   async function handleSave() {
     if (!title.trim()||!date) return;
     setLoading(true);
-    // Supabase:
-    // isEdit: UPDATE project_activities SET ... WHERE id = report.id
-    // !isEdit: INSERT INTO project_activities (project_id, record_type, title, ...)
-    await new Promise(r=>setTimeout(r,700));
-    setLoading(false);
-    onSave({
-      id:report?.id||`r${Date.now()}`, project_id:projectId,
-      pillar, record_type:type, title, activity_date:date,
-      evaluation_score:evalScore||null,
-      qualitative_summary:summary, tensions_text:tensions,
-      opportunities_text:opps, consultant_notes:notes,
-      visible_to_client:visible,
-    });
+    try {
+      const payload = {
+        project_id: projectId, record_type: type, title, activity_date: date,
+        pillar,
+        evaluation_score:    evalScore ? parseFloat(evalScore) : null,
+        qualitative_summary: summary, tensions_text: tensions,
+        opportunities_text:  opps,    consultant_notes: notes,
+        visible_to_client:   visible,
+      };
+      if (isEdit) {
+        const { data, error } = await supabase
+          .from("project_activities")
+          .update({ ...payload, updated_at:new Date().toISOString() })
+          .eq("id", report.id).select().single();
+        if (error) throw error;
+        onSave(data);
+      } else {
+        const { data, error } = await supabase
+          .from("project_activities").insert(payload).select().single();
+        if (error) throw error;
+        onSave(data);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -812,7 +846,7 @@ function ReportModal({ report, projectId, activePillars, onSave, onClose }) {
 }
 
 // ── Tab: REPORTES ──────────────────────────────────────────────
-function TabReports({ project, reports, onAdd, onUpdate }) {
+function TabReports({ project, reports, supabase, onAdd, onUpdate }) {
   const [modal,  setModal]  = useState(null);
   const [filter, setFilter] = useState("all");
 
@@ -939,6 +973,7 @@ function TabReports({ project, reports, onAdd, onUpdate }) {
         <ReportModal
           report={modal==="new"?null:modal}
           projectId={project.id}
+          supabase={supabase}
           activePillars={activePillars}
           onSave={handleSave}
           onClose={()=>setModal(null)}/>
@@ -948,7 +983,7 @@ function TabReports({ project, reports, onAdd, onUpdate }) {
 }
 
 // ── Tab: CARGA IA ──────────────────────────────────────────────
-function TabUpload({ project, onApplyScores }) {
+function TabUpload({ project, supabase, onApplyScores }) {
   const [files,  setFiles]  = useState([]);
   const [busy,   setBusy]   = useState(false);
   const [prop,   setProp]   = useState(null);
@@ -1189,52 +1224,100 @@ function TabUpload({ project, onApplyScores }) {
 }
 
 // ── MAIN EXPORT ────────────────────────────────────────────────
-export default function ModuleESG({ client }) {
-  const [projects, setProjects] = useState(MOCK_PROJECTS);
-  const [selProjId,setSelProjId]= useState(MOCK_PROJECTS[0]?.id);
-  const [reports,  setReports]  = useState(MOCK_REPORTS);
+export default function ModuleESG({ client, supabase }) {
+  const [projects, setProjects] = useState([]);
+  const [selProjId,setSelProjId]= useState(null);
+  const [reports,  setReports]  = useState([]);
   const [tab,      setTab]      = useState("score");
+  const [loading,  setLoading]  = useState(true);
 
-  const selProject  = projects.find(p=>p.id===selProjId)||projects[0];
+  useEffect(() => {
+    if (!supabase || !client?.id) return;
+    loadProjects();
+  }, [supabase, client?.id]);
+
+  async function loadProjects() {
+    setLoading(true);
+    try {
+      const { data: projs, error: pErr } = await supabase
+        .from("projects").select("*")
+        .eq("client_id", client.id).eq("module_key", "esg")
+        .order("starts_on", { ascending: false });
+      if (pErr) throw pErr;
+      if (!projs?.length) { setProjects([]); setLoading(false); return; }
+
+      const ids = projs.map(p=>p.id);
+      const [scoresRes, reportsRes] = await Promise.all([
+        supabase.from("project_scores").select("*").in("project_id", ids)
+          .order("updated_at", { ascending: false }),
+        supabase.from("project_activities").select("*").in("project_id", ids)
+          .order("activity_date", { ascending: false }),
+      ]);
+
+      // Also fetch client_modules for active_pillars
+      const { data: modData } = await supabase
+        .from("client_modules").select("active_pillars_json")
+        .eq("client_id", client.id).single();
+      const activePillars = modData?.active_pillars_json ||
+        { ambiental:true, social:true, gobernanza:true };
+
+      const projectsWithScores = projs.map(p => {
+        const ps  = scoresRes.data?.find(s=>s.project_id===p.id);
+        const dim = ps?.dimension_scores_json || {};
+        const drv = ps?.score_drivers_json    || {};
+        return {
+          ...p,
+          active_pillars: activePillars,
+          score: {
+            overall:    ps?.overall_score ?? null,
+            ambiental:  dim.ambiental  ?? null,
+            social:     dim.social     ?? null,
+            gobernanza: dim.gobernanza ?? null,
+          },
+          maturity:        drv.maturity        || { ambiental:1, social:1, gobernanza:1 },
+          gri_compliance:  drv.gri_compliance  || { ambiental:{}, social:{}, gobernanza:{} },
+          indicators:      drv.indicators      || { ambiental:{}, social:{}, gobernanza:{} },
+          history: [],
+        };
+      });
+
+      setProjects(projectsWithScores);
+      setSelProjId(projectsWithScores[0]?.id || null);
+      setReports(reportsRes.data || []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const selProject  = projects.find(p=>p.id===selProjId) || projects[0];
   const projReports = reports.filter(r=>r.project_id===selProjId);
 
   function updateProject(updated) {
     setProjects(p=>p.map(pr=>pr.id===updated.id?updated:pr));
+    if (supabase && updated.client_visible !== undefined) {
+      supabase.from("projects")
+        .update({ client_visible:updated.client_visible, updated_at:new Date().toISOString() })
+        .eq("id", updated.id);
+    }
   }
 
   function applyScores(newScores, griUpdates, maturityUpdates) {
     setProjects(p=>p.map(pr=>{
       if (pr.id!==selProjId) return pr;
-      const activePillars = Object.entries(pr.active_pillars).filter(([,v])=>v).map(([k])=>k);
-      const overall = Math.round(
-        activePillars.reduce((s,k)=>{
-          const val = newScores[k]??pr.score[k]??0;
-          return s+val;
-        },0)/activePillars.length
-      );
-      // Apply GRI updates
+      const active = Object.entries(pr.active_pillars).filter(([,v])=>v).map(([k])=>k);
+      const overall = active.length
+        ? Math.round(active.reduce((s,k)=>s+(newScores[k]??pr.score[k]??0),0)/active.length)
+        : 0;
       let newCompliance = { ...pr.gri_compliance };
-      if (griUpdates) {
-        griUpdates.forEach(g=>{
-          Object.keys(newCompliance).forEach(pillarKey=>{
-            if (g.id in newCompliance[pillarKey]) {
-              newCompliance[pillarKey][g.id] = g.proposed;
-            }
-          });
+      if (griUpdates) griUpdates.forEach(g=>{
+        Object.keys(newCompliance).forEach(pk=>{
+          if (g.id in (newCompliance[pk]||{})) newCompliance[pk][g.id]=g.proposed;
         });
-      }
-      // Apply maturity updates
+      });
       let newMaturity = { ...pr.maturity };
-      if (maturityUpdates) {
-        Object.entries(maturityUpdates).forEach(([k,v])=>{
-          newMaturity[k] = v.proposed;
-        });
-      }
-      return { ...pr,
-        score:{ ...pr.score, ...newScores, overall },
-        maturity:newMaturity,
-        gri_compliance:newCompliance,
-      };
+      if (maturityUpdates) Object.entries(maturityUpdates).forEach(([k,v])=>{ newMaturity[k]=v.proposed; });
+      return { ...pr, score:{ ...pr.score, ...newScores, overall },
+        maturity:newMaturity, gri_compliance:newCompliance };
     }));
     setTab("score");
   }
@@ -1342,21 +1425,39 @@ export default function ModuleESG({ client }) {
         </div>
 
         {/* Content */}
-        {selProject&&(
+        {loading ? (
+          <div style={{ display:"flex",alignItems:"center",gap:10,color:T.t3,
+            fontFamily:"'JetBrains Mono',monospace",fontSize:13,padding:"48px 0" }}>
+            <span style={{ width:14,height:14,border:`2px solid ${T.b2}`,borderTopColor:T.esg,
+              borderRadius:"50%",animation:"esgSpin .8s linear infinite",display:"inline-block" }}/>
+            Cargando proyectos…
+          </div>
+        ) : !selProject ? (
+          <div style={{ textAlign:"center",padding:"48px 0",background:T.s2,
+            border:`1px dashed ${T.b2}`,borderRadius:14 }}>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:6 }}>
+              Sin proyectos ESG
+            </div>
+            <div style={{ fontSize:13,color:T.t3 }}>
+              Crea el primer proyecto ESG desde Gestión de Clientes.
+            </div>
+          </div>
+        ) : (
           <>
             {tab==="score"&&(
-              <TabScore project={selProject} onUpdate={updateProject}/>
+              <TabScore project={selProject} supabase={supabase} onUpdate={updateProject}/>
             )}
             {tab==="gri"&&(
-              <TabGRI project={selProject} onUpdate={updateProject}/>
+              <TabGRI project={selProject} supabase={supabase} onUpdate={updateProject}/>
             )}
             {tab==="reports"&&(
               <TabReports project={selProject} reports={projReports}
+                supabase={supabase}
                 onAdd={r=>setReports(p=>[r,...p])}
                 onUpdate={r=>setReports(p=>p.map(x=>x.id===r.id?r:x))}/>
             )}
             {tab==="upload"&&(
-              <TabUpload project={selProject} onApplyScores={applyScores}/>
+              <TabUpload project={selProject} supabase={supabase} onApplyScores={applyScores}/>
             )}
           </>
         )}
