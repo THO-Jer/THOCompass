@@ -1088,17 +1088,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
     const newScores = {};
     Object.entries(prop.proposed_scores).forEach(([k,v])=>{ if(v.proposed!=null) newScores[k]=v.proposed; });
     // Persistir en Supabase
-    if (supabase && project?.id) {
-      const overall = Math.round(
-        DIMENSIONS.reduce((acc,d)=>acc+(newScores[d.key]||project.score?.[d.key]||0)*d.weight/100, 0)
-      );
-      await saveProjectScore(supabase, project.id, {
-        overall_score:         overall,
-        dimension_scores_json: { ...project.score, ...newScores },
-      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: sourceFileName });
-      await syncClientScore(supabase, project.client_id, "rc",
-        { ...project.score, ...newScores }, overall);
-    }
+    // Scores persisted via onApplyScores → applyScores in parent
 
     // Crear compromisos marcados en Supabase
     if (supabase && project?.id && prop.proposed_commitments?.length) {
@@ -1115,7 +1105,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
         });
       }
     }
-    onApplyScores(newScores);
+    onApplyScores(newScores, { method:"ai_analysis", notes:prop.summary, sourceFile:sourceFileName });
     setProp(null); setFiles([]);
   }
 
@@ -1486,7 +1476,7 @@ export default function ModuleRC({ client, supabase }) {
     }
   }
 
-  async function applyScores(newScores) {
+  async function applyScores(newScores, opts = {}) {
     const updated = projects.map(pr => {
       if (pr.id !== selProjId) return pr;
       const merged = { ...pr.score, ...newScores };
@@ -1502,7 +1492,7 @@ export default function ModuleRC({ client, supabase }) {
       await saveProjectScore(supabase, selProjId, {
         overall_score:         overall,
         dimension_scores_json: { ...proj?.score },
-      });
+      }, { method: opts.method || "manual", notes: opts.notes || null, sourceFile: opts.sourceFile || null });
       await syncClientScore(supabase, proj?.client_id, "rc",
         proj?.score || {}, overall);
     }

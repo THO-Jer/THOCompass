@@ -913,18 +913,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
   async function handleApply() {
     const newScores = {};
     Object.entries(prop.proposed||{}).forEach(([k,v])=>{ if(v.proposed!=null) newScores[k]=v.proposed; });
-    if (supabase && project?.id) {
-      const overall = Math.round(
-        DIMENSIONS.reduce((acc,d)=>acc+(newScores[d.key]||project.score?.[d.key]||0)*d.weight/100, 0)
-      );
-      await saveProjectScore(supabase, project.id, {
-        overall_score: overall,
-        dimension_scores_json: { ...project.score, ...newScores },
-      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: sourceFileName });
-      await syncClientScore(supabase, project.client_id, "do",
-        { ...project.score, ...newScores }, overall);
-    }
-
+    // Scores persisted via onApplyScores → applyScores in parent
     // Crear compromisos marcados en Supabase
     if (supabase && project?.id && prop.proposed_commitments?.length) {
       const toCreate = prop.proposed_commitments.filter(c => c._include !== false);
@@ -940,7 +929,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
         });
       }
     }
-    onApplyScores(newScores);
+    onApplyScores(newScores, { method:"ai_analysis", notes:prop.summary, sourceFile:sourceFileName });
     setProp(null); setFiles([]);
   }
 
@@ -1302,7 +1291,7 @@ export default function ModuleDO({ client, supabase }) {
     }
   }
 
-  async function applyScores(newScores) {
+  async function applyScores(newScores, opts = {}) {
     const updated = projects.map(pr => {
       if (pr.id !== selProjId) return pr;
       const merged = { ...pr.score, ...newScores };
@@ -1315,7 +1304,7 @@ export default function ModuleDO({ client, supabase }) {
       await saveProjectScore(supabase, selProjId, {
         overall_score: proj?.score?.overall ?? 0,
         dimension_scores_json: { ...proj?.score },
-      });
+      }, { method: opts.method || "manual", notes: opts.notes || null, sourceFile: opts.sourceFile || null });
       await syncClientScore(supabase, proj?.client_id, "do",
         proj?.score || {}, proj?.score?.overall ?? 0);
     }

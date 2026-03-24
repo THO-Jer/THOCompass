@@ -105,7 +105,10 @@ async function getOrCreateCurrentPeriod(sb) {
 }
 
 export async function syncClientScore(sb, clientId, moduleKey, dimScores, overall) {
-  if (!sb || !clientId) return;
+  if (!sb || !clientId) {
+    console.warn("syncClientScore: missing sb or clientId", { clientId, moduleKey });
+    return;
+  }
 
   const fieldMap = {
     rc:  { total:"rc", percepcion:"rc_percepcion", compromisos:"rc_compromisos",
@@ -123,6 +126,8 @@ export async function syncClientScore(sb, clientId, moduleKey, dimScores, overal
     if (map[dim] && val != null) payload[map[dim]] = Math.round(val);
   });
   if (Object.keys(payload).length === 0) return;
+
+  console.log("syncClientScore payload:", { clientId, moduleKey, payload });
 
   const { data: existingScore } = await sb
     .from("client_scores").select("client_id")

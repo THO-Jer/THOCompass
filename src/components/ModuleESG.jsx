@@ -1125,28 +1125,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
     const newMaturity = {};
     Object.entries(prop.proposed_maturity||{}).forEach(([k,v])=>{ if(v.proposed!=null) newMaturity[k]=v.proposed; });
 
-    if (supabase && project?.id) {
-      const active = Object.entries(project.active_pillars||{}).filter(([,v])=>v).map(([k])=>k);
-      const overall = active.length
-        ? Math.round(active.reduce((s,k)=>s+(newScores[k]??project.score?.[k]??0),0)/active.length) : 0;
-      // Fetch current score_drivers_json to merge
-      const { data: ex } = await supabase.from("project_scores")
-        .select("id, score_drivers_json").eq("project_id", project.id)
-        .order("updated_at",{ascending:false}).limit(1);
-      const current = ex?.[0]?.score_drivers_json || {};
-      await saveProjectScore(supabase, project.id, {
-        overall_score:         overall,
-        dimension_scores_json: { ...project.score, ...newScores },
-        score_drivers_json: {
-          ...current,
-          maturity:       { ...project.maturity, ...newMaturity },
-          gri_compliance: project.gri_compliance || {},
-        },
-      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: sourceFileName });
-      await syncClientScore(supabase, project.client_id, "esg",
-        { ...project.score, ...newScores }, overall);
-    }
-
+    // Scores persisted via onApplyScores → applyScores in parent
     // Crear compromisos marcados en Supabase
     if (supabase && project?.id && prop.proposed_commitments?.length) {
       const toCreate = prop.proposed_commitments.filter(c => c._include !== false);
@@ -1162,7 +1141,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
         });
       }
     }
-    onApplyScores(newScores, prop.gri_updates, prop.proposed_maturity);
+    onApplyScores(newScores, prop.gri_updates, prop.proposed_maturity, { method:"ai_analysis", notes:prop.summary, sourceFile:sourceFileName });
     setProp(null); setFiles([]);
   }
 
@@ -1531,7 +1510,7 @@ export default function ModuleESG({ client, supabase }) {
     }
   }
 
-  async function applyScores(newScores, griUpdates, maturityUpdates) {
+  async function applyScores(newScores, griUpdates, maturityUpdates, opts = {}) {
     const updated = projects.map(pr=>{
       if (pr.id!==selProjId) return pr;
       const active = Object.entries(pr.active_pillars||{}).filter(([,v])=>v).map(([k])=>k);
@@ -1559,7 +1538,7 @@ export default function ModuleESG({ client, supabase }) {
           gri_compliance: pr?.gri_compliance  || {},
           active_pillars: pr?.active_pillars  || {},
         },
-      });
+      }, { method: opts.method || "manual", notes: opts.notes || null, sourceFile: opts.sourceFile || null });
       await syncClientScore(supabase, pr?.client_id, "esg",
         pr?.score || {}, pr?.score?.overall ?? 0);
     }
