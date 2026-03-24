@@ -4,12 +4,7 @@
 // Renderiza el instrumento correspondiente al módulo del link.
 
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const sb = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase as sb } from "../lib/supabase.js";
 
 const T = {
   bg:"#08090c", s1:"#0d0f14", s2:"#111520", b1:"#1d2535", b2:"#232d42",
