@@ -63,6 +63,17 @@ ${filesText}
 ## INSTRUCCIONES
 Para cada dimensión: (1) cita evidencia textual, (2) identifica rango de rúbrica, (3) propón número. Si no hay evidencia → null. Considera el historial y contexto del proyecto al interpretar la evidencia.
 
+## DETECCIÓN DE COMPROMISOS
+Además de los scores, identifica COMPROMISOS EXPLÍCITOS mencionados en los documentos.
+Un compromiso es un acuerdo, promesa o tarea asignada con:
+- Un responsable o actor que lo asume
+- Una acción concreta a realizar
+- Idealmente una fecha o plazo (puede ser implícita: "próxima reunión", "fin de mes", etc.)
+
+Extrae SOLO compromisos que estén explícitamente mencionados en el texto, no inferidos.
+Si no hay compromisos → devolver arreglo vacío [].
+
+
 Responde ÚNICAMENTE con JSON válido:
 {
   "summary": "Síntesis 2-3 oraciones del contenido y relevancia LSO",
@@ -73,21 +84,50 @@ Responde ÚNICAMENTE con JSON válido:
     "compromisos":    { "current": ${scores.compromisos ?? null},    "proposed": <0-100 o null>, "reason": "Evidencia: '...' → rango X-Y" },
     "dialogo":        { "current": ${scores.dialogo ?? null},        "proposed": <0-100 o null>, "reason": "Evidencia: '...' → rango X-Y" },
     "conflictividad": { "current": ${scores.conflictividad ?? null}, "proposed": <0-100 o null>, "reason": "Evidencia: '...' → rango X-Y" }
-  }
+  },
+  "proposed_commitments": [
+    {
+      "title": "Descripción breve del compromiso (máx 10 palabras)",
+      "description": "Detalle de lo acordado según el documento",
+      "responsible": "Nombre o cargo del responsable si se menciona",
+      "due_date": "YYYY-MM-DD si se menciona fecha, null si no",
+      "source_quote": "Cita textual del documento que origina este compromiso"
+    }
+  ]
 }`;
+
+
+    // Try to repair truncated JSON
+    function repairJson(str) {
+      try { return JSON.parse(str); } catch {}
+      // Count open braces/brackets and close them
+      let s = str.trim();
+      const opens = (s.match(/[{[]/g)||[]).length;
+      const closes = (s.match(/[}\]]/g)||[]).length;
+      const diff = opens - closes;
+      // Remove trailing comma if present
+      s = s.replace(/,\s*$/, '');
+      for (let i = 0; i < diff; i++) {
+        s += s.includes('{') && !s.endsWith('}') ? '}' : ']';
+      }
+      try { return JSON.parse(s); } catch {}
+      return null;
+    }
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type":"application/json", "x-api-key":apiKey, "anthropic-version":"2023-06-01" },
-      body: JSON.stringify({ model:"claude-haiku-4-5-20251001", max_tokens:1600,
+      body: JSON.stringify({ model:"claude-haiku-4-5-20251001", max_tokens:2000,
         messages:[{ role:"user", content:prompt }] }),
     });
     if (!response.ok) return res.status(response.status).json({ error: await response.text() });
     const data  = await response.json();
-    const clean = (data.content?.[0]?.text || "{}").replace(/```json|```/g,"").trim();
-    try { return res.status(200).json(JSON.parse(clean)); }
-    catch { return res.status(500).json({ error:"JSON inválido", raw:clean }); }
+    const raw   = data.content?.[0]?.text || "{}";
+    const clean = raw.replace(/```json|```/g,"").trim();
+    const parsed = repairJson(clean);
+    if (parsed) return res.status(200).json(parsed);
+    return res.status(500).json({ error:"JSON inválido tras intento de reparación", raw:clean.slice(0,500) });
   } catch(err) {
     return res.status(500).json({ error: err.message });
   }

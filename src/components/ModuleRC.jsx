@@ -1096,6 +1096,22 @@ function TabUpload({ project, supabase, onApplyScores }) {
       await syncClientScore(supabase, project.client_id, "rc",
         { ...project.score, ...newScores }, overall);
     }
+
+    // Crear compromisos marcados en Supabase
+    if (supabase && project?.id && prop.proposed_commitments?.length) {
+      const toCreate = prop.proposed_commitments.filter(c => c._include !== false);
+      for (const cm of toCreate) {
+        await supabase.from("project_commitments").insert({
+          project_id:  project.id,
+          title:       cm.title,
+          description: cm.description || null,
+          responsible: cm.responsible || null,
+          due_date:    cm.due_date || null,
+          status:      "pending",
+          commitment_type: "general",
+        });
+      }
+    }
     onApplyScores(newScores);
     setProp(null); setFiles([]);
   }
@@ -1263,6 +1279,50 @@ function TabUpload({ project, supabase, onApplyScores }) {
             letterSpacing:1.5,textTransform:"uppercase",marginBottom:10,marginTop:18 }}>
             O ajusta manualmente antes de aplicar
           </div>
+
+          {/* Proposed commitments */}
+          {prop.proposed_commitments?.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:T.t3,
+                letterSpacing:1.5,textTransform:"uppercase",marginBottom:10 }}>
+                Compromisos detectados en el documento ({prop.proposed_commitments.length})
+              </div>
+              <div style={{ fontSize:12,color:T.t3,marginBottom:12 }}>
+                Revisa y edita antes de crear. Los compromisos marcados se agregarán al proyecto.
+              </div>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {prop.proposed_commitments.map((c,i)=>(
+                  <div key={i} style={{ padding:"12px 14px",background:T.s2,
+                    border:`1px solid ${T.b1}`,borderRadius:10 }}>
+                    <div style={{ display:"flex",alignItems:"flex-start",gap:10 }}>
+                      <input type="checkbox" defaultChecked
+                        onChange={e=>{
+                          const updated=[...prop.proposed_commitments];
+                          updated[i]={...updated[i],_include:e.target.checked};
+                          setProp(p=>({...p,proposed_commitments:updated}));
+                        }}
+                        style={{ marginTop:3,accentColor:T.rc,flexShrink:0 }}/>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontSize:13,color:T.t1,fontWeight:600,marginBottom:3 }}>{c.title}</div>
+                        {c.description&&<div style={{ fontSize:12,color:T.t3,marginBottom:4 }}>{c.description}</div>}
+                        <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
+                          {c.responsible&&<span style={{ fontSize:11,color:T.t3 }}>👤 {c.responsible}</span>}
+                          {c.due_date&&<span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:T.amber }}>📅 {c.due_date}</span>}
+                        </div>
+                        {c.source_quote&&(
+                          <div style={{ fontSize:11,color:T.t4,fontStyle:"italic",
+                            marginTop:6,padding:"4px 8px",background:T.s1,borderRadius:6 }}>
+                            "{c.source_quote}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:20 }}>
             {Object.entries(prop.proposed_scores).map(([key,s])=>{
               const dim = DIMENSIONS.find(d=>d.key===key);

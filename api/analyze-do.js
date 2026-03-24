@@ -51,6 +51,11 @@ ${triangulation}
 ## DOCUMENTOS
 ${filesText}
 
+
+## DETECCIÓN DE COMPROMISOS
+Identifica COMPROMISOS EXPLÍCITOS en los documentos — acuerdos, promesas o tareas asignadas.
+Extrae SOLO los mencionados en el texto, no inferidos. Si no hay → [].
+
 Responde ÚNICAMENTE con JSON válido:
 {
   "summary": "Síntesis 2-3 oraciones",
@@ -60,8 +65,35 @@ Responde ÚNICAMENTE con JSON válido:
     "cultura":    { "current": ${scores.cultura ?? null},    "proposed": <0-100 o null>, "reason": "Evidencia → rango" },
     "engagement": { "current": ${scores.engagement ?? null}, "proposed": <0-100 o null>, "reason": "Evidencia → rango" },
     "liderazgo":  { "current": ${scores.liderazgo ?? null},  "proposed": <0-100 o null>, "reason": "Evidencia → rango" }
-  }
+  },
+  "proposed_commitments": [
+    {
+      "title": "Descripción breve del compromiso (máx 10 palabras)",
+      "description": "Detalle de lo acordado",
+      "responsible": "Nombre o cargo si se menciona, null si no",
+      "due_date": "YYYY-MM-DD si hay fecha, null si no",
+      "source_quote": "Cita textual del documento"
+    }
+  ]
 }`;
+
+
+    // Try to repair truncated JSON
+    function repairJson(str) {
+      try { return JSON.parse(str); } catch {}
+      // Count open braces/brackets and close them
+      let s = str.trim();
+      const opens = (s.match(/[{[]/g)||[]).length;
+      const closes = (s.match(/[}\]]/g)||[]).length;
+      const diff = opens - closes;
+      // Remove trailing comma if present
+      s = s.replace(/,\s*$/, '');
+      for (let i = 0; i < diff; i++) {
+        s += s.includes('{') && !s.endsWith('}') ? '}' : ']';
+      }
+      try { return JSON.parse(s); } catch {}
+      return null;
+    }
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {

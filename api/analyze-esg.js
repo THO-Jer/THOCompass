@@ -60,6 +60,11 @@ Responde ÚNICAMENTE con JSON válido:
   "detected_pillar": "<pilar más relevante>",
   "summary": "Síntesis 2-3 oraciones",
   "insights": ["hallazgo con cita", "hallazgo 2", "hallazgo 3"],
+
+## DETECCIÓN DE COMPROMISOS
+Identifica COMPROMISOS EXPLÍCITOS en los documentos — acuerdos, promesas o tareas asignadas.
+Extrae SOLO los mencionados en el texto, no inferidos. Si no hay → [].
+
   "source_consistency": "consistente|mixta|contradictoria",
   "gri_updates": [
     { "id": "<GRI XXX>", "current": "<cumple|parcial|pendiente|no_aplica>", "proposed": "<cumple|parcial|pendiente|no_aplica>", "reason": "evidencia" }
@@ -69,8 +74,35 @@ Responde ÚNICAMENTE con JSON válido:
   },
   "proposed_maturity": {
     ${pillars.map(k=>`"${k}": { "current": ${maturity[k]??1}, "proposed": <1-5>, "reason": "Evidencia → nivel" }`).join(",\n    ")}
-  }
+  },
+  "proposed_commitments": [
+    {
+      "title": "Descripción breve del compromiso (máx 10 palabras)",
+      "description": "Detalle de lo acordado",
+      "responsible": "Nombre o cargo si se menciona, null si no",
+      "due_date": "YYYY-MM-DD si hay fecha, null si no",
+      "source_quote": "Cita textual del documento"
+    }
+  ]
 }`;
+
+
+    // Try to repair truncated JSON
+    function repairJson(str) {
+      try { return JSON.parse(str); } catch {}
+      // Count open braces/brackets and close them
+      let s = str.trim();
+      const opens = (s.match(/[{[]/g)||[]).length;
+      const closes = (s.match(/[}\]]/g)||[]).length;
+      const diff = opens - closes;
+      // Remove trailing comma if present
+      s = s.replace(/,\s*$/, '');
+      for (let i = 0; i < diff; i++) {
+        s += s.includes('{') && !s.endsWith('}') ? '}' : ']';
+      }
+      try { return JSON.parse(s); } catch {}
+      return null;
+    }
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
