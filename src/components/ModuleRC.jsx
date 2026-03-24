@@ -940,6 +940,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
   const [prop,         setProp]         = useState(null);
   const [drag,         setDrag]         = useState(false);
   const [uploadedFiles,setUploadedFiles]= useState([]);
+  const [sourceFileName, setSourceFileName] = useState(null);
   const ref = useRef();
 
   async function loadUploadedFiles() {
@@ -1072,7 +1073,9 @@ function TabUpload({ project, supabase, onApplyScores }) {
         throw new Error(err.error || "Error en el servidor");
       }
 
-      setProp(await res.json());
+      const result = await res.json();
+      setSourceFileName(fileContents?.[0]?.name || null);
+      setProp(result);
     } catch(e) {
       console.error("Analyze RC error:", e);
       setProp({ summary: `Error: ${e.message}`, insights: [], proposed_scores: {} });
@@ -1092,7 +1095,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
       await saveProjectScore(supabase, project.id, {
         overall_score:         overall,
         dimension_scores_json: { ...project.score, ...newScores },
-      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: fileContents?.[0]?.name });
+      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: sourceFileName });
       await syncClientScore(supabase, project.client_id, "rc",
         { ...project.score, ...newScores }, overall);
     }

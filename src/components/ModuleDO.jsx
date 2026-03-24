@@ -901,7 +901,9 @@ function TabUpload({ project, supabase, onApplyScores }) {
       });
 
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Error servidor"); }
-      setProp(await res.json());
+      const result = await res.json();
+      setSourceFileName(fileContents?.[0]?.name || null);
+      setProp(result);
     } catch(e) {
       console.error("Analyze DO error:", e);
       setProp({ summary: `Error: ${e.message}`, insights: [], proposed: {} });
@@ -918,7 +920,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
       await saveProjectScore(supabase, project.id, {
         overall_score: overall,
         dimension_scores_json: { ...project.score, ...newScores },
-      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: fileContents?.[0]?.name });
+      }, { method: 'ai_analysis', notes: prop.summary, sourceFile: sourceFileName });
       await syncClientScore(supabase, project.client_id, "do",
         { ...project.score, ...newScores }, overall);
     }

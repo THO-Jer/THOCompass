@@ -898,173 +898,106 @@ function MessagesPanel({ messages, onSend, onDelete, senderRole="client" }) {
 }
 
 // ── Recommendations Card ───────────────────────────────────────
-const REC_META = {
-  urgent:      { color:"#ef4444", bg:"#ef444412", icon:"🚨", label:"Urgente"      },
-  warning:     { color:"#f59e0b", bg:"#f59e0b12", icon:"⚠",  label:"Atención"     },
-  opportunity: { color:"#3b82f6", bg:"#3b82f612", icon:"→",  label:"Oportunidad"  },
-  good:        { color:"#22c55e", bg:"#22c55e12", icon:"✓",  label:"Bien encaminado"},
-};
+// ── Upcoming Commitments Card ──────────────────────────────────
+function UpcomingCommitmentsCard({ client }) {
+  // Get all active commitments with due dates, sorted by proximity to today
+  const DONE = ["completed","resolved","closed","rejected"];
+  const today = new Date();
 
-const RECS_TTL_DAYS = 7; // Regenerate after 7 days
+  const upcoming = (client.commitments || [])
+    .filter(c => c.due_date && !DONE.includes(c.status))
+    .map(c => {
+      const due  = new Date(c.due_date);
+      const days = Math.ceil((due - today) / (1000*60*60*24));
+      return { ...c, days };
+    })
+    .sort((a,b) => Math.abs(a.days) - Math.abs(b.days)) // closest first
+    .slice(0, 3);
 
-function RecommendationsCard({ client, supabase }) {
-  const [recs,       setRecs]       = useState(null);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState(null);
-  const [generatedAt,setGeneratedAt]= useState(null);
+  const mod = c => {
+    const proj = (client.projects||[]).find(p=>p.id===c.project_id);
+    return proj ? MOD[proj.module_key] : null;
+  };
 
-  useEffect(() => {
-    if (client?.id) loadOrGenerate(false);
-  }, [client?.id]);
-
-  async function loadOrGenerate(forceRefresh = false) {
-    setLoading(true); setError(null);
-
-    // 1. Try loading cached recommendations from Supabase
-    if (supabase && client?.id && !forceRefresh) {
-      const { data } = await supabase
-        .from("client_recommendations")
-        .select("id, text, module, source, generated_at, expires_at")
-        .eq("client_id", client.id)
-        .eq("source", "ai")
-        .eq("visible_to_client", true)
-        .order("generated_at", { ascending: false })
-        .limit(10);
-
-      if (data?.length > 0) {
-        const freshest   = data[0];
-        const genDate    = new Date(freshest.generated_at || freshest.created_at || 0);
-        const ageInDays  = (Date.now() - genDate) / (1000*60*60*24);
-        const expired    = freshest.expires_at && new Date(freshest.expires_at) < new Date();
-
-        if (!expired && ageInDays < RECS_TTL_DAYS) {
-          // Use cached
-          setRecs(data.map(r => ({
-            type:   r.module === "rc" ? "opportunity" : "opportunity",
-            module: r.module,
-            title:  r.text?.split(".")[0]?.slice(0,60) || "Recomendación",
-            body:   r.text,
-            action: "",
-          })));
-          setGeneratedAt(genDate);
-          setLoading(false);
-          return;
-        }
-      }
-    }
-
-    // 2. Generate new recommendations via API
-    try {
-      const activities = client.projects?.flatMap(p=>p.activities||[]) || [];
-      const lastAct    = activities.sort((a,b)=>new Date(b.activity_date)-new Date(a.activity_date))[0];
-      const lastDays   = lastAct
-        ? Math.floor((Date.now()-new Date(lastAct.activity_date))/(1000*60*60*24))
-        : null;
-
-      const res = await fetch("/api/generate-recommendations", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          clientName: client.name, modules: client.modules,
-          scores: client.scores, projects: client.projects,
-          commitments: client.commitments, lastActivityDays: lastDays,
-        }),
-      });
-      if (!res.ok) { setError("No se pudieron generar recomendaciones"); return; }
-      const newRecs = await res.json();
-      setRecs(Array.isArray(newRecs) ? newRecs.slice(0, 3) : []);
-      setGeneratedAt(new Date());
-
-      // 3. Save to client_recommendations for future caching
-      if (supabase && client?.id && newRecs?.length) {
-        // Delete old AI recs
-        await supabase.from("client_recommendations")
-          .delete().eq("client_id", client.id).eq("source", "ai");
-        // Insert new ones
-        const expires = new Date();
-        expires.setDate(expires.getDate() + RECS_TTL_DAYS);
-        await supabase.from("client_recommendations").insert(
-          newRecs.map(r => ({
-            client_id:         client.id,
-            text:              `${r.title}. ${r.body}${r.action ? " → " + r.action : ""}`,
-            module:            r.module !== "general" ? r.module : null,
-            source:            "ai",
-            visible_to_client: true,
-            generated_at:      new Date().toISOString(),
-            expires_at:        expires.toISOString(),
-          }))
-        );
-      }
-    } catch(e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+  function dayLabel(days) {
+    if (days < 0)  return { text:`Atrasado ${Math.abs(days)}d`, color:T.red    };
+    if (days === 0)return { text:"Vence hoy",                   color:T.red    };
+    if (days <= 3) return { text:`${days}d restantes`,          color:T.red    };
+    if (days <= 7) return { text:`${days}d restantes`,          color:T.amber  };
+    if (days <= 14)return { text:`${days}d restantes`,          color:T.amber  };
+    return           { text: new Date(new Date().setDate(new Date().getDate()+days))
+                         .toLocaleDateString("es-CL",{day:"numeric",month:"short"}), color:T.t3 };
   }
 
   return (
     <div>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1 }}>
-          Recomendaciones estratégicas
-        </div>
-        <button onClick={()=>loadOrGenerate(true)} disabled={loading}
-          style={{ background:"none",border:`1px solid ${T.b2}`,borderRadius:6,
-            color:T.t3,cursor:loading?"not-allowed":"pointer",fontSize:11,
-            padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace" }}
-          title="Regenerar recomendaciones">
-          {loading ? "…" : "↺"}
-        </button>
+      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+        Próximos compromisos
       </div>
 
-      {loading && (
-        <div style={{ textAlign:"center",padding:"20px 0",color:T.t3,fontSize:12,
-          fontFamily:"'JetBrains Mono',monospace" }}>
-          Analizando estado del proyecto…
-        </div>
-      )}
-
-      {error && !loading && (
-        <div style={{ fontSize:12,color:T.red,padding:"8px 0" }}>{error}</div>
-      )}
-
-      {!loading && recs && recs.length === 0 && (
-        <div style={{ fontSize:13,color:T.t3,textAlign:"center",padding:"16px 0" }}>
-          Sin recomendaciones en este momento.
-        </div>
-      )}
-
-      {!loading && recs && recs.map((r,i) => {
-        const meta = REC_META[r.type] || REC_META.opportunity;
-        const mod  = r.module && MOD[r.module];
-        return (
-          <div key={i} style={{ padding:"12px 14px",marginBottom:10,
-            background:meta.bg,border:`1px solid ${meta.color}25`,
-            borderRadius:10,borderLeft:`3px solid ${meta.color}` }}>
-            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
-              <span style={{ fontSize:14 }}>{meta.icon}</span>
-              <span style={{ fontSize:12,fontWeight:600,color:meta.color }}>{meta.label}</span>
-              {mod && (
-                <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
-                  color:mod.color,marginLeft:"auto" }}>
-                  {mod.icon} {mod.short}
-                </span>
-              )}
-            </div>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,
-              color:T.t1,marginBottom:5 }}>{r.title}</div>
-            <div style={{ fontSize:12,color:T.t2,lineHeight:1.6,marginBottom:8 }}>{r.body}</div>
-            <div style={{ fontSize:11,color:meta.color,
-              fontFamily:"'JetBrains Mono',monospace",
-              padding:"4px 10px",background:`${meta.color}10`,
-              borderRadius:6,display:"inline-block" }}>
-              → {r.action}
+      {upcoming.length === 0 ? (
+        <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",
+          background:`${T.green}08`,border:`1px solid ${T.green}20`,borderRadius:10 }}>
+          <span style={{ fontSize:20 }}>✓</span>
+          <div>
+            <div style={{ fontSize:13,color:T.green,fontWeight:500 }}>Sin compromisos próximos</div>
+            <div style={{ fontSize:11,color:T.t3,marginTop:2 }}>
+              No hay acuerdos con fecha pendiente en este período.
             </div>
           </div>
-        );
-      })}
+        </div>
+      ) : (
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          {upcoming.map((cm,i) => {
+            const dl  = dayLabel(cm.days);
+            const mod_ = mod(cm);
+            return (
+              <div key={cm.id||i} style={{ display:"flex",alignItems:"center",gap:12,
+                padding:"12px 14px",background:T.s2,
+                border:`1px solid ${cm.days<=3?T.red+"30":cm.days<=7?T.amber+"30":T.b1}`,
+                borderRadius:10 }}>
+                {/* Countdown */}
+                <div style={{ textAlign:"center",width:44,flexShrink:0 }}>
+                  <div style={{ fontFamily:"'JetBrains Mono',monospace",
+                    fontSize:cm.days<0?13:Math.abs(cm.days)>99?11:18,
+                    fontWeight:700,color:dl.color,lineHeight:1 }}>
+                    {cm.days<0?"!":`${Math.abs(cm.days)}`}
+                  </div>
+                  <div style={{ fontFamily:"'JetBrains Mono',monospace",
+                    fontSize:8,color:T.t4,textTransform:"uppercase",letterSpacing:1 }}>
+                    {cm.days<0?"atraso":"días"}
+                  </div>
+                </div>
+                {/* Content */}
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:13,color:T.t1,fontWeight:500,marginBottom:3,
+                    whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                    {cm.title}
+                  </div>
+                  <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                    <span style={{ fontFamily:"'JetBrains Mono',monospace",
+                      fontSize:10,color:dl.color }}>{dl.text}</span>
+                    {cm.responsible&&(
+                      <span style={{ fontSize:11,color:T.t3 }}>👤 {cm.responsible}</span>
+                    )}
+                    {mod_&&(
+                      <span style={{ fontFamily:"'JetBrains Mono',monospace",
+                        fontSize:9,color:mod_.color }}>{mod_.icon} {mod_.short}</span>
+                    )}
+                  </div>
+                </div>
+                {/* Status dot */}
+                <div style={{ width:8,height:8,borderRadius:"50%",flexShrink:0,
+                  background:cm.days<0?T.red:cm.days<=7?T.amber:T.t3 }}/>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ── General Dashboard ──────────────────────────────────────────
 function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }) {
@@ -1273,7 +1206,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
               </div>
             ))}
           </Card>
-          <Card><RecommendationsCard client={client} supabase={supabase}/></Card>
+          <Card><UpcomingCommitmentsCard client={client}/></Card>
         </div>
 
         {/* Active projects */}
