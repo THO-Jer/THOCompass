@@ -17,7 +17,7 @@
 import { saveProjectScore, syncClientScore } from "../lib/scores.js";
 import ScoreLog from "./ScoreLog.jsx";
 import FilesPanel from "./FilesPanel.jsx";
-import SurveyManager from "./SurveyManager.jsx";
+import FormManager from "./FormManager.jsx";
 import CommitmentsPanel from "./CommitmentsPanel.jsx";
 import BaselineInstrument from "./BaselineInstrument.jsx";
 import { useState, useRef, useEffect } from "react";
@@ -1472,19 +1472,15 @@ export default function ModuleDO({ client, supabase }) {
                 accentColor={T.do}/>
             )}
             {tab==="surveys"&&(
-              <SurveyManager
+              <FormManager
                 projectId={selProject.id}
                 moduleKey="do"
                 supabase={supabase}
                 accentColor={T.do}
-                onApplyScores={(scores, notes) => {
-                  applyScores(scores);
-                  // Also save with source info
-                  if (supabase && selProject.id) {
-                    saveProjectScore(supabase, selProject.id, {
-                      overall_score: scores.overall,
-                      dimension_scores_json: scores,
-                    }, { method: 'baseline_instrument', notes });
+                onApplyScores={(result, formTitle) => {
+                  if(result?.proposed_scores||result?.proposed) {
+                    const scores = result.proposed_scores||result.proposed;
+                    applyScores(scores, { method:"survey", notes:`Formulario: ${formTitle}` });
                   }
                 }}/>
             )}

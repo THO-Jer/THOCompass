@@ -9,6 +9,7 @@ import ModuleDO        from "./components/ModuleDO";
 import ModuleESG       from "./components/ModuleESG";
 import PendingAccess   from "./components/PendingAccess";
 import SurveyPage      from "./components/SurveyPage";
+import FormPage        from "./components/FormPage";
 
 // ── Design tokens ─────────────────────────────────────────────
 const T = {
@@ -303,9 +304,10 @@ export default function App() {
   // Check for public survey route FIRST — no auth needed
   const hash = window.location.hash;
   const surveyMatch = hash.match(/^#\/survey\/([a-zA-Z0-9-]+)$/);
-  if (surveyMatch) {
-    return <SurveyPage token={surveyMatch[1]} />;
-  }
+  if (surveyMatch) return <SurveyPage token={surveyMatch[1]} />;
+
+  const formMatch = hash.match(/^#\/form\/([a-zA-Z0-9-]+)$/);
+  if (formMatch) return <FormPage token={formMatch[1]} />;
 
   const auth = useAuthGuard();
   const [page,        setPage]        = useState("dashboard");

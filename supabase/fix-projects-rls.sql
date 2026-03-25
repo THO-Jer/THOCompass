@@ -443,3 +443,156 @@ alter table public.client_recommendations
   add column if not exists generated_at  timestamptz,
   add column if not exists source        text default 'manual',
   add column if not exists expires_at    timestamptz;
+
+-- ── 16. FORM BUILDER SYSTEM ──────────────────────────────────
+-- Sistema de gestión de datos: constructor de formularios,
+-- recolección de respuestas y análisis.
+
+create table if not exists public.form_templates (
+  id           uuid        primary key default gen_random_uuid(),
+  project_id   uuid        not null references public.projects(id) on delete cascade,
+  module_key   text        not null check (module_key in ('rc','do','esg')),
+  title        text        not null,
+  description  text,
+  target_group text,
+  status       text        not null default 'draft'
+               check (status in ('draft','active','closed')),
+  token        text        unique not null default gen_random_uuid()::text,
+  expires_at   timestamptz,
+  created_by   uuid        references public.user_profiles(id),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create table if not exists public.form_questions (
+  id           uuid        primary key default gen_random_uuid(),
+  form_id      uuid        not null references public.form_templates(id) on delete cascade,
+  order_index  integer     not null default 0,
+  type         text        not null
+               check (type in ('likert','nps','multiple_single','multiple_multi','text','matrix','ranking')),
+  text         text        not null,
+  required     boolean     not null default true,
+  config_json  jsonb       not null default '{}'::jsonb,
+  -- config_json examples:
+  -- likert:    { "scale_min": 1, "scale_max": 5, "min_label": "Muy en desacuerdo", "max_label": "Muy de acuerdo" }
+  -- nps:       { "label": "¿Recomendarías...?" }
+  -- multiple:  { "options": ["Opción A", "Opción B", "Opción C"] }
+  -- matrix:    { "rows": ["Ítem 1", "Ítem 2"], "cols": ["Malo", "Regular", "Bueno"] }
+  -- ranking:   { "items": ["Prioridad A", "Prioridad B", "Prioridad C"] }
+  -- text:      { "placeholder": "Escribe aquí...", "max_length": 500 }
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists public.form_responses (
+  id                uuid        primary key default gen_random_uuid(),
+  form_id           uuid        not null references public.form_templates(id) on delete cascade,
+  respondent_name   text,
+  respondent_role   text,
+  respondent_segment text,
+  started_at        timestamptz not null default now(),
+  submitted_at      timestamptz,
+  ip_hash           text,
+  is_complete       boolean     not null default false
+);
+
+create table if not exists public.form_answers (
+  id              uuid    primary key default gen_random_uuid(),
+  response_id     uuid    not null references public.form_responses(id) on delete cascade,
+  question_id     uuid    not null references public.form_questions(id) on delete cascade,
+  value_integer   integer,
+  value_text      text,
+  value_json      jsonb,   -- for matrix, ranking, multiple_multi
+  created_at      timestamptz not null default now(),
+  unique (response_id, question_id)
+);
+
+create table if not exists public.form_analysis_cache (
+  id                      uuid        primary key default gen_random_uuid(),
+  form_id                 uuid        not null references public.form_templates(id) on delete cascade,
+  generated_at            timestamptz not null default now(),
+  expires_at              timestamptz,
+  response_count          integer,
+  stats_json              jsonb,
+  ai_summary              text,
+  ai_insights             jsonb,
+  proposed_scores_json    jsonb,
+  proposed_commitments_json jsonb,
+  unique (form_id)
+);
+
+-- RLS
+alter table public.form_templates    enable row level security;
+alter table public.form_questions    enable row level security;
+alter table public.form_responses    enable row level security;
+alter table public.form_answers      enable row level security;
+alter table public.form_analysis_cache enable row level security;
+
+-- Consultores gestionan todo
+drop policy if exists "consultants manage form_templates"    on public.form_templates;
+drop policy if exists "consultants manage form_questions"    on public.form_questions;
+drop policy if exists "consultants manage form_responses"    on public.form_responses;
+drop policy if exists "consultants manage form_answers"      on public.form_answers;
+drop policy if exists "consultants manage form_analysis"     on public.form_analysis_cache;
+
+create policy "consultants manage form_templates"
+  on public.form_templates for all
+  using (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'))
+  with check (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'));
+
+create policy "consultants manage form_questions"
+  on public.form_questions for all
+  using (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'))
+  with check (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'));
+
+create policy "consultants manage form_responses"
+  on public.form_responses for all
+  using (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'))
+  with check (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'));
+
+create policy "consultants manage form_answers"
+  on public.form_answers for all
+  using (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'))
+  with check (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'));
+
+create policy "consultants manage form_analysis"
+  on public.form_analysis_cache for all
+  using (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'))
+  with check (exists (select 1 from public.user_profiles where id = auth.uid() and role in ('super_consultant','consultant') and approval_status = 'approved'));
+
+-- Público puede leer templates activos (para la página de respuesta)
+drop policy if exists "public read active forms" on public.form_templates;
+create policy "public read active forms"
+  on public.form_templates for select
+  using (status = 'active' and (expires_at is null or expires_at > now()));
+
+-- Público puede leer preguntas de forms activos
+drop policy if exists "public read form questions" on public.form_questions;
+create policy "public read form questions"
+  on public.form_questions for select
+  using (exists (
+    select 1 from public.form_templates ft
+    where ft.id = form_id and ft.status = 'active'
+    and (ft.expires_at is null or ft.expires_at > now())
+  ));
+
+-- Público puede insertar respuestas en forms activos
+drop policy if exists "public insert form responses" on public.form_responses;
+create policy "public insert form responses"
+  on public.form_responses for insert
+  with check (exists (
+    select 1 from public.form_templates ft
+    where ft.id = form_id and ft.status = 'active'
+    and (ft.expires_at is null or ft.expires_at > now())
+  ));
+
+-- Público puede insertar answers de sus propias respuestas
+drop policy if exists "public insert form answers" on public.form_answers;
+create policy "public insert form answers"
+  on public.form_answers for insert
+  with check (true);
+
+-- Público puede actualizar su propia respuesta (para completar)
+drop policy if exists "public update own response" on public.form_responses;
+create policy "public update own response"
+  on public.form_responses for update
+  using (submitted_at is null);
