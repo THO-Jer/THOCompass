@@ -1,6 +1,25 @@
 // FormPage.jsx — Página pública de respuesta a formulario (sin login)
 import { useState, useEffect, useRef } from "react";
-import { supabase as sb } from "../lib/supabase.js";
+
+const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Fetch directo a Supabase REST sin cliente — garantiza uso de anon key
+async function anonFetch(path, method="GET", body=null) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method,
+    headers: {
+      "apikey":        SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type":  "application/json",
+      "Prefer":        method==="POST" ? "return=representation" : "",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return text ? JSON.parse(text) : null;
+}
 
 const T = {
   bg:"#08090c", s1:"#0d0f14", s2:"#111520", b1:"#1d2535", b2:"#232d42",
@@ -221,37 +240,36 @@ export default function FormPage({ token }) {
 
   useEffect(()=>{
     if(!token){ setStep(-1); setError("Link inválido"); return; }
-    sb.from("form_templates").select("*").eq("token",token).maybeSingle()
-      .then(({data,error})=>{
-        if(error||!data){ setStep(-1); setError("Este formulario no existe o ha expirado."); return; }
-        if(data.status!=="active"){ setStep(-1); setError("Este formulario no está activo."); return; }
-        if(data.expires_at&&new Date(data.expires_at)<new Date()){
-          setStep(-1); setError("Este formulario ha cerrado."); return; }
-        setForm(data);
-        return sb.from("form_questions").select("*")
-          .eq("form_id",data.id).order("order_index");
+    anonFetch(`form_templates?token=eq.${token}&status=eq.active&select=*`)
+      .then(data=>{
+        const form = Array.isArray(data) ? data[0] : data;
+        if(!form){ setStep(-1); setError("Este formulario no existe o ha expirado."); return null; }
+        if(form.expires_at&&new Date(form.expires_at)<new Date()){
+          setStep(-1); setError("Este formulario ha cerrado."); return null; }
+        setForm(form);
+        return anonFetch(`form_questions?form_id=eq.${form.id}&order=order_index`);
       })
-      .then(res=>{
-        if(!res) return;
-        const {data,error}=res;
-        if(error){ setStep(-1); setError("Error cargando preguntas."); return; }
+      .then(data=>{
+        if(!data) return;
         setQuestions(data||[]);
         setStep(1);
-      });
+      })
+      .catch(e=>{ setStep(-1); setError("Error cargando formulario: "+e.message); });
   },[token]);
 
   async function handleSubmit() {
     setSaving(true);
     try {
-      // Create response record
-      const {data:resp,error:rErr} = await sb.from("form_responses").insert({
-        form_id:          form.id,
-        respondent_name:  name.trim()||null,
-        respondent_role:  role.trim()||null,
-        submitted_at:     new Date().toISOString(),
-        is_complete:      true,
-      }).select().single();
-      if(rErr) throw rErr;
+      // Insert response
+      const respData = await anonFetch("form_responses", "POST", {
+        form_id:         form.id,
+        respondent_name: name.trim()||null,
+        respondent_role: role.trim()||null,
+        submitted_at:    new Date().toISOString(),
+        is_complete:     true,
+      });
+      const resp = Array.isArray(respData) ? respData[0] : respData;
+      if (!resp?.id) throw new Error("No se obtuvo ID de respuesta");
 
       // Insert answers
       const rows = questions.map(q=>{
@@ -264,8 +282,7 @@ export default function FormPage({ token }) {
       }).filter(r=>r.value_integer!=null||r.value_text||r.value_json!=null);
 
       if(rows.length){
-        const {error:aErr}=await sb.from("form_answers").insert(rows);
-        if(aErr) throw aErr;
+        await anonFetch("form_answers", "POST", rows);
       }
       setStep(3);
     } catch(e){

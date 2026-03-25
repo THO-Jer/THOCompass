@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import FormBuilder from "./FormBuilder.jsx";
 import FormResults from "./FormResults.jsx";
+import { createBaselineForm } from "../lib/baseline.js";
 
 const T = {
   s1:"#0d0f14", s2:"#111520", b1:"#1d2535", b2:"#232d42",
@@ -20,10 +21,23 @@ export default function FormManager({ projectId, moduleKey, supabase, accentColo
   const [forms,      setForms]      = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [building,   setBuilding]   = useState(false);
-  const [viewForm,   setViewForm]   = useState(null); // form to view results
+  const [viewForm,   setViewForm]   = useState(null);
   const [copied,     setCopied]     = useState(null);
+  const [creatingBL, setCreatingBL] = useState(false);
 
   const BASE = window.location.origin;
+
+  async function handleCreateBaseline() {
+    setCreatingBL(true);
+    const form = await createBaselineForm(supabase, projectId, moduleKey);
+    if (form) {
+      await load();
+      setCopied(null);
+    } else {
+      alert("Error al crear el instrumento de línea base.");
+    }
+    setCreatingBL(false);
+  }
 
   useEffect(()=>{
     if(!supabase||!projectId) return;
@@ -67,14 +81,50 @@ export default function FormManager({ projectId, moduleKey, supabase, accentColo
 
   async function handleAnalyzeAI(questions, responses, answers) {
     if(!questions.length||!responses.length) return;
-    // Build text representation of answers for IA
+
+    // Check if this is a baseline form (all questions have dim in config_json)
+    const isBaseline = questions.every(q=>q.config_json?.dim);
+
+    if (isBaseline) {
+      // Calculate scores directly from Likert answers grouped by dimension
+      const dimGroups = {};
+      questions.forEach(q => {
+        const dim = q.config_json.dim;
+        const inverse = q.config_json.inverse || false;
+        if (!dimGroups[dim]) dimGroups[dim] = [];
+        const qAnswers = answers.filter(a=>a.question_id===q.id)
+          .map(a=>a.value_integer).filter(v=>v!=null);
+        const avgVal = qAnswers.length ? qAnswers.reduce((s,v)=>s+v,0)/qAnswers.length : null;
+        if (avgVal !== null) {
+          // Convert 1-5 Likert to 0-100 score
+          const mapped = {1:10,2:30,3:55,4:75,5:95};
+          const floor=Math.floor(avgVal),ceil=Math.ceil(avgVal),frac=avgVal-floor;
+          let score = floor===ceil ? mapped[floor] :
+            mapped[floor]+(mapped[ceil]-mapped[floor])*frac;
+          if (inverse) score = 100-score+10;
+          dimGroups[dim].push(Math.round(score));
+        }
+      });
+      const dimScores = {};
+      Object.entries(dimGroups).forEach(([dim,scores])=>{
+        dimScores[dim] = Math.round(scores.reduce((s,v)=>s+v,0)/scores.length);
+      });
+      const overall = Math.round(
+        Object.values(dimScores).reduce((s,v)=>s+v,0)/Object.values(dimScores).length
+      );
+      onApplyScores?.({ proposed_scores: Object.fromEntries(
+        Object.entries(dimScores).map(([k,v])=>[k,{proposed:v,current:null,reason:"Calculado del instrumento de línea base"}])
+      ), summary:`Línea base aplicada. ${responses.length} respuestas. Scores por dimensión: ${Object.entries(dimScores).map(([k,v])=>`${k}=${v}`).join(", ")}.` }, viewForm?.title);
+      return;
+    }
+
+    // Non-baseline: send to AI endpoint
     const textAnswers = questions.map(q=>{
       const qAnswers = answers.filter(a=>a.question_id===q.id);
       const vals = qAnswers.map(a=>a.value_integer??a.value_text??JSON.stringify(a.value_json)).filter(v=>v!=null);
       return `### ${q.text}\n${vals.join("\n")}`;
     }).join("\n\n");
 
-    // Call existing analyze endpoint
     const endpoint = { rc:"analyze-rc", do:"analyze-do", esg:"analyze-esg" }[moduleKey];
     if(!endpoint) return;
     try {
@@ -83,8 +133,7 @@ export default function FormManager({ projectId, moduleKey, supabase, accentColo
         body: JSON.stringify({
           fileContents:[{ name:`Formulario: ${viewForm?.title}`, content:textAnswers }],
           projectName: viewForm?.title,
-          currentScores:{},
-          projectContext:{},
+          currentScores:{}, projectContext:{},
         }),
       });
       if(!res.ok) throw new Error(await res.text());
@@ -119,12 +168,21 @@ export default function FormManager({ projectId, moduleKey, supabase, accentColo
             Las respuestas se analizan automáticamente y pueden convertirse en scores.
           </div>
         </div>
-        <button onClick={()=>setBuilding(true)} style={{
-          padding:"8px 16px",background:accentColor,border:"none",borderRadius:8,
-          color:"#08090c",fontSize:12,fontWeight:600,cursor:"pointer",
-          fontFamily:"'Instrument Sans',sans-serif",whiteSpace:"nowrap",flexShrink:0 }}>
-          + Nuevo formulario
-        </button>
+        <div style={{ display:"flex",gap:8,flexShrink:0 }}>
+          <button onClick={handleCreateBaseline} disabled={creatingBL}
+            style={{ padding:"8px 14px",background:`${accentColor}15`,
+              border:`1px solid ${accentColor}35`,borderRadius:8,
+              color:accentColor,fontSize:12,fontWeight:600,cursor:"pointer",
+              fontFamily:"'Instrument Sans',sans-serif",whiteSpace:"nowrap" }}>
+            {creatingBL ? "Creando…" : "📋 Línea base"}
+          </button>
+          <button onClick={()=>setBuilding(true)} style={{
+            padding:"8px 16px",background:accentColor,border:"none",borderRadius:8,
+            color:"#08090c",fontSize:12,fontWeight:600,cursor:"pointer",
+            fontFamily:"'Instrument Sans',sans-serif",whiteSpace:"nowrap" }}>
+            + Nuevo formulario
+          </button>
+        </div>
       </div>
 
       {/* Forms list */}
@@ -135,9 +193,16 @@ export default function FormManager({ projectId, moduleKey, supabase, accentColo
           <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:4 }}>
             Sin formularios aún
           </div>
-          <div style={{ fontSize:12,color:T.t3 }}>
-            Crea tu primer formulario para comenzar a recopilar datos.
+          <div style={{ fontSize:12,color:T.t3,marginBottom:16 }}>
+            Crea un formulario personalizado o carga el instrumento de línea base predefinido.
           </div>
+          <button onClick={handleCreateBaseline} disabled={creatingBL}
+            style={{ padding:"9px 20px",background:`${accentColor}15`,
+              border:`1px solid ${accentColor}35`,borderRadius:9,
+              color:accentColor,cursor:"pointer",fontSize:13,fontWeight:600,
+              fontFamily:"'Instrument Sans',sans-serif" }}>
+            {creatingBL ? "Creando…" : "📋 Cargar instrumento de línea base"}
+          </button>
         </div>
       )}
 
