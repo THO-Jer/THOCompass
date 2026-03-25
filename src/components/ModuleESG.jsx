@@ -1380,16 +1380,6 @@ function TabUpload({ project, supabase, onApplyScores }) {
 
       {/* Encuestas externas */}
       {supabase && project?.id && (
-        <div style={{ marginTop:24 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
-            Encuestas externas
-          </div>
-          <SurveyManager
-            project={project}
-            moduleKey="esg"
-            supabase={supabase}
-            accentColor={T.esg}/>
-        </div>
       )}
 
       {uploadedFiles.length > 0 && (
