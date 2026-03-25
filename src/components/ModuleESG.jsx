@@ -1378,10 +1378,6 @@ function TabUpload({ project, supabase, onApplyScores }) {
         </Card>
       )}
 
-      {/* Encuestas externas */}
-      {supabase && project?.id && (
-      )}
-
       {uploadedFiles.length > 0 && (
         <Card>
           <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>

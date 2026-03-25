@@ -1343,10 +1343,6 @@ function TabUpload({ project, supabase, onApplyScores }) {
         </Card>
       )}
 
-      {/* Encuestas externas */}
-      {supabase && project?.id && (
-      )}
-
       {/* Historial de archivos subidos */}
       {uploadedFiles.length > 0 && (
         <Card>
