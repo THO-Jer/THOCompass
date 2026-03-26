@@ -26,11 +26,30 @@ import FilesPanel from "./FilesPanel.jsx";
 
 // ── Tokens ────────────────────────────────────────────────────
 const T = {
-  bg:"#050505", s1:"#0a0a0a", s2:"#111111", s3:"#1a1a1a",
-  b1:"#1f1f1f", b2:"#2a2a2a", b3:"#363636",
-  t1:"#f0ece4", t2:"#9a9080", t3:"#4a4540", t4:"#282420",
-  rc:"#c8813a", do:"#8b6fa8", esg:"#4a8c6a",
-  blue:"#5b7fa6", amber:"#b8860b", red:"#a84040", green:"#4a8c6a",
+  bg:"#050505",
+  s1:"#0a0a0a",
+  s2:"#111111",
+  s3:"#181818",
+  b1:"#222222",
+  b2:"#2e2e2e",
+  b3:"#3a3a3a",
+  t1:"#f0ece4",
+  t2:"#9a9080",
+  t3:"#4a4540",
+  t4:"#282420",
+  rc:"#e8631a",
+  do:"#9b59d0",
+  esg:"#2db87a",
+  tho_orange:"#e8631a",
+  tho_yellow:"#f0c020",
+  tho_green:"#2db87a",
+  tho_blue:"#3b8fd4",
+  tho_purple:"#9b59d0",
+  tho_pink:"#d44b8a",
+  blue:"#3b8fd4",
+  amber:"#f0c020",
+  red:"#d44040",
+  green:"#2db87a",
 };
 
 const CSS = `
@@ -1034,10 +1053,27 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
       <div style={{ position:"relative", overflow:"hidden",
         background:"linear-gradient(135deg,#050505 0%,#0a0a0a 60%,#111111 100%)",
         borderBottom:`1px solid ${T.b1}` }}>
-        <div style={{ position:"absolute",top:-60,right:-60,width:300,height:300,borderRadius:"50%",
-          background:`radial-gradient(circle,${T.rc}08 0%,transparent 70%)`,pointerEvents:"none" }}/>
-        <div style={{ position:"absolute",bottom:-40,left:100,width:200,height:200,borderRadius:"50%",
-          background:`radial-gradient(circle,${T.do}06 0%,transparent 70%)`,pointerEvents:"none" }}/>
+        {/* Spectrum stripe at top */}
+        <div style={{ height:2, background:"linear-gradient(90deg,#e8631a,#f0c020,#2db87a,#3b8fd4,#9b59d0,#d44b8a)" }}/>
+        {/* Compass watermark */}
+        <div style={{ position:"absolute", bottom:-20, right:20, opacity:.04,
+          color:T.t1, pointerEvents:"none" }}>
+          <svg width="180" height="180" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth=".5"/>
+            <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth=".3"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+            <polygon points="12,2 10.5,12 13.5,12" fill="#e8631a" opacity="1"/>
+            <polygon points="12,22 13.5,12 10.5,12" fill="#3b8fd4" opacity="0.8"/>
+            <line x1="12" y1="2" x2="12" y2="3.5" stroke="currentColor" strokeWidth=".8"/>
+            <line x1="12" y1="20.5" x2="12" y2="22" stroke="currentColor" strokeWidth=".8"/>
+            <line x1="2" y1="12" x2="3.5" y2="12" stroke="currentColor" strokeWidth=".8"/>
+            <line x1="20.5" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth=".8"/>
+            <line x1="4.2" y1="4.2" x2="5.3" y2="5.3" stroke="currentColor" strokeWidth=".5"/>
+            <line x1="18.7" y1="4.2" x2="17.6" y2="5.3" stroke="currentColor" strokeWidth=".5"/>
+            <line x1="4.2" y1="19.8" x2="5.3" y2="18.7" stroke="currentColor" strokeWidth=".5"/>
+            <line x1="18.7" y1="19.8" x2="17.6" y2="18.7" stroke="currentColor" strokeWidth=".5"/>
+          </svg>
+        </div>
 
         <div style={{ padding:"36px 40px 32px",position:"relative" }}>
           <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:24 }}>

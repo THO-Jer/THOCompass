@@ -15,11 +15,30 @@ import { useState, useEffect } from "react";
 
 // ── Design tokens (mismos que App v4) ─────────────────────────
 const T = {
-  bg:"#050505", s1:"#0a0a0a", s2:"#111111", s3:"#1a1a1a",
-  b1:"#1f1f1f", b2:"#2a2a2a", b3:"#363636",
-  t1:"#f0ece4", t2:"#9a9080", t3:"#4a4540", t4:"#282420",
-  rc:"#c8813a", do:"#8b6fa8", esg:"#4a8c6a",
-  blue:"#5b7fa6", amber:"#b8860b", red:"#a84040", green:"#4a8c6a",
+  bg:"#050505",
+  s1:"#0a0a0a",
+  s2:"#111111",
+  s3:"#181818",
+  b1:"#222222",
+  b2:"#2e2e2e",
+  b3:"#3a3a3a",
+  t1:"#f0ece4",
+  t2:"#9a9080",
+  t3:"#4a4540",
+  t4:"#282420",
+  rc:"#e8631a",
+  do:"#9b59d0",
+  esg:"#2db87a",
+  tho_orange:"#e8631a",
+  tho_yellow:"#f0c020",
+  tho_green:"#2db87a",
+  tho_blue:"#3b8fd4",
+  tho_purple:"#9b59d0",
+  tho_pink:"#d44b8a",
+  blue:"#3b8fd4",
+  amber:"#f0c020",
+  red:"#d44040",
+  green:"#2db87a",
 };
 
 const CSS = `

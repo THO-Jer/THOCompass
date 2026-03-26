@@ -15,26 +15,33 @@ import FormPage        from "./components/FormPage";
 // Inspirado en tho-web.vercel.app: negro puro, serif editorial,
 // acentos cálidos contenidos, mucho espacio.
 const T = {
-  bg:"#050505",   // negro puro como tho-web
-  s1:"#0a0a0a",   // superficies
+  bg:"#050505",
+  s1:"#0a0a0a",
   s2:"#111111",
-  s3:"#1a1a1a",
-  b1:"#1f1f1f",   // bordes sutiles, monocromáticos
-  b2:"#2a2a2a",
-  b3:"#363636",
-  t1:"#f0ece4",   // blanco cálido (como tho-web)
-  t2:"#9a9080",   // texto secundario cálido
-  t3:"#4a4540",   // texto terciario
+  s3:"#181818",
+  b1:"#222222",
+  b2:"#2e2e2e",
+  b3:"#3a3a3a",
+  t1:"#f0ece4",
+  t2:"#9a9080",
+  t3:"#4a4540",
   t4:"#282420",
-  // Acentos módulos — más apagados, elegantes
-  rc:"#c8813a",   // terracota/bronce en vez de naranja brillante
-  do:"#8b6fa8",   // violeta apagado
-  esg:"#4a8c6a",  // verde bosque
+  // THO brand colors — vibrant, used as accents on dark bg
+  rc:"#e8631a",   // naranja THO
+  do:"#9b59d0",   // violeta THO
+  esg:"#2db87a",  // verde THO
+  // Spectrum completo de la paleta THO
+  tho_orange:"#e8631a",
+  tho_yellow:"#f0c020",
+  tho_green:"#2db87a",
+  tho_blue:"#3b8fd4",
+  tho_purple:"#9b59d0",
+  tho_pink:"#d44b8a",
   // UI
-  blue:"#5b7fa6",
-  amber:"#b8860b",
-  red:"#a84040",
-  green:"#4a8c6a",
+  blue:"#3b8fd4",
+  amber:"#f0c020",
+  red:"#d44040",
+  green:"#2db87a",
 };
 
 const BASE_CSS = `
@@ -98,16 +105,43 @@ const CLIENT_NAV = (modules) => [
 
 const MOD_COLOR = { rc:T.rc, do:T.do, esg:T.esg, clients:T.blue, admin:T.blue, dashboard:T.blue };
 
+// ── THO Design constants ──────────────────────────────────────
+const THO_SPECTRUM = `linear-gradient(90deg, #e8631a, #f0c020, #2db87a, #3b8fd4, #9b59d0, #d44b8a)`;
+const THO_SPECTRUM_SUBTLE = `linear-gradient(90deg, #e8631a40, #f0c02040, #2db87a40, #3b8fd440, #9b59d040, #d44b8a40)`;
+
+// Compass SVG — evocación sutil de brújula
+function CompassMark({ size=20, opacity=0.15 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      style={{ opacity, flexShrink:0 }}>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1"/>
+      <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+      {/* N needle — orange */}
+      <polygon points="12,3 10.5,12 13.5,12" fill="#e8631a" opacity="0.9"/>
+      {/* S needle — blue */}
+      <polygon points="12,21 13.5,12 10.5,12" fill="#3b8fd4" opacity="0.7"/>
+      {/* Tick marks */}
+      <line x1="12" y1="2" x2="12" y2="4" stroke="currentColor" strokeWidth="0.8"/>
+      <line x1="12" y1="20" x2="12" y2="22" stroke="currentColor" strokeWidth="0.8"/>
+      <line x1="2" y1="12" x2="4" y2="12" stroke="currentColor" strokeWidth="0.8"/>
+      <line x1="20" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="0.8"/>
+    </svg>
+  );
+}
+
 // ── Logo mark ─────────────────────────────────────────────────
 function LogoMark({ size=28 }) {
   return (
     <div style={{
       width:size, height:size, borderRadius:6, flexShrink:0,
-      background:`linear-gradient(135deg,${T.rc},${T.do})`,
+      background:THO_SPECTRUM,
       display:"flex", alignItems:"center", justifyContent:"center",
-      fontFamily:"'Megrim',cursive", fontWeight:400, fontSize:size*0.6,
+      fontFamily:"'Megrim',cursive", fontWeight:400, fontSize:size*0.58,
       color:"white", letterSpacing:0,
-    }}>T</div>
+      position:"relative",
+    }}>
+      <CompassMark size={size*0.75} opacity={0.35}/>
+    </div>
   );
 }
 
@@ -159,7 +193,16 @@ function Sidebar({ nav, page, onNav, open, onToggle, profile, isC, onSignOut, mo
       height:"100%",
       transition: mobile ? "none" : "width .2s cubic-bezier(.4,0,.2,1)",
       overflow:"hidden",
+      position:"relative",
     }}>
+      {/* THO spectrum stripe at top */}
+      <div style={{ height:2, background:THO_SPECTRUM, flexShrink:0 }}/>
+
+      {/* Compass watermark */}
+      <div style={{ position:"absolute", bottom:60, right:-10, opacity:.04,
+        pointerEvents:"none", color:T.t1 }}>
+        <CompassMark size={120} opacity={1}/>
+      </div>
       {/* Logo */}
       <div style={{
         display:"flex", alignItems:"center", gap:10,
@@ -332,6 +375,20 @@ function Login() {
   const [error,    setError]    = useState(null);
   const [mode,     setMode]     = useState("login"); // login | signup | magic
 
+  async function handleOAuth(provider) {
+    setLoading(true); setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: getOAuthRedirectUrl(),
+          scopes: provider === "azure" ? "email profile" : undefined,
+        },
+      });
+      if (error) throw error;
+    } catch(e) { setError(e.message); setLoading(false); }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true); setError(null);
@@ -393,8 +450,16 @@ function Login() {
 
         {/* Card */}
         <div style={{ background:T.s1, border:`1px solid ${T.b1}`,
-          borderRadius:14, padding:"32px 28px",
+          borderRadius:14, overflow:"hidden",
           boxShadow:"0 32px 80px rgba(0,0,0,.6)" }}>
+          {/* Spectrum stripe */}
+          <div style={{ height:3, background:THO_SPECTRUM }}/>
+          <div style={{ padding:"32px 28px", position:"relative" }}>
+          {/* Compass watermark */}
+          <div style={{ position:"absolute", top:16, right:16, opacity:.06,
+            color:T.t1, pointerEvents:"none" }}>
+            <CompassMark size={64} opacity={1}/>
+          </div>
 
           <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20,
             color:T.t1, marginBottom:4, textAlign:"center" }}>
@@ -404,6 +469,51 @@ function Login() {
             {mode==="magic" ? "Te enviaremos un link seguro" :
              mode==="signup" ? "Tu cuenta quedará pendiente de aprobación" :
              "Accede a tu cuenta THO Compass"}
+          </div>
+
+          {/* OAuth providers */}
+          <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
+            <button type="button" onClick={()=>handleOAuth("azure")} disabled={loading}
+              style={{ width:"100%", padding:"10px 14px",
+                background:"none", border:`1px solid ${T.b2}`,
+                borderRadius:8, color:T.t1, fontSize:13, cursor:"pointer",
+                fontFamily:"'Instrument Sans',sans-serif",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:10,
+                transition:"border-color .15s", letterSpacing:.2 }}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=T.b3}
+              onMouseLeave={e=>e.currentTarget.style.borderColor=T.b2}>
+              <svg width="16" height="16" viewBox="0 0 21 21" fill="none">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+              </svg>
+              Ingresar con Microsoft
+            </button>
+            <button type="button" onClick={()=>handleOAuth("google")} disabled={loading}
+              style={{ width:"100%", padding:"10px 14px",
+                background:"none", border:`1px solid ${T.b2}`,
+                borderRadius:8, color:T.t1, fontSize:13, cursor:"pointer",
+                fontFamily:"'Instrument Sans',sans-serif",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:10,
+                transition:"border-color .15s", letterSpacing:.2 }}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=T.b3}
+              onMouseLeave={e=>e.currentTarget.style.borderColor=T.b2}>
+              <svg width="16" height="16" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Ingresar con Google
+            </button>
+          </div>
+
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+            <div style={{ flex:1, height:1, background:T.b1 }}/>
+            <span style={{ fontSize:11, color:T.t3,
+              fontFamily:"'JetBrains Mono',monospace", letterSpacing:1 }}>o</span>
+            <div style={{ flex:1, height:1, background:T.b1 }}/>
           </div>
 
           <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -479,6 +589,7 @@ function Login() {
                 ← Volver al inicio
               </button>
             )}
+          </div>
           </div>
         </div>
 
@@ -671,13 +782,18 @@ export default function App() {
 
           {/* Topbar */}
           <div style={{
-            height:52, background:T.s1,
+            background:T.s1,
             borderBottom:`1px solid ${T.b1}`,
-            display:"flex", alignItems:"center",
-            justifyContent:"space-between",
-            padding:"0 24px",
             position:"sticky", top:0, zIndex:100,
           }}>
+            {/* Spectrum stripe */}
+            <div style={{ height:2, background:THO_SPECTRUM }}/>
+            <div style={{
+              height:50,
+              display:"flex", alignItems:"center",
+              justifyContent:"space-between",
+              padding:"0 24px",
+            }}>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
               {/* Mobile hamburger */}
               <button className="mobile-menu-btn" onClick={()=>setMobileMenuOpen(true)}
@@ -773,6 +889,7 @@ export default function App() {
                 </button>
               )}
             </div>
+          </div>
           </div>
 
           {/* Page content */}
