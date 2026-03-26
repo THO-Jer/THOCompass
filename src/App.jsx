@@ -753,11 +753,22 @@ export default function App() {
   const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV(clientMods);
 
   // Navigate and reset scroll
+  function scrollViewportTop() {
+    window.scrollTo({ top:0, left:0, behavior:"auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
+
   function navigate(id) {
     setPage(id);
-    window.scrollTo({ top:0, behavior:"instant" });
+    scrollViewportTop();
     setShowPicker(false);
   }
+
+  // Force top position whenever dashboard/modules are opened
+  useEffect(() => {
+    scrollViewportTop();
+  }, [page, selClientId]);
 
   // ── Render page content ──────────────────────────────────────
   function renderPage() {
