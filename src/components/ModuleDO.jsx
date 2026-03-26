@@ -29,17 +29,17 @@ import {
 
 // ── Tokens ────────────────────────────────────────────────────
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -56,7 +56,7 @@ const T = {
 };
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .do-fade{animation:doFade .35s cubic-bezier(.4,0,.2,1) both;}
 .do-d1{animation-delay:.06s;} .do-d2{animation-delay:.12s;}
 .do-d3{animation-delay:.18s;} .do-d4{animation-delay:.24s;}
@@ -301,7 +301,7 @@ function Modal({ title, onClose, children, width=540 }) {
         padding:"28px 32px",width,maxWidth:"94vw",maxHeight:"88vh",overflowY:"auto",
         boxShadow:"0 32px 80px rgba(0,0,0,.8)" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:18,color:T.t1 }}>{title}</div>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:18,color:T.t1 }}>{title}</div>
           <button onClick={onClose} style={{ background:"none",border:"none",
             color:T.t3,cursor:"pointer",fontSize:18 }}>✕</button>
         </div>
@@ -484,7 +484,7 @@ function TabScore({ project, supabase, onUpdate }) {
       {/* Radar */}
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:18 }}>
         <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
             Perfil de indicadores
           </div>
           <div style={{ height:220 }}>
@@ -500,7 +500,7 @@ function TabScore({ project, supabase, onUpdate }) {
 
         {/* Evolution */}
         <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
             Evolución histórica
           </div>
           <div style={{ height:220 }}>
@@ -526,7 +526,7 @@ function TabScore({ project, supabase, onUpdate }) {
 
       {/* Dimension inputs */}
       <Card>
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
           Ingreso de scores por dimensión
         </div>
         <div style={{ fontSize:13,color:T.t3,marginBottom:20,lineHeight:1.55 }}>
@@ -552,7 +552,7 @@ function TabScore({ project, supabase, onUpdate }) {
       {/* Historial de cambios */}
       {supabase && project?.id && (
         <div style={{ marginTop:24 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1,marginBottom:14 }}>
             Historial de cambios
           </div>
           <ScoreLog projectId={project.id} supabase={supabase} accentColor={T.do}/>
@@ -718,7 +718,7 @@ function TabDiagnostics({ project, instruments, supabase, onAdd, onUpdate }) {
         <div style={{ textAlign:"center",padding:"48px 0",background:T.s2,
           border:`1px dashed ${T.b2}`,borderRadius:14 }}>
           <div style={{ fontSize:32,marginBottom:12 }}>📋</div>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:6 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1,marginBottom:6 }}>
             Sin instrumentos registrados
           </div>
           <div style={{ fontSize:13,color:T.t3,marginBottom:16 }}>
@@ -740,7 +740,7 @@ function TabDiagnostics({ project, instruments, supabase, onAdd, onUpdate }) {
                   <div style={{ flex:1 }}>
                     <div style={{ display:"flex",alignItems:"center",gap:9,marginBottom:6 }}>
                       <span style={{ fontSize:18 }}>{it?.icon||"📝"}</span>
-                      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1 }}>
+                      <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1 }}>
                         {inst.title}
                       </div>
                       {!inst.visible_to_client&&(
@@ -967,7 +967,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
       </div>
 
       <Card style={{ marginBottom:16 }}>
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
           Carga de instrumentos y resultados
         </div>
         <div style={{ fontSize:13,color:T.t3,marginBottom:18,lineHeight:1.6 }}>
@@ -982,7 +982,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
           style={{ border:`2px dashed ${drag?T.do:T.b2}`,borderRadius:12,padding:28,
             textAlign:"center",cursor:"pointer",background:drag?`${T.do}08`:T.s2,transition:"all .2s" }}>
           <div style={{ fontSize:28,marginBottom:8 }}>📁</div>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:4 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1,marginBottom:4 }}>
             Arrastra archivos o haz clic
           </div>
           <div style={{ fontSize:12,color:T.t3 }}>
@@ -1191,7 +1191,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
       {/* Historial de archivos subidos */}
       {uploadedFiles.length > 0 && (
         <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
             Archivos subidos ({uploadedFiles.length})
           </div>
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
@@ -1450,7 +1450,7 @@ export default function ModuleDO({ client, supabase }) {
         ) : !selProject ? (
           <div style={{ textAlign:"center",padding:"48px 0",background:T.s2,
             border:`1px dashed ${T.b2}`,borderRadius:14 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:6 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1,marginBottom:6 }}>
               Sin proyectos DO
             </div>
             <div style={{ fontSize:13,color:T.t3 }}>

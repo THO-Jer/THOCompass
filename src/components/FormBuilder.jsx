@@ -4,17 +4,17 @@
 import { useState, useRef } from "react";
 
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -484,7 +484,7 @@ export default function FormBuilder({ projectId, moduleKey, supabase, accentColo
         <div style={{ padding:"18px 24px",borderBottom:`1px solid ${T.b1}`,
           display:"flex",alignItems:"center",justifyContent:"space-between" }}>
           <div>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:18,color:T.t1 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:18,color:T.t1 }}>
               Nuevo formulario
             </div>
             <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,
@@ -601,7 +601,7 @@ export default function FormBuilder({ projectId, moduleKey, supabase, accentColo
               <div style={{ textAlign:"center",padding:"40px 0",
                 background:T.s2,borderRadius:12,border:`2px dashed ${T.b2}` }}>
                 <div style={{ fontSize:28,marginBottom:8 }}>📋</div>
-                <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,
+                <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,
                   color:T.t1,marginBottom:4 }}>Sin preguntas aún</div>
                 <div style={{ fontSize:12,color:T.t3 }}>
                   Haz clic en cualquier tipo de pregunta para comenzar.

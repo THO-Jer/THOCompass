@@ -7,17 +7,17 @@ import { useState, useEffect } from "react";
 import { supabase as sb } from "../lib/supabase.js";
 
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -131,7 +131,7 @@ export default function SurveyPage({ token }) {
       <style>{`body{margin:0;background:${T.bg}}`}</style>
       <div style={{ textAlign:"center", maxWidth:400 }}>
         <div style={{ fontSize:48, marginBottom:16 }}>⚠</div>
-        <div style={{ fontFamily:"'Playfair Display',serif", fontSize:22,
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:22,
           color:T.t1, marginBottom:12 }}>Link no disponible</div>
         <div style={{ fontSize:14, color:T.t3, lineHeight:1.7 }}>{error}</div>
       </div>
@@ -152,10 +152,10 @@ export default function SurveyPage({ token }) {
   if (step === 2) return (
     <div style={{ minHeight:"100vh", background:T.bg, display:"flex",
       alignItems:"center", justifyContent:"center", padding:24 }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');body{margin:0;background:${T.bg}}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');body{margin:0;background:${T.bg}}`}</style>
       <div style={{ textAlign:"center", maxWidth:440 }}>
         <div style={{ fontSize:52, marginBottom:20 }}>✓</div>
-        <div style={{ fontFamily:"'Playfair Display',serif", fontSize:26,
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:26,
           color:T.t1, marginBottom:12 }}>¡Gracias por responder!</div>
         <div style={{ fontSize:14, color:T.t2, lineHeight:1.7, marginBottom:24 }}>
           Tus respuestas han sido registradas y serán parte del análisis de{" "}
@@ -171,7 +171,7 @@ export default function SurveyPage({ token }) {
   );
 
   const CSS = `
-    @import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     * { box-sizing: border-box; }
     body { margin:0; background:${T.bg}; font-family:'Instrument Sans',sans-serif; color:${T.t2}; }
     input, select { outline:none; }
@@ -187,7 +187,7 @@ export default function SurveyPage({ token }) {
           color:mod.color, letterSpacing:2, textTransform:"uppercase", marginBottom:12 }}>
           {mod.icon} {mod.label} · THO Compass
         </div>
-        <div style={{ fontFamily:"'Playfair Display',serif", fontSize:28,
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:28,
           color:T.t1, marginBottom:8, lineHeight:1.2 }}>
           {link.title || "Instrumento de evaluación"}
         </div>

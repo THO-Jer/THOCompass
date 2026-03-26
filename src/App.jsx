@@ -15,17 +15,17 @@ import FormPage        from "./components/FormPage";
 // Inspirado en tho-web.vercel.app: negro puro, serif editorial,
 // acentos cálidos contenidos, mucho espacio.
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   // THO brand colors — vibrant, used as accents on dark bg
   rc:"#e8631a",   // naranja THO
   do:"#9b59d0",   // violeta THO
@@ -45,15 +45,15 @@ const T = {
 };
 
 const BASE_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:auto;}
 body{
   background:
     radial-gradient(1200px 420px at 20% -10%, rgba(155,89,208,.09), transparent 50%),
     radial-gradient(900px 300px at 90% -20%, rgba(232,99,26,.08), transparent 55%),
-    #050505;
-  color:#f0ece4;
+    #040915;
+  color:#f5f8ff;
   font-family:'Inter','Instrument Sans',sans-serif;
   font-size:14px;
   line-height:1.7;
@@ -65,19 +65,19 @@ button,input,select,textarea{
 }
 button,input,select,textarea{transition:all .18s cubic-bezier(.4,0,.2,1);}
 input,select,textarea{
-  background:#111111;
-  border:1px solid #2e2e2e;
+  background:#0b1426;
+  border:1px solid #243454;
   border-radius:10px;
-  color:#f0ece4;
+  color:#f5f8ff;
 }
 input:focus,select:focus,textarea:focus{
   outline:none;
-  border-color:#4d4258;
-  box-shadow:0 0 0 3px rgba(155,89,208,.17);
+  border-color:#3b8fd4;
+  box-shadow:0 0 0 3px rgba(59,143,212,.22);
 }
 ::-webkit-scrollbar{width:2px;}
 ::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:2px;}
+::-webkit-scrollbar-thumb{background:#243454;border-radius:2px;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -251,7 +251,7 @@ function Sidebar({ nav, page, onNav, open, onToggle, profile, isC, onSignOut, mo
     <div style={{
       width: mobile ? "100%" : (open ? 220 : 52),
       flexShrink:0,
-      background:"linear-gradient(180deg,#0d0d0d 0%, #0a0a0a 100%)",
+      background:"linear-gradient(180deg,#071126 0%, #070f1f 100%)",
       borderRight: mobile ? "none" : `1px solid ${T.b1}`,
       boxShadow: mobile ? "none" : "20px 0 38px rgba(0,0,0,.35)",
       display:"flex", flexDirection:"column",
@@ -340,7 +340,7 @@ function Sidebar({ nav, page, onNav, open, onToggle, profile, isC, onSignOut, mo
               width:30, height:30, borderRadius:"50%", flexShrink:0,
               background:`${T.rc}20`, border:`1px solid ${T.rc}30`,
               display:"flex", alignItems:"center", justifyContent:"center",
-              fontFamily:"'Playfair Display',serif", fontSize:12, color:T.rc,
+              fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:12, color:T.rc,
             }}>{profile.full_name?.[0]?.toUpperCase() || "?"}</div>
             <div style={{ minWidth:0 }}>
               <div style={{ fontSize:12, color:T.t1, fontWeight:500,
@@ -475,7 +475,7 @@ function Login() {
     <div style={{ minHeight:"100vh", background:T.bg, display:"flex",
       alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ maxWidth:400, textAlign:"center" }}>
-        <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18,
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:18,
           color:T.t1, marginBottom:12 }}>Supabase no configurado</div>
         <div style={{ fontSize:13, color:T.t3 }}>
           Agrega VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en las variables de entorno.
@@ -519,7 +519,7 @@ function Login() {
             <CompassMark size={64} opacity={1}/>
           </div>
 
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20,
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:20,
             color:T.t1, marginBottom:4, textAlign:"center" }}>
             {mode==="signup" ? "Crear cuenta" : mode==="magic" ? "Acceso por email" : "Ingresar"}
           </div>

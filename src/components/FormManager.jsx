@@ -6,17 +6,17 @@ import FormResults from "./FormResults.jsx";
 import { createBaselineForm } from "../lib/baseline.js";
 
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -211,7 +211,7 @@ export default function FormManager({ projectId, moduleKey, supabase, accentColo
         <div style={{ textAlign:"center",padding:"36px 0",
           background:T.s2,borderRadius:12,border:`1px dashed ${T.b2}` }}>
           <div style={{ fontSize:28,marginBottom:8 }}>📋</div>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:4 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1,marginBottom:4 }}>
             Sin formularios aún
           </div>
           <div style={{ fontSize:12,color:T.t3,marginBottom:16 }}>
@@ -241,7 +241,7 @@ export default function FormManager({ projectId, moduleKey, supabase, accentColo
                 <div style={{ display:"flex",alignItems:"flex-start",gap:12 }}>
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap" }}>
-                      <span style={{ fontFamily:"'Playfair Display',serif",
+                      <span style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",
                         fontSize:14,color:T.t1,fontWeight:600 }}>{form.title}</span>
                       <span style={{ padding:"2px 8px",borderRadius:20,fontSize:10,
                         fontFamily:"'JetBrains Mono',monospace",

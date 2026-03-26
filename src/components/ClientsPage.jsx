@@ -14,17 +14,17 @@ import { useState, useEffect } from "react";
 
 // ── Design tokens ──────────────────────────────────────────────
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -41,7 +41,7 @@ const T = {
 };
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .cp-fade  { animation: cpFade .35s cubic-bezier(.4,0,.2,1) both; }
 .cp-d1 { animation-delay:.06s; } .cp-d2 { animation-delay:.12s; }
 .cp-d3 { animation-delay:.18s; } .cp-d4 { animation-delay:.24s; }
@@ -180,7 +180,7 @@ function Modal({ title, onClose, children, width=500 }) {
         padding:"28px 32px", width, maxWidth:"94vw", maxHeight:"88vh", overflowY:"auto",
         boxShadow:"0 32px 80px rgba(0,0,0,.8)", animation:"cpFade .28s ease both" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, color:T.t1 }}>{title}</div>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:18, color:T.t1 }}>{title}</div>
           <button onClick={onClose} style={{ background:"none", border:"none",
             color:T.t3, cursor:"pointer", fontSize:18 }}>✕</button>
         </div>
@@ -349,7 +349,7 @@ function ProjectCard({ project, onEdit, onArchive }) {
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
         <div style={{ flex:1 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:14, color:T.t1 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:14, color:T.t1 }}>
               {project.name}
             </div>
             <Pill color={st.color}>● {st.label}</Pill>
@@ -490,7 +490,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
           <div>
             <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:T.t3,
               letterSpacing:2, textTransform:"uppercase", marginBottom:8 }}>{client.industry}</div>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:30, color:T.t1,
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:30, color:T.t1,
               letterSpacing:-.5, marginBottom:8 }}>{client.name}</div>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
               {Object.entries(MOD).map(([k,m])=>(
@@ -551,7 +551,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
                   marginBottom:14 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                     <span style={{ fontSize:18 }}>{m.icon}</span>
-                    <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:m.color }}>
+                    <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:m.color }}>
                       {m.label}
                     </div>
                     <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11,
@@ -594,7 +594,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
       {tab==="config" && (
         <div className="cp-fade">
           <Card style={{ marginBottom:18 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:T.t1, marginBottom:18 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:T.t1, marginBottom:18 }}>
               Datos generales
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:18 }}>
@@ -607,7 +607,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
             </div>
 
             <Divider/>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:T.t1, marginBottom:18 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:T.t1, marginBottom:18 }}>
               Módulos activos
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:22 }}>
@@ -647,7 +647,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
       {tab==="users" && (
         <div className="cp-fade">
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:T.t1, marginBottom:18 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:T.t1, marginBottom:18 }}>
               Usuarios con acceso
             </div>
             {(client.users||[]).length===0 ? (
@@ -662,7 +662,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
                     <div style={{ width:34, height:34, borderRadius:"50%", flexShrink:0,
                       background:`${T.blue}18`, color:T.blue, border:`1px solid ${T.blue}30`,
                       display:"flex", alignItems:"center", justifyContent:"center",
-                      fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:12 }}>
+                      fontFamily:"'Inter','Instrument Sans',sans-serif", fontWeight:700, fontSize:12 }}>
                       {u.full_name?.[0]?.toUpperCase()||u.email[0]?.toUpperCase()}
                     </div>
                     <div style={{ flex:1 }}>
@@ -702,7 +702,7 @@ function ClientDetail({ client, supabase, onBack, onUpdate, onClientsChange }) {
       {tab==="publish" && (
         <div className="cp-fade">
           <Card style={{ marginBottom:16 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:T.t1, marginBottom:6 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:T.t1, marginBottom:6 }}>
               Control de publicación
             </div>
             <div style={{ fontSize:13, color:T.t3, marginBottom:22 }}>
@@ -785,7 +785,7 @@ function ClientList({ clients, onSelect, onCreateClient }) {
           letterSpacing:2, textTransform:"uppercase", marginBottom:8 }}>Cartera de clientes</div>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end",
           flexWrap:"wrap", gap:14 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:30, color:T.t1, letterSpacing:-.5 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:30, color:T.t1, letterSpacing:-.5 }}>
             Clientes
           </div>
           <Btn variant="primary" onClick={onCreateClient}>+ Nueva empresa</Btn>
@@ -831,7 +831,7 @@ function ClientList({ clients, onSelect, onCreateClient }) {
               gap:16, flexWrap:"wrap" }}>
               <div style={{ flex:1, minWidth:200 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:5 }}>
-                  <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, color:T.t1 }}>
+                  <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:18, color:T.t1 }}>
                     {c.name}
                   </div>
                   <span style={{ padding:"3px 9px", borderRadius:20, fontSize:11,
@@ -887,7 +887,7 @@ function ClientList({ clients, onSelect, onCreateClient }) {
         {filtered.length===0 && (
           <div style={{ textAlign:"center", padding:"48px 0" }}>
             <div style={{ fontSize:32, marginBottom:12 }}>🔍</div>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:T.t1, marginBottom:6 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:T.t1, marginBottom:6 }}>
               Sin resultados
             </div>
             <div style={{ fontSize:13, color:T.t3 }}>No se encontraron clientes con ese criterio.</div>

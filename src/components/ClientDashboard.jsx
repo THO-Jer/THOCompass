@@ -26,17 +26,17 @@ import FilesPanel from "./FilesPanel.jsx";
 
 // ── Tokens ────────────────────────────────────────────────────
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -53,7 +53,7 @@ const T = {
 };
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .cd-fade{animation:cdFade .4s cubic-bezier(.4,0,.2,1) both;}
 .cd-d1{animation-delay:.07s;} .cd-d2{animation-delay:.14s;}
 .cd-d3{animation-delay:.21s;} .cd-d4{animation-delay:.28s;}
@@ -312,7 +312,7 @@ function AutoSummary({ client }) {
         </div>
         <div style={{ flex:1 }}>
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:8 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:17,color:T.t1 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:17,color:T.t1 }}>
               Estado actual de la asesoría
             </div>
             <span style={{ background:`${cfg.color}18`,color:cfg.color,
@@ -371,7 +371,7 @@ function ModuleCard({ modKey, scores, active, onClick }) {
           </div>
         </div>
       </div>
-      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,color:T.t1,marginBottom:3 }}>
+      <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:13,color:T.t1,marginBottom:3 }}>
         {mod.label}
       </div>
       <div style={{ fontSize:11,color:T.t3,marginBottom:14 }}>{mod.scoreLabel}</div>
@@ -491,7 +491,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:16 }}>
             {/* Score ring + dims */}
             <Card>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>
+              <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:16 }}>
                 Score por dimensión
               </div>
               <div style={{ display:"flex",justifyContent:"center",marginBottom:20 }}>
@@ -505,7 +505,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
             </Card>
             {/* Radar */}
             <Card>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+              <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
                 Perfil de indicadores
               </div>
               <div style={{ height:240 }}>
@@ -521,7 +521,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
               {modKey==="esg"&&client.scores.esg?.maturity&&(
                 <>
                   <div style={{ height:1,background:T.b1,margin:"16px 0" }}/>
-                  <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,color:T.t1,marginBottom:12 }}>
+                  <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:13,color:T.t1,marginBottom:12 }}>
                     Nivel de madurez por pilar
                   </div>
                   {["ambiental","social","gobernanza"].map(k=>{
@@ -553,7 +553,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
           {/* Alerts for this module */}
           {moduleAlerts.length>0&&(
             <Card>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+              <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
                 Alertas del módulo
               </div>
               {moduleAlerts.map(a=>(
@@ -578,7 +578,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
           {/* GRI compliance for ESG */}
           {modKey==="esg"&&client.gri_summary&&(
             <Card style={{ marginTop:16 }}>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>
+              <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:16 }}>
                 Cumplimiento de estándares GRI
               </div>
               {Object.entries(client.gri_summary).map(([pillar,g])=>{
@@ -636,7 +636,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
                     justifyContent:"space-between",gap:16 }}>
                     <div style={{ flex:1 }}>
                       <div style={{ display:"flex",alignItems:"center",gap:9,marginBottom:6 }}>
-                        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1 }}>
+                        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1 }}>
                           {p.name}
                         </div>
                         <span style={{ background:`${STATUS_COLOR[p.status]||T.t3}18`,
@@ -683,7 +683,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
       {tab==="commitments"&&(
         <div className="cd-fade">
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
               Compromisos activos
             </div>
             <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
@@ -748,7 +748,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
       {tab==="documents"&&(
         <div className="cd-fade">
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
               Documentos compartidos
             </div>
             <div style={{ fontSize:13,color:T.t3,marginBottom:18,lineHeight:1.6 }}>
@@ -772,7 +772,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
       {tab==="history"&&(
         <div className="cd-fade">
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
               Historial de cambios de score
             </div>
             <div style={{ fontSize:13,color:T.t3,marginBottom:18,lineHeight:1.6 }}>
@@ -791,7 +791,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
       {tab==="evolution"&&(
         <div className="cd-fade">
           <Card style={{ marginBottom:16 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:18 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:18 }}>
               Evolución del {mod.scoreLabel}
             </div>
             <div style={{ height:250 }}>
@@ -817,7 +817,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
 
           {/* Period comparison */}
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
               Comparativa períodos
             </div>
             {history.slice(-3).reverse().map((h,i,arr)=>{
@@ -951,7 +951,7 @@ function UpcomingCommitmentsCard({ client }) {
 
   return (
     <div>
-      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+      <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
         Próximos compromisos
       </div>
 
@@ -1053,7 +1053,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
 
       {/* ── HERO ── */}
       <div style={{ position:"relative", overflow:"hidden",
-        background:"linear-gradient(135deg,#050505 0%,#0a0a0a 60%,#111111 100%)",
+        background:"linear-gradient(135deg,#040915 0%,#070f1f 60%,#0b1426 100%)",
         borderBottom:`1px solid ${T.b1}` }}>
         {/* Spectrum stripe at top */}
         <div style={{ height:2, background:"linear-gradient(90deg,#e8631a,#c44a7a,#9b59d0)" }}/>
@@ -1084,7 +1084,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
                 letterSpacing:3,textTransform:"uppercase",marginBottom:10 }}>
                 {client.period} · THO Compass
               </div>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:34,color:T.t1,
+              <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:34,color:T.t1,
                 letterSpacing:-.5,marginBottom:8,lineHeight:1.1 }}>{client.name}</div>
               <div style={{ display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:16 }}>
                 {client.industry&&<span style={{ fontSize:13,color:T.t2 }}>{client.industry}</span>}
@@ -1107,8 +1107,8 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
                 border:`1px solid ${ircsColor}25`,borderRadius:16,flexShrink:0 }}>
                 <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:T.t3,
                   letterSpacing:2,textTransform:"uppercase",marginBottom:6 }}>Índice IRCS</div>
-                <div style={{ fontFamily:"'Playfair Display',serif",fontSize:56,color:ircsColor,
-                  fontWeight:700,lineHeight:1,marginBottom:4 }}>{ircs}</div>
+                <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:56,color:ircsColor,
+                  lineHeight:1,marginBottom:4 }}>{ircs}</div>
                 <div style={{ fontSize:12,color:ircsColor,fontWeight:500 }}>{ircsLabel}</div>
               </div>
             )}
@@ -1141,7 +1141,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
             borderRadius:12,display:"flex",alignItems:"center",gap:14 }}>
             <div style={{ fontSize:28 }}>🏆</div>
             <div>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.green,marginBottom:2 }}>
+              <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.green,marginBottom:2 }}>
                 {completedCommitments} compromiso{completedCommitments>1?"s":""} completado{completedCommitments>1?"s":""}
               </div>
               <div style={{ fontSize:12,color:T.t3 }}>Acuerdos cumplidos con sus grupos de interés.</div>
@@ -1152,7 +1152,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         {/* Evolution + Radar */}
         <div className="cd-fade cd-d2" style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,marginBottom:20 }}>
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>Evolución histórica</div>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:16 }}>Evolución histórica</div>
             <div style={{ height:200 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
@@ -1201,7 +1201,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
             )}
           </Card>
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>Perfil de indicadores</div>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>Perfil de indicadores</div>
             <div style={{ height:240 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData}>
@@ -1217,7 +1217,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         {/* Alerts + Recommendations */}
         <div className="cd-fade cd-d3" style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:20 }}>
           <Card>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>Alertas del período</div>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>Alertas del período</div>
             {client.alerts.length===0 ? (
               <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",
                 background:`${T.green}08`,border:`1px solid ${T.green}20`,borderRadius:10 }}>
@@ -1249,7 +1249,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         {/* Active projects */}
         {client.projects.length>0&&(
           <Card cls="cd-fade cd-d4" style={{ marginBottom:20 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>Proyectos activos</div>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>Proyectos activos</div>
             <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12 }}>
               {client.projects.map(p=>{
                 const mod=MOD[p.module_key];
@@ -1261,7 +1261,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=T.b1;e.currentTarget.style.transform="none"}}>
                     <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
                       <span style={{ fontSize:15 }}>{mod?.icon}</span>
-                      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,color:T.t1 }}>{p.name}</div>
+                      <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:13,color:T.t1 }}>{p.name}</div>
                     </div>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                       <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:10,
@@ -1279,7 +1279,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
 
         {/* Messages */}
         <Card cls="cd-fade cd-d5">
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
             Canal con THO Consultora
           </div>
           <div style={{ fontSize:13,color:T.t3,marginBottom:18 }}>
@@ -1478,7 +1478,7 @@ export default function ClientDashboard({ client: rawClient = MOCK_CLIENT, supab
               <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",
                 padding:"14px 18px", borderBottom:`1px solid ${T.b1}` }}>
                 <div>
-                  <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1 }}>
+                  <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1 }}>
                     Mensajes — {client.name}
                   </div>
                   <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,
