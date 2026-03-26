@@ -1562,7 +1562,7 @@ export default function ModuleESG({ client, supabase }) {
   return (
     <>
       <style>{CSS}</style>
-      <div className="esg-module" style={ padding:"clamp(16px, 4vw, 36px)",maxWidth:1200,overflowX:"hidden" }>
+      <div className="esg-module" style={{ padding:"clamp(16px, 4vw, 36px)",maxWidth:1200,overflowX:"hidden" }}>
         {/* THO spectrum stripe */}
         <div style={{ height:2, background:"linear-gradient(90deg,#e8631a,#c44a7a,#9b59d0)",
           margin:"-32px -36px 24px" }}/>
