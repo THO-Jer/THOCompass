@@ -20,7 +20,7 @@ const T = {
 }
 
 const css = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 .ap-wrap{font-family:'Instrument Sans',sans-serif;}
 .ap-tabs{display:flex;gap:3px;background:${T.s2};border-radius:10px;padding:4px;width:fit-content;margin-bottom:20px;}
 .ap-tab{padding:7px 16px;border-radius:7px;border:none;background:none;color:${T.t3};font-size:13px;font-weight:500;cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:all .15s;}

@@ -26,16 +26,15 @@ import FilesPanel from "./FilesPanel.jsx";
 
 // ── Tokens ────────────────────────────────────────────────────
 const T = {
-  bg:"#08090c", s1:"#0d0f14", s2:"#111520", s3:"#161b28",
-  b1:"#1d2535", b2:"#232d42", b3:"#2e3a52",
-  t1:"#e8ecf4", t2:"#8a97b0", t3:"#3d4d66", t4:"#1e2a3e",
-  rc:"#f97316", do:"#a855f7", esg:"#22c55e",
-  blue:"#3b82f6", amber:"#f59e0b", red:"#ef4444", green:"#22c55e",
-  teal:"#14b8a6",
+  bg:"#050505", s1:"#0a0a0a", s2:"#111111", s3:"#1a1a1a",
+  b1:"#1f1f1f", b2:"#2a2a2a", b3:"#363636",
+  t1:"#f0ece4", t2:"#9a9080", t3:"#4a4540", t4:"#282420",
+  rc:"#c8813a", do:"#8b6fa8", esg:"#4a8c6a",
+  blue:"#5b7fa6", amber:"#b8860b", red:"#a84040", green:"#4a8c6a",
 };
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 .cd-fade{animation:cdFade .4s cubic-bezier(.4,0,.2,1) both;}
 .cd-d1{animation-delay:.07s;} .cd-d2{animation-delay:.14s;}
 .cd-d3{animation-delay:.21s;} .cd-d4{animation-delay:.28s;}
@@ -168,7 +167,7 @@ const Tip = ({ text, children }) => {
       onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}>
       {children}
       {show&&<span style={{ position:"absolute",bottom:"calc(100% + 8px)",left:"50%",
-        transform:"translateX(-50%)",background:"#1d2535",border:`1px solid ${T.b2}`,
+        transform:"translateX(-50%)",background:"#1f1f1f",border:`1px solid ${T.b2}`,
         borderRadius:8,padding:"10px 14px",fontSize:12,color:T.t2,lineHeight:1.55,
         width:240,zIndex:9999,pointerEvents:"none",boxShadow:"0 8px 24px rgba(0,0,0,.5)",
         fontFamily:"'Instrument Sans',sans-serif" }}>{text}</span>}
@@ -1033,7 +1032,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
 
       {/* ── HERO ── */}
       <div style={{ position:"relative", overflow:"hidden",
-        background:"linear-gradient(135deg,#0d0f14 0%,#111520 60%,#161b28 100%)",
+        background:"linear-gradient(135deg,#050505 0%,#0a0a0a 60%,#111111 100%)",
         borderBottom:`1px solid ${T.b1}` }}>
         <div style={{ position:"absolute",top:-60,right:-60,width:300,height:300,borderRadius:"50%",
           background:`radial-gradient(circle,${T.rc}08 0%,transparent 70%)`,pointerEvents:"none" }}/>

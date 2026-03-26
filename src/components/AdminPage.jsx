@@ -15,15 +15,15 @@ import { useState, useEffect } from "react";
 
 // ── Design tokens (mismos que App v4) ─────────────────────────
 const T = {
-  bg:"#08090c", s1:"#0d0f14", s2:"#111520", s3:"#161b28",
-  b1:"#1d2535", b2:"#232d42", b3:"#2e3a52",
-  t1:"#e8ecf4", t2:"#8a97b0", t3:"#3d4d66", t4:"#1e2a3e",
-  rc:"#f97316", do:"#a855f7", esg:"#22c55e",
-  blue:"#3b82f6", amber:"#f59e0b", red:"#ef4444", green:"#22c55e",
+  bg:"#050505", s1:"#0a0a0a", s2:"#111111", s3:"#1a1a1a",
+  b1:"#1f1f1f", b2:"#2a2a2a", b3:"#363636",
+  t1:"#f0ece4", t2:"#9a9080", t3:"#4a4540", t4:"#282420",
+  rc:"#c8813a", do:"#8b6fa8", esg:"#4a8c6a",
+  blue:"#5b7fa6", amber:"#b8860b", red:"#a84040", green:"#4a8c6a",
 };
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 .adm-fade { animation: admFade .35s cubic-bezier(.4,0,.2,1) both; }
 .adm-d1   { animation-delay:.05s; }
 .adm-d2   { animation-delay:.1s; }

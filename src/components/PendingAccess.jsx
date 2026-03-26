@@ -6,7 +6,7 @@
 import { useState } from 'react'
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 .pa-wrap{min-height:100vh;background:#08090c;display:flex;align-items:center;justify-content:center;font-family:'Instrument Sans',sans-serif;position:relative;overflow:hidden;}
 .pa-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:52px 52px;}
 .pa-glow{position:absolute;border-radius:50%;pointer-events:none;}

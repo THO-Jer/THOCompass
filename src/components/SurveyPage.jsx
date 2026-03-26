@@ -7,10 +7,11 @@ import { useState, useEffect } from "react";
 import { supabase as sb } from "../lib/supabase.js";
 
 const T = {
-  bg:"#08090c", s1:"#0d0f14", s2:"#111520", b1:"#1d2535", b2:"#232d42",
-  t1:"#e8ecf4", t2:"#8a97b0", t3:"#3d4d66",
-  rc:"#f97316", do:"#a855f7", esg:"#22c55e", blue:"#3b82f6",
-  green:"#22c55e", red:"#ef4444",
+  bg:"#050505", s1:"#0a0a0a", s2:"#111111", s3:"#1a1a1a",
+  b1:"#1f1f1f", b2:"#2a2a2a", b3:"#363636",
+  t1:"#f0ece4", t2:"#9a9080", t3:"#4a4540", t4:"#282420",
+  rc:"#c8813a", do:"#8b6fa8", esg:"#4a8c6a",
+  blue:"#5b7fa6", amber:"#b8860b", red:"#a84040", green:"#4a8c6a",
 };
 
 const QUESTIONS = {
@@ -132,7 +133,7 @@ export default function SurveyPage({ token }) {
   if (step === 2) return (
     <div style={{ minHeight:"100vh", background:T.bg, display:"flex",
       alignItems:"center", justifyContent:"center", padding:24 }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Instrument+Sans:wght@400;600&family=JetBrains+Mono:wght@400&display=swap');body{margin:0;background:${T.bg}}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');body{margin:0;background:${T.bg}}`}</style>
       <div style={{ textAlign:"center", maxWidth:440 }}>
         <div style={{ fontSize:52, marginBottom:20 }}>✓</div>
         <div style={{ fontFamily:"'Playfair Display',serif", fontSize:26,
@@ -151,7 +152,7 @@ export default function SurveyPage({ token }) {
   );
 
   const CSS = `
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Instrument+Sans:wght@400;600&family=JetBrains+Mono:wght@400&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
     * { box-sizing: border-box; }
     body { margin:0; background:${T.bg}; font-family:'Instrument Sans',sans-serif; color:${T.t2}; }
     input, select { outline:none; }
