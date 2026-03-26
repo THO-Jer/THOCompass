@@ -1573,7 +1573,7 @@ export default function ModuleESG({ client, supabase }) {
             letterSpacing:2,textTransform:"uppercase",marginBottom:8 }}>
             🌿 Sostenibilidad Corporativa
           </div>
-          <div style={{ fontFamily:\"'Megrim',cursive\",letterSpacing:2,fontSize:30,color:T.t1,
+          <div style={{ fontFamily:'Megrim',cursive,letterSpacing:2,fontSize:30,color:T.t1,
             letterSpacing:-.5,marginBottom:4 }}>Madurez ESG</div>
           <div style={{ fontSize:13,color:T.t2 }}>
             Framework GRI · Ambiental · Social · Gobernanza · {client?.name||"Cliente"}

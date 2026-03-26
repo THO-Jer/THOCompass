@@ -439,7 +439,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
         </div>
         <div style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",
           flexWrap:"wrap",gap:14 }}>
-          <div style={{ fontFamily:\"'Megrim',cursive\",letterSpacing:2,fontSize:28,color:T.t1,letterSpacing:-.5 }}>
+          <div style={{ fontFamily:'Megrim',cursive,letterSpacing:2,fontSize:28,color:T.t1,letterSpacing:-.5 }}>
             {mod.scoreLabel}
           </div>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
