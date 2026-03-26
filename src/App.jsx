@@ -47,7 +47,7 @@ const T = {
 const BASE_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;}
+html{scroll-behavior:auto;}
 body{
   background:
     radial-gradient(1200px 420px at 20% -10%, rgba(155,89,208,.09), transparent 50%),
@@ -752,23 +752,11 @@ export default function App() {
   const isC = auth.isConsultant;
   const nav  = isC ? CONSULTANT_NAV : CLIENT_NAV(clientMods);
 
-  // Navigate and reset scroll
-  function scrollViewportTop() {
-    window.scrollTo({ top:0, left:0, behavior:"auto" });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  }
-
+  // Navigate only — do not alter scroll position
   function navigate(id) {
     setPage(id);
-    scrollViewportTop();
     setShowPicker(false);
   }
-
-  // Force top position whenever dashboard/modules are opened
-  useEffect(() => {
-    scrollViewportTop();
-  }, [page, selClientId]);
 
   // ── Render page content ──────────────────────────────────────
   function renderPage() {
