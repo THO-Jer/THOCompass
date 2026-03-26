@@ -307,12 +307,14 @@ export default function FormPage({ token }) {
 
       const rows = questions.map(q=>{
         const val = answers[q.id];
-        const row = { response_id:resp.id, question_id:q.id };
-        if(q.type==="likert"||q.type==="nps") row.value_integer=val??null;
-        else if(q.type==="text") row.value_text=val||null;
-        else row.value_json=val??null;
-        return row;
-      }).filter(r=>r.value_integer!=null||r.value_text||r.value_json!=null);
+        return {
+          response_id:    resp.id,
+          question_id:    q.id,
+          value_integer:  (q.type==="likert"||q.type==="nps") ? (val??null) : null,
+          value_text:     q.type==="text" ? (val||null) : null,
+          value_json:     (q.type!=="likert"&&q.type!=="nps"&&q.type!=="text") ? (val??null) : null,
+        };
+      }).filter(r=>r.value_integer!=null||r.value_text!=null||r.value_json!=null);
 
       if(rows.length) await anonInsert("form_answers", rows);
       setStep(3);
