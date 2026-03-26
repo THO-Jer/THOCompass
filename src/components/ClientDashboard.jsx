@@ -439,7 +439,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
         </div>
         <div style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",
           flexWrap:"wrap",gap:14 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:28,color:T.t1,letterSpacing:-.5 }}>
+          <div style={{ fontFamily:\"'Megrim',cursive\",letterSpacing:2,fontSize:28,color:T.t1,letterSpacing:-.5 }}>
             {mod.scoreLabel}
           </div>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
@@ -1054,7 +1054,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         background:"linear-gradient(135deg,#050505 0%,#0a0a0a 60%,#111111 100%)",
         borderBottom:`1px solid ${T.b1}` }}>
         {/* Spectrum stripe at top */}
-        <div style={{ height:2, background:"linear-gradient(90deg,#e8631a,#f0c020,#2db87a,#3b8fd4,#9b59d0,#d44b8a)" }}/>
+        <div style={{ height:2, background:"linear-gradient(90deg,#e8631a,#c44a7a,#9b59d0)" }}/>
         {/* Compass watermark */}
         <div style={{ position:"absolute", bottom:-20, right:20, opacity:.04,
           color:T.t1, pointerEvents:"none" }}>

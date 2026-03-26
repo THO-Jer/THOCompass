@@ -1330,7 +1330,7 @@ export default function ModuleDO({ client, supabase }) {
       <style>{CSS}</style>
       <div style={{ padding:"32px 36px",maxWidth:1200 }}>
         {/* THO spectrum stripe */}
-        <div style={{ height:2, background:"linear-gradient(90deg,#e8631a,#f0c020,#2db87a,#3b8fd4,#9b59d0,#d44b8a)",
+        <div style={{ height:2, background:"linear-gradient(90deg,#e8631a,#c44a7a,#9b59d0)",
           margin:"-32px -36px 24px" }}/>
 
         {/* Header */}
@@ -1339,7 +1339,7 @@ export default function ModuleDO({ client, supabase }) {
             letterSpacing:2,textTransform:"uppercase",marginBottom:8 }}>
             🏛 Desarrollo Organizacional
           </div>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:30,color:T.t1,
+          <div style={{ fontFamily:\"'Megrim',cursive\",letterSpacing:2,fontSize:30,color:T.t1,
             letterSpacing:-.5,marginBottom:4 }}>Salud Organizacional</div>
           <div style={{ fontSize:13,color:T.t2 }}>
             Cultura · Engagement · Liderazgo · {client?.name||"Cliente"}

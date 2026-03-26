@@ -106,8 +106,8 @@ const CLIENT_NAV = (modules) => [
 const MOD_COLOR = { rc:T.rc, do:T.do, esg:T.esg, clients:T.blue, admin:T.blue, dashboard:T.blue };
 
 // ── THO Design constants ──────────────────────────────────────
-const THO_SPECTRUM = `linear-gradient(90deg, #e8631a, #f0c020, #2db87a, #3b8fd4, #9b59d0, #d44b8a)`;
-const THO_SPECTRUM_SUBTLE = `linear-gradient(90deg, #e8631a40, #f0c02040, #2db87a40, #3b8fd440, #9b59d040, #d44b8a40)`;
+const THO_SPECTRUM = `linear-gradient(90deg,#e8631a,#c44a7a,#9b59d0)`;
+const THO_SPECTRUM_SUBTLE = `linear-gradient(90deg, #e8631a30, #c44a7a30, #9b59d030)`;
 
 // Compass SVG — evocación sutil de brújula
 function CompassMark({ size=20, opacity=0.15 }) {
@@ -134,13 +134,12 @@ function LogoMark({ size=28 }) {
   return (
     <div style={{
       width:size, height:size, borderRadius:6, flexShrink:0,
-      background:THO_SPECTRUM,
+      background:"#111111",
+      border:`1px solid #2e2e2e`,
       display:"flex", alignItems:"center", justifyContent:"center",
-      fontFamily:"'Megrim',cursive", fontWeight:400, fontSize:size*0.58,
-      color:"white", letterSpacing:0,
       position:"relative",
     }}>
-      <CompassMark size={size*0.75} opacity={0.35}/>
+      <CompassMark size={size*0.78} opacity={0.9}/>
     </div>
   );
 }
@@ -216,21 +215,16 @@ function Sidebar({ nav, page, onNav, open, onToggle, profile, isC, onSignOut, mo
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{
               fontFamily:"'Megrim',cursive",
-              fontSize:18,
-              color:T.t1,
+              fontSize:20,
               letterSpacing:2,
               lineHeight:1,
-            }}>
-              THO{" "}
-              <span style={{
-                background:`linear-gradient(90deg,${T.rc},${T.do})`,
-                WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent"
-              }}>Compass</span>
-            </div>
+              background:"linear-gradient(90deg,#e8631a,#c44a7a,#9b59d0)",
+              WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
+            }}>Compass</div>
             <div style={{
               fontFamily:"'JetBrains Mono',monospace",
               fontSize:8, color:T.t3, letterSpacing:2,
-              textTransform:"uppercase", marginTop:2
+              textTransform:"uppercase", marginTop:3
             }}>The Human Org</div>
           </div>
         )}
@@ -433,14 +427,12 @@ function Login() {
         <div style={{ textAlign:"center", marginBottom:40 }}>
           <div style={{ display:"inline-flex", alignItems:"center", gap:12, marginBottom:8 }}>
             <LogoMark size={36}/>
-            <div style={{ fontFamily:"'Megrim',cursive", fontSize:22,
-              color:T.t1, letterSpacing:3 }}>
-              THO{" "}
-              <span style={{ background:`linear-gradient(90deg,${T.rc},${T.do})`,
-                WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
-                Compass
-              </span>
-            </div>
+            <div style={{
+              fontFamily:"'Megrim',cursive", fontSize:24,
+              letterSpacing:3,
+              background:"linear-gradient(90deg,#e8631a,#c44a7a,#9b59d0)",
+              WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
+            }}>Compass</div>
           </div>
           <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:9,
             color:T.t3, letterSpacing:3, textTransform:"uppercase" }}>
