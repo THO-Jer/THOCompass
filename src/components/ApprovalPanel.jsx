@@ -20,14 +20,14 @@ const T = {
 }
 
 const css = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .ap-wrap{font-family:'Instrument Sans',sans-serif;}
 .ap-tabs{display:flex;gap:3px;background:${T.s2};border-radius:10px;padding:4px;width:fit-content;margin-bottom:20px;}
 .ap-tab{padding:7px 16px;border-radius:7px;border:none;background:none;color:${T.t3};font-size:13px;font-weight:500;cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:all .15s;}
 .ap-tab.active{background:${T.s1};color:${T.t1};box-shadow:0 1px 6px rgba(0,0,0,.3);}
 .ap-card{background:${T.s1};border:1px solid ${T.b1};border-radius:14px;padding:20px 22px;margin-bottom:12px;}
 .ap-row{display:flex;align-items:center;gap:12px;}
-.ap-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-weight:700;font-size:13px;flex-shrink:0;}
+.ap-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Inter','Instrument Sans',sans-serif;font-weight:700;font-size:13px;flex-shrink:0;}
 .ap-name{font-size:13px;font-weight:600;color:${T.t1};margin-bottom:2px;}
 .ap-email{font-family:'JetBrains Mono',monospace;font-size:11px;color:${T.t3};}
 .ap-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:${T.t4};margin-top:2px;}

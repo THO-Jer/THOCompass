@@ -58,17 +58,17 @@ async function anonInsertResponse(body) {
 }
 
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -352,7 +352,7 @@ export default function FormPage({ token }) {
   });
   const canSubmit = answeredRequired.length===required.length;
 
-  const CSS = `@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  const CSS = `@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
     body{background:${T.bg};font-family:'Instrument Sans',sans-serif;color:${T.t2};}
     :root{--ac:${color};}
@@ -360,9 +360,9 @@ export default function FormPage({ token }) {
 
   if(step===0) return (<><style>{CSS}</style><div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:T.t3,letterSpacing:2}}>CARGANDO…</div></div></>);
 
-  if(step===-1) return (<><style>{CSS}</style><div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center",maxWidth:400}}><div style={{fontSize:48,marginBottom:16}}>⚠</div><div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:T.t1,marginBottom:12}}>Formulario no disponible</div><div style={{fontSize:14,color:T.t3,lineHeight:1.7}}>{error}</div></div></div></>);
+  if(step===-1) return (<><style>{CSS}</style><div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center",maxWidth:400}}><div style={{fontSize:48,marginBottom:16}}>⚠</div><div style={{fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:22,color:T.t1,marginBottom:12}}>Formulario no disponible</div><div style={{fontSize:14,color:T.t3,lineHeight:1.7}}>{error}</div></div></div></>);
 
-  if(step===3) return (<><style>{CSS}</style><div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center",maxWidth:440}}><div style={{fontSize:52,marginBottom:20}}>✓</div><div style={{fontFamily:"'Playfair Display',serif",fontSize:26,color:T.t1,marginBottom:12}}>¡Gracias por responder!</div><div style={{fontSize:14,color:T.t2,lineHeight:1.7,marginBottom:24}}>Tus respuestas han sido registradas para <strong>{form.title}</strong>.</div><div style={{padding:"12px 18px",background:`${color}10`,border:`1px solid ${color}25`,borderRadius:10,fontSize:13,color:T.t3}}>Puedes cerrar esta ventana.</div></div></div></>);
+  if(step===3) return (<><style>{CSS}</style><div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center",maxWidth:440}}><div style={{fontSize:52,marginBottom:20}}>✓</div><div style={{fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:26,color:T.t1,marginBottom:12}}>¡Gracias por responder!</div><div style={{fontSize:14,color:T.t2,lineHeight:1.7,marginBottom:24}}>Tus respuestas han sido registradas para <strong>{form.title}</strong>.</div><div style={{padding:"12px 18px",background:`${color}10`,border:`1px solid ${color}25`,borderRadius:10,fontSize:13,color:T.t3}}>Puedes cerrar esta ventana.</div></div></div></>);
 
   // Intro
   if(step===1) return (
@@ -372,7 +372,7 @@ export default function FormPage({ token }) {
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color,letterSpacing:3,textTransform:"uppercase",marginBottom:12}}>
           {form.module_key?.toUpperCase()} · THO Compass
         </div>
-        <div style={{fontFamily:"'Playfair Display',serif",fontSize:30,color:T.t1,marginBottom:8,lineHeight:1.2}}>{form.title}</div>
+        <div style={{fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:30,color:T.t1,marginBottom:8,lineHeight:1.2}}>{form.title}</div>
         {form.target_group&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:T.t3,marginBottom:20}}>Dirigido a: {form.target_group}</div>}
         {form.description&&<div style={{fontSize:14,color:T.t2,lineHeight:1.75,marginBottom:28,padding:"16px 20px",background:T.s2,borderRadius:12,border:`1px solid ${T.b1}`}}>{form.description}</div>}
         <div style={{fontSize:13,color:T.t3,marginBottom:28,lineHeight:1.7}}>

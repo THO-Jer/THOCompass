@@ -6,7 +6,7 @@
 import { useState } from 'react'
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .pa-wrap{min-height:100vh;background:#08090c;display:flex;align-items:center;justify-content:center;font-family:'Instrument Sans',sans-serif;position:relative;overflow:hidden;}
 .pa-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:52px 52px;}
 .pa-glow{position:absolute;border-radius:50%;pointer-events:none;}
@@ -15,16 +15,16 @@ const CSS = `
 .pa-card{position:relative;background:#0d0f14;border:1px solid #232d42;border-radius:20px;padding:48px 44px;width:460px;max-width:92vw;box-shadow:0 32px 80px rgba(0,0,0,.7);animation:paFadeUp .45s cubic-bezier(.4,0,.2,1) both;}
 @keyframes paFadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 .pa-card::before{content:'';position:absolute;top:0;left:48px;right:48px;height:2px;border-radius:0 0 2px 2px;background:linear-gradient(90deg,#f97316,#a855f7);}
-.pa-logo{font-family:'Playfair Display',serif;font-weight:700;font-size:17px;color:#e8ecf4;margin-bottom:32px;display:flex;align-items:center;gap:9px;}
+.pa-logo{font-family:'Inter','Instrument Sans',sans-serif;font-weight:700;font-size:17px;color:#e8ecf4;margin-bottom:32px;display:flex;align-items:center;gap:9px;}
 .pa-logo-mark{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#f97316,#a855f7);display:flex;align-items:center;justify-content:center;font-size:13px;color:white;font-weight:800;}
 .pa-icon-wrap{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:30px;}
 .pa-icon-pending{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);animation:paBreath 3s ease-in-out infinite;}
 .pa-icon-disabled{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);}
 @keyframes paBreath{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.2)}50%{box-shadow:0 0 0 12px rgba(245,158,11,0)}}
-.pa-title{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:#e8ecf4;text-align:center;margin-bottom:10px;}
+.pa-title{font-family:'Inter','Instrument Sans',sans-serif;font-size:24px;font-weight:700;color:#e8ecf4;text-align:center;margin-bottom:10px;}
 .pa-desc{font-size:13px;color:#8a97b0;text-align:center;line-height:1.7;margin-bottom:28px;}
 .pa-user{display:flex;align-items:center;gap:12px;background:#111520;border:1px solid #1d2535;border-radius:12px;padding:13px 15px;margin-bottom:24px;}
-.pa-avatar{width:38px;height:38px;border-radius:50%;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.25);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:#f97316;flex-shrink:0;}
+.pa-avatar{width:38px;height:38px;border-radius:50%;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.25);display:flex;align-items:center;justify-content:center;font-family:'Inter','Instrument Sans',sans-serif;font-weight:700;font-size:14px;color:#f97316;flex-shrink:0;}
 .pa-user-name{font-size:13px;font-weight:600;color:#e8ecf4;margin-bottom:2px;}
 .pa-user-email{font-family:'JetBrains Mono',monospace;font-size:11px;color:#3d4d66;}
 .pa-steps{margin-bottom:28px;}

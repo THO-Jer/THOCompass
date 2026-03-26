@@ -27,17 +27,17 @@ import {
 
 // ── Tokens ────────────────────────────────────────────────────
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -54,7 +54,7 @@ const T = {
 };
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .rc-fade { animation: rcFade .35s cubic-bezier(.4,0,.2,1) both; }
 .rc-d1{animation-delay:.06s;} .rc-d2{animation-delay:.12s;}
 .rc-d3{animation-delay:.18s;} .rc-d4{animation-delay:.24s;}
@@ -287,7 +287,7 @@ function Modal({ title, onClose, children, width=540 }) {
         padding:"28px 32px",width,maxWidth:"94vw",maxHeight:"88vh",overflowY:"auto",
         boxShadow:"0 32px 80px rgba(0,0,0,.8)" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:18,color:T.t1 }}>{title}</div>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:18,color:T.t1 }}>{title}</div>
           <button onClick={onClose} style={{ background:"none",border:"none",color:T.t3,cursor:"pointer",fontSize:18 }}>✕</button>
         </div>
         {children}
@@ -393,7 +393,7 @@ function TabScore({ project, supabase, onUpdate }) {
 
         {/* Radar */}
         <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
             Perfil de indicadores
           </div>
           <div style={{ height:220 }}>
@@ -410,7 +410,7 @@ function TabScore({ project, supabase, onUpdate }) {
 
       {/* Dimension inputs */}
       <Card style={{ marginBottom:16 }}>
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
           Ingreso de scores por dimensión
         </div>
         <div style={{ fontSize:13,color:T.t3,marginBottom:20,lineHeight:1.55 }}>
@@ -435,7 +435,7 @@ function TabScore({ project, supabase, onUpdate }) {
       {/* History */}
       {project.history.length>1&&(
         <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:16 }}>
             Evolución del score LSO
           </div>
           <div style={{ height:180 }}>
@@ -463,7 +463,7 @@ function TabScore({ project, supabase, onUpdate }) {
       {/* Historial de cambios */}
       {supabase && project?.id && (
         <div style={{ marginTop:24 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:14 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1,marginBottom:14 }}>
             Historial de cambios
           </div>
           <ScoreLog projectId={project.id} supabase={supabase} accentColor={T.rc}/>
@@ -617,7 +617,7 @@ function TabActivities({ project, activities, supabase, onAddActivity, onUpdateA
         <div style={{ textAlign:"center",padding:"48px 0",background:T.s2,
           border:`1px dashed ${T.b2}`,borderRadius:14 }}>
           <div style={{ fontSize:32,marginBottom:12 }}>📋</div>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:6 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1,marginBottom:6 }}>
             Sin actividades registradas
           </div>
           <div style={{ fontSize:13,color:T.t3,marginBottom:16 }}>
@@ -638,7 +638,7 @@ function TabActivities({ project, activities, supabase, onAddActivity, onUpdateA
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex",alignItems:"center",gap:9,marginBottom:6 }}>
                     <span style={{ fontSize:18 }}>{ACTIVITY_ICONS[a.record_type]||"📝"}</span>
-                    <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1 }}>
+                    <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1 }}>
                       {a.title}
                     </div>
                     {!a.visible_to_client&&(
@@ -699,7 +699,7 @@ function TabActivities({ project, activities, supabase, onAddActivity, onUpdateA
           <div style={{ background:T.s1,border:`1px solid ${T.b2}`,borderRadius:14,
             padding:"24px 28px",maxWidth:360,width:"100%",
             boxShadow:"0 24px 64px rgba(0,0,0,.7)" }}>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:8 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1,marginBottom:8 }}>
               ¿Eliminar actividad?
             </div>
             <div style={{ fontSize:13,color:T.t3,marginBottom:20 }}>
@@ -855,7 +855,7 @@ function TabActors({ project, actors, supabase, onAdd, onUpdate, onDelete }) {
         <div style={{ textAlign:"center",padding:"48px 0",background:T.s2,
           border:`1px dashed ${T.b2}`,borderRadius:14 }}>
           <div style={{ fontSize:32,marginBottom:12 }}>👥</div>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:6 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1,marginBottom:6 }}>
             Sin actores registrados
           </div>
           <div style={{ fontSize:13,color:T.t3,marginBottom:16 }}>
@@ -882,7 +882,7 @@ function TabActors({ project, actors, supabase, onAdd, onUpdate, onDelete }) {
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:5 }}>
-                    <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1 }}>
+                    <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1 }}>
                       {a.name}
                     </div>
                     <Pill color={relColor(a.relationship_status)}>● {relLabel(a.relationship_status)}</Pill>
@@ -928,7 +928,7 @@ function TabActors({ project, actors, supabase, onAdd, onUpdate, onDelete }) {
           display:"flex",alignItems:"center",justifyContent:"center",zIndex:500 }}>
           <div style={{ background:T.s1,border:`1px solid ${T.b2}`,borderRadius:14,
             padding:"24px 28px",maxWidth:360,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,.7)" }}>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:8 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1,marginBottom:8 }}>
               ¿Eliminar actor?
             </div>
             <div style={{ fontSize:13,color:T.t3,marginBottom:20 }}>Esta acción no se puede deshacer.</div>
@@ -1139,7 +1139,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
       </div>
 
       <Card style={{ marginBottom:16 }}>
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:6 }}>
+        <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:6 }}>
           Carga de archivos
         </div>
         <div style={{ fontSize:13,color:T.t3,marginBottom:18,lineHeight:1.6 }}>
@@ -1154,7 +1154,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
           style={{ border:`2px dashed ${drag?T.rc:T.b2}`,borderRadius:12,padding:28,
             textAlign:"center",cursor:"pointer",background:drag?`${T.rc}08`:T.s2,transition:"all .2s" }}>
           <div style={{ fontSize:28,marginBottom:8 }}>📁</div>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,color:T.t1,marginBottom:4 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:14,color:T.t1,marginBottom:4 }}>
             Arrastra archivos o haz clic
           </div>
           <div style={{ fontSize:12,color:T.t3 }}>Actas .docx · Encuestas .xlsx · Reportes .pdf · Notas .txt</div>
@@ -1365,7 +1365,7 @@ function TabUpload({ project, supabase, onApplyScores }) {
       {/* Historial de archivos subidos */}
       {uploadedFiles.length > 0 && (
         <Card>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:15,color:T.t1,marginBottom:14 }}>
             Archivos subidos ({uploadedFiles.length})
           </div>
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
@@ -1645,7 +1645,7 @@ export default function ModuleRC({ client, supabase }) {
         ) : !selProject ? (
           <div style={{ textAlign:"center",padding:"48px 0",background:T.s2,
             border:`1px dashed ${T.b2}`,borderRadius:14 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1,marginBottom:6 }}>
+            <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1,marginBottom:6 }}>
               Sin proyectos RC
             </div>
             <div style={{ fontSize:13,color:T.t3 }}>

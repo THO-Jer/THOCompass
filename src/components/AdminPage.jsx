@@ -15,17 +15,17 @@ import { useState, useEffect } from "react";
 
 // ── Design tokens (mismos que App v4) ─────────────────────────
 const T = {
-  bg:"#050505",
-  s1:"#0a0a0a",
-  s2:"#111111",
-  s3:"#181818",
-  b1:"#222222",
-  b2:"#2e2e2e",
-  b3:"#3a3a3a",
-  t1:"#f0ece4",
-  t2:"#9a9080",
-  t3:"#4a4540",
-  t4:"#282420",
+  bg:"#040915",
+  s1:"#070f1f",
+  s2:"#0b1426",
+  s3:"#111d33",
+  b1:"#1a2740",
+  b2:"#243454",
+  b3:"#30446b",
+  t1:"#f5f8ff",
+  t2:"#c0cce4",
+  t3:"#8ea0c2",
+  t4:"#65779a",
   rc:"#e8631a",
   do:"#9b59d0",
   esg:"#2db87a",
@@ -42,7 +42,7 @@ const T = {
 };
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .adm-fade { animation: admFade .35s cubic-bezier(.4,0,.2,1) both; }
 .adm-d1   { animation-delay:.05s; }
 .adm-d2   { animation-delay:.1s; }
@@ -134,7 +134,7 @@ const Avatar = ({ name, email, color=T.blue }) => (
   <div style={{ width:34, height:34, borderRadius:"50%", flexShrink:0,
     background:`${color}18`, color, border:`1px solid ${color}30`,
     display:"flex", alignItems:"center", justifyContent:"center",
-    fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:12 }}>
+    fontFamily:"'Inter','Instrument Sans',sans-serif", fontWeight:700, fontSize:12 }}>
     {initials(name, email)}
   </div>
 );
@@ -190,7 +190,7 @@ const Divider = () => <div style={{ height:1, background:T.b1, margin:"22px 0" }
 const SectionTitle = ({ children, count, action }) => (
   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
     <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-      <div style={{ fontFamily:"'Playfair Display',serif", fontSize:17, color:T.t1 }}>{children}</div>
+      <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:17, color:T.t1 }}>{children}</div>
       {count !== undefined && (
         <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:T.t3,
           background:T.s2, padding:"2px 8px", borderRadius:20 }}>{count}</span>
@@ -211,7 +211,7 @@ function Modal({ title, onClose, children, width=480 }) {
         boxShadow:"0 32px 80px rgba(0,0,0,.7)",
         animation:"admFade .3s ease both" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, color:T.t1 }}>{title}</div>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:18, color:T.t1 }}>{title}</div>
           <button onClick={onClose} style={{ background:"none", border:"none",
             color:T.t3, cursor:"pointer", fontSize:18, lineHeight:1 }}>✕</button>
         </div>
@@ -558,7 +558,7 @@ function InviteConsultantModal({ supabase, onClose, onInvited }) {
         width:"100%",maxWidth:440,boxShadow:"0 24px 64px rgba(0,0,0,.7)" }}>
         <div style={{ padding:"18px 22px",borderBottom:`1px solid ${T.b1}`,
           display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-          <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,color:T.t1 }}>
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif",fontWeight:700,fontSize:16,color:T.t1 }}>
             Invitar consultor/a al equipo
           </div>
           <button onClick={onClose} style={{ background:"none",border:"none",
@@ -899,7 +899,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
         <div className="adm-fade" style={{ marginBottom:28 }}>
           <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:T.t3,
             letterSpacing:2, textTransform:"uppercase", marginBottom:8 }}>Centro de administración</div>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:30, color:T.t1,
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:30, color:T.t1,
             letterSpacing:-.5, marginBottom:6 }}>Administración</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10, color:T.t3, fontSize:13,
@@ -923,7 +923,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
             letterSpacing:2, textTransform:"uppercase", marginBottom:8 }}>
             Centro de administración
           </div>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:30, color:T.t1,
+          <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:30, color:T.t1,
             letterSpacing:-.5, marginBottom:6 }}>Administración</div>
           <div style={{ fontSize:13, color:T.t2 }}>
             Gestión de usuarios, empresas, accesos y equipo consultor.
@@ -977,7 +977,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
               <Card>
                 <div style={{ textAlign:"center", padding:"36px 0" }}>
                   <div style={{ fontSize:36, marginBottom:12 }}>✅</div>
-                  <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:T.t1, marginBottom:6 }}>
+                  <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:T.t1, marginBottom:6 }}>
                     Sin pendientes
                   </div>
                   <div style={{ fontSize:13, color:T.t3 }}>No hay usuarios esperando aprobación.</div>
@@ -1096,7 +1096,7 @@ export default function AdminPage({ supabase, currentUser, onClientsChange }) {
                   gap:16, flexWrap:"wrap" }}>
                   <div style={{ flex:1, minWidth:200 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-                      <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, color:T.t1 }}>{c.name}</div>
+                      <div style={{ fontFamily:"'Inter','Instrument Sans',sans-serif", fontSize:16, color:T.t1 }}>{c.name}</div>
                       <StatusPill status={c.published?"approved":"pending"}/>
                     </div>
                     <div style={{ fontSize:12, color:T.t3, fontFamily:"'JetBrains Mono',monospace", marginBottom:10 }}>
