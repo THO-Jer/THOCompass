@@ -16,21 +16,45 @@ async function anonGet(table, query) {
   return res.json();
 }
 
-async function anonInsert(table, body) {
+async function anonInsert(table, body, returnId=false) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: "POST",
     headers: {
       "apikey":        SUPABASE_KEY,
       "Authorization": `Bearer ${SUPABASE_KEY}`,
       "Content-Type":  "application/json",
-      "Prefer":        "return=representation",
+      ...(returnId ? { "Prefer": "return=representation" } : {}),
     },
     body: JSON.stringify(body),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(text);
-  const data = JSON.parse(text);
-  return Array.isArray(data) ? data[0] : data;
+  if (returnId && text) {
+    const data = JSON.parse(text);
+    return Array.isArray(data) ? data[0] : data;
+  }
+  return null;
+}
+
+// Inserta una respuesta y obtiene su ID via header Location
+async function anonInsertResponse(body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/form_responses`, {
+    method: "POST",
+    headers: {
+      "apikey":        SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type":  "application/json",
+      "Prefer":        "return=headers-only",
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  // Supabase returns Location: /form_responses?id=eq.UUID
+  const location = res.headers.get("location") || "";
+  const match = location.match(/id=eq\.([a-f0-9-]+)/);
+  if (match) return { id: match[1] };
+  throw new Error("No se pudo obtener ID de la respuesta");
 }
 
 const T = {
@@ -272,7 +296,7 @@ export default function FormPage({ token }) {
   async function handleSubmit() {
     setSaving(true);
     try {
-      const resp = await anonInsert("form_responses", {
+      const resp = await anonInsertResponse({
         form_id:         form.id,
         respondent_name: name.trim()||null,
         respondent_role: role.trim()||null,
