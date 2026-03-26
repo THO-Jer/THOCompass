@@ -1339,7 +1339,7 @@ export default function ModuleDO({ client, supabase }) {
             letterSpacing:2,textTransform:"uppercase",marginBottom:8 }}>
             🏛 Desarrollo Organizacional
           </div>
-          <div style={{ fontFamily:"'Megrim',cursive" ,letterSpacing:2,fontSize:30,color:T.t1,
+          <div style={{ fontFamily:"'Megrim',cursive",fontSize:30,color:T.t1,
             letterSpacing:-.5,marginBottom:4 }}>Salud Organizacional</div>
           <div style={{ fontSize:13,color:T.t2 }}>
             Cultura · Engagement · Liderazgo · {client?.name||"Cliente"}

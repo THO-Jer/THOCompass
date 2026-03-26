@@ -45,16 +45,35 @@ const T = {
 };
 
 const BASE_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Megrim&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@300;400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
 body{
-  background:#050505;
+  background:
+    radial-gradient(1200px 420px at 20% -10%, rgba(155,89,208,.09), transparent 50%),
+    radial-gradient(900px 300px at 90% -20%, rgba(232,99,26,.08), transparent 55%),
+    #050505;
   color:#f0ece4;
-  font-family:'Instrument Sans',sans-serif;
+  font-family:'Inter','Instrument Sans',sans-serif;
   font-size:14px;
-  line-height:1.65;
+  line-height:1.7;
+  letter-spacing:.01em;
   -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{
+  font-family:'Inter','Instrument Sans',sans-serif;
+}
+button,input,select,textarea{transition:all .18s cubic-bezier(.4,0,.2,1);}
+input,select,textarea{
+  background:#111111;
+  border:1px solid #2e2e2e;
+  border-radius:10px;
+  color:#f0ece4;
+}
+input:focus,select:focus,textarea:focus{
+  outline:none;
+  border-color:#4d4258;
+  box-shadow:0 0 0 3px rgba(155,89,208,.17);
 }
 ::-webkit-scrollbar{width:2px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -179,8 +198,9 @@ function LogoMark({ size=28 }) {
   return (
     <div style={{
       width:size, height:size, borderRadius:6, flexShrink:0,
-      background:"#111111",
-      border:`1px solid #2e2e2e`,
+      background:"linear-gradient(155deg,#121212,#0d0d0d)",
+      border:`1px solid #343434`,
+      boxShadow:"inset 0 1px 0 rgba(255,255,255,.07), 0 8px 20px rgba(0,0,0,.32)",
       display:"flex", alignItems:"center", justifyContent:"center",
       position:"relative",
     }}>
@@ -198,7 +218,7 @@ function NavItem({ item, isActive, ac, open, onClick }) {
         display:"flex", alignItems:"center", gap:10,
         padding: open ? "9px 12px" : "9px 0",
         justifyContent: open ? "flex-start" : "center",
-        borderRadius:6, cursor:item.locked ? "default" : "pointer",
+        borderRadius:10, cursor:item.locked ? "default" : "pointer",
         background: isActive ? `${ac}12` : "transparent",
         borderLeft: isActive ? `2px solid ${ac}` : "2px solid transparent",
         marginLeft: isActive ? 0 : 0,
@@ -231,8 +251,9 @@ function Sidebar({ nav, page, onNav, open, onToggle, profile, isC, onSignOut, mo
     <div style={{
       width: mobile ? "100%" : (open ? 220 : 52),
       flexShrink:0,
-      background:T.s1,
+      background:"linear-gradient(180deg,#0d0d0d 0%, #0a0a0a 100%)",
       borderRight: mobile ? "none" : `1px solid ${T.b1}`,
+      boxShadow: mobile ? "none" : "20px 0 38px rgba(0,0,0,.35)",
       display:"flex", flexDirection:"column",
       height:"100%",
       transition: mobile ? "none" : "width .2s cubic-bezier(.4,0,.2,1)",
@@ -276,8 +297,8 @@ function Sidebar({ nav, page, onNav, open, onToggle, profile, isC, onSignOut, mo
         {!mobile && (
           <button onClick={onToggle} style={{
             marginLeft:open?"auto":undefined,
-            background:"none", border:`1px solid ${T.b2}`,
-            borderRadius:5, color:T.t3, cursor:"pointer",
+            background:"#101010", border:`1px solid ${T.b2}`,
+            borderRadius:8, color:T.t2, cursor:"pointer",
             padding:"3px 6px", fontSize:11, flexShrink:0,
             fontFamily:"'JetBrains Mono',monospace",
           }}>{open ? "←" : "→"}</button>
@@ -488,7 +509,7 @@ function Login() {
         {/* Card */}
         <div style={{ background:T.s1, border:`1px solid ${T.b1}`,
           borderRadius:14, overflow:"hidden",
-          boxShadow:"0 32px 80px rgba(0,0,0,.6)" }}>
+          boxShadow:"0 34px 90px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.04)" }}>
           {/* Spectrum stripe */}
           <div style={{ height:3, background:THO_SPECTRUM }}/>
           <div style={{ padding:"32px 28px", position:"relative" }}>
@@ -821,7 +842,8 @@ export default function App() {
 
           {/* Topbar */}
           <div style={{
-            background:T.s1,
+            background:"rgba(10,10,10,.9)",
+            backdropFilter:"blur(10px)",
             borderBottom:`1px solid ${T.b1}`,
             position:"sticky", top:0, zIndex:100,
           }}>
@@ -858,7 +880,7 @@ export default function App() {
                 <>
                   <button onClick={() => setShowPicker(p=>!p)} style={{
                     background:"none",
-                    border:`1px solid ${T.b2}`, borderRadius:6,
+                    border:`1px solid ${T.b2}`, borderRadius:10,
                     padding:"5px 14px", color:T.t1, fontSize:12,
                     cursor:"pointer",
                     fontFamily:"'Instrument Sans',sans-serif",
@@ -880,9 +902,9 @@ export default function App() {
                         style={{ position:"fixed", inset:0, zIndex:199 }}/>
                       <div style={{
                         position:"absolute", top:"calc(100% + 6px)", right:0,
-                        background:T.s1, border:`1px solid ${T.b2}`, borderRadius:10,
+                        background:"#0c0c0c", border:`1px solid ${T.b2}`, borderRadius:12,
                         padding:6, minWidth:220, zIndex:200,
-                        boxShadow:"0 16px 48px rgba(0,0,0,.6)",
+                        boxShadow:"0 26px 70px rgba(0,0,0,.56)",
                       }}>
                         <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8,
                           color:T.t3, letterSpacing:2.5, textTransform:"uppercase",
