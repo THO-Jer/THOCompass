@@ -1535,7 +1535,7 @@ export default function ModuleRC({ client, supabase }) {
             letterSpacing:2,textTransform:"uppercase",marginBottom:8 }}>
             🤝 Relacionamiento Comunitario
           </div>
-          <div style={{ fontFamily:"'Megrim',cursive" ,letterSpacing:2,fontSize:30,color:T.t1,
+          <div style={{ fontFamily:"'Megrim',cursive",fontSize:30,color:T.t1,
             letterSpacing:-.5,marginBottom:4 }}>Índice LSO</div>
           <div style={{ fontSize:13,color:T.t2 }}>
             Licencia Social de Operación · {client?.name||"Cliente"}

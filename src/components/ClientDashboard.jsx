@@ -439,7 +439,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
         </div>
         <div style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",
           flexWrap:"wrap",gap:14 }}>
-          <div style={{ fontFamily:"'Megrim',cursive" ,letterSpacing:2,fontSize:28,color:T.t1,letterSpacing:-.5 }}>
+          <div style={{ fontFamily:"'Megrim',cursive",fontSize:28,color:T.t1,letterSpacing:-.5 }}>
             {mod.scoreLabel}
           </div>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
@@ -855,8 +855,11 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
 function MessagesPanel({ messages, onSend, onDelete, senderRole="client" }) {
   const [txt,       setTxt]       = useState("");
   const [hoverId,   setHoverId]   = useState(null);
-  const endRef = useRef();
-  useEffect(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),[messages]);
+  const listRef = useRef(null);
+  useEffect(() => {
+    if (!listRef.current) return;
+    listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [messages]);
   const send = () => { if(txt.trim()){onSend(txt);setTxt("");} };
   const placeholder = senderRole==="client"
     ? "Escribe un mensaje al equipo consultor…"
@@ -864,7 +867,7 @@ function MessagesPanel({ messages, onSend, onDelete, senderRole="client" }) {
   const canDelete = senderRole === "consultant";
   return (
     <div>
-      <div style={{ display:"flex",flexDirection:"column",gap:12,maxHeight:300,
+      <div ref={listRef} style={{ display:"flex",flexDirection:"column",gap:12,maxHeight:300,
         overflowY:"auto",marginBottom:16,paddingRight:4 }}>
         {messages.length===0&&(
           <div style={{ color:T.t4,fontSize:12,textAlign:"center",padding:"20px 0",
@@ -900,7 +903,6 @@ function MessagesPanel({ messages, onSend, onDelete, senderRole="client" }) {
             </div>
           </div>
         ))}
-        <div ref={endRef}/>
       </div>
       <div style={{ display:"flex",gap:9 }}>
         <input value={txt} onChange={e=>setTxt(e.target.value)}
