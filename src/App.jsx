@@ -65,19 +65,64 @@ body{
 .fu{animation:fadeUp .35s cubic-bezier(.4,0,.2,1) both;}
 .d1{animation-delay:.06s;} .d2{animation-delay:.12s;} .d3{animation-delay:.18s;}
 
-/* Responsive */
+/* ── Responsive ── */
 @media(max-width:768px){
+  /* Layout */
   .sidebar-desktop{display:none!important;}
-  .topbar-back{display:flex!important;}
   .main-full{margin-left:0!important;}
-  .rc-content,.do-content,.esg-content,.cd-content{padding:16px!important;}
-  .mod-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  .mod-grid-2{grid-template-columns:1fr!important;}
-  .mod-grid-3{grid-template-columns:1fr!important;}
+
+  /* Mobile menu button — show it */
+  .mobile-menu-btn{display:flex!important;}
+
+  /* Module content padding */
+  [class*="-fade"]{padding:0!important;}
+
+  /* Module wrappers — reduce padding */
+  .rc-module,.do-module,.esg-module{padding:16px!important;}
+
+  /* Tabs — horizontal scroll */
+  .mod-tabs{
+    overflow-x:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+    flex-wrap:nowrap!important;
+    scrollbar-width:none!important;
+  }
+  .mod-tabs::-webkit-scrollbar{display:none!important;}
+
+  /* Grids → single column */
+  .mod-grid-2,.mod-grid-3,.mod-grid-auto{
+    grid-template-columns:1fr!important;
+  }
+
+  /* Hero padding */
+  .hero-section{padding:20px 16px 16px!important;}
+
+  /* General content padding */
+  .page-content{padding:16px!important;}
+
+  /* Cards */
+  .tho-card{padding:14px!important;}
+
+  /* Tables — horizontal scroll */
+  .tho-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
+
+  /* Form inputs — full width */
+  input,select,textarea{width:100%!important;font-size:16px!important;}
+
+  /* Topbar */
+  .topbar-breadcrumb span:first-child{display:none!important;}
+  .topbar-breadcrumb span.sep{display:none!important;}
 }
+
 @media(min-width:769px){
   .mobile-menu-btn{display:none!important;}
   .mobile-drawer{display:none!important;}
+}
+
+/* Tablet */
+@media(min-width:769px) and (max-width:1024px){
+  .main-full{margin-left:52px!important;}
+  .mod-grid-3{grid-template-columns:1fr 1fr!important;}
 }
 `;
 
@@ -605,7 +650,7 @@ export default function App() {
 
   const auth = useAuthGuard();
   const [page,         setPage]         = useState("dashboard");
-  const [sidebarOpen,  setSidebarOpen]  = useState(true);
+  const [sidebarOpen,  setSidebarOpen]  = useState(window.innerWidth > 1024);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selClientId,  setSelClientId]  = useState(null);
   const [clients,      setClients]      = useState([]);
@@ -770,6 +815,8 @@ export default function App() {
           marginLeft: sidebarOpen ? 220 : 52,
           flex:1, minHeight:"100vh",
           transition:"margin-left .2s cubic-bezier(.4,0,.2,1)",
+          maxWidth:"100%",
+          overflowX:"hidden",
         }}>
 
           {/* Topbar */}
@@ -790,8 +837,8 @@ export default function App() {
               {/* Mobile hamburger */}
               <button className="mobile-menu-btn" onClick={()=>setMobileMenuOpen(true)}
                 style={{ background:"none", border:`1px solid ${T.b2}`, borderRadius:6,
-                  color:T.t2, cursor:"pointer", padding:"5px 8px", fontSize:14,
-                  display:"none" }}>☰</button>
+                  color:T.t2, cursor:"pointer", padding:"5px 10px", fontSize:16,
+                  alignItems:"center", justifyContent:"center" }}>☰</button>
 
               {/* Breadcrumb */}
               <div style={{ fontSize:12, color:T.t3, fontFamily:"'JetBrains Mono',monospace",

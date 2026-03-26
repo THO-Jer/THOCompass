@@ -488,7 +488,7 @@ function ModuleDetail({ modKey, client, onBack, supabase }) {
       {/* Overview */}
       {tab==="overview"&&(
         <div className="cd-fade">
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:16 }}>
             {/* Score ring + dims */}
             <Card>
               <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>
@@ -1075,7 +1075,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
           </svg>
         </div>
 
-        <div style={{ padding:"36px 40px 32px",position:"relative" }}>
+        <div className="hero-section" style={{ padding:"clamp(16px,4vw,36px) clamp(16px,5vw,40px) clamp(12px,3vw,32px)",position:"relative" }}>
           <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:24 }}>
             <div style={{ flex:1,minWidth:260 }}>
               <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:T.t3,
@@ -1119,7 +1119,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         </div>
       </div>
 
-      <div style={{ padding:"24px 40px 40px" }}>
+      <div className="page-content" style={{ padding:"clamp(16px,3vw,24px) clamp(16px,5vw,40px) clamp(16px,5vw,40px)",overflowX:"hidden" }}>
 
         {/* Module cards */}
         <div className="cd-fade" style={{ display:"grid",
@@ -1148,7 +1148,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         )}
 
         {/* Evolution + Radar */}
-        <div className="cd-fade cd-d2" style={{ display:"grid",gridTemplateColumns:"3fr 2fr",gap:16,marginBottom:20 }}>
+        <div className="cd-fade cd-d2" style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,marginBottom:20 }}>
           <Card>
             <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:16 }}>Evolución histórica</div>
             <div style={{ height:200 }}>
@@ -1213,7 +1213,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         </div>
 
         {/* Alerts + Recommendations */}
-        <div className="cd-fade cd-d3" style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20 }}>
+        <div className="cd-fade cd-d3" style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:20 }}>
           <Card>
             <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>Alertas del período</div>
             {client.alerts.length===0 ? (
@@ -1248,7 +1248,7 @@ function GeneralDashboard({ client, supabase, onOpenModule, msgList, onSendMsg }
         {client.projects.length>0&&(
           <Card cls="cd-fade cd-d4" style={{ marginBottom:20 }}>
             <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,color:T.t1,marginBottom:14 }}>Proyectos activos</div>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12 }}>
               {client.projects.map(p=>{
                 const mod=MOD[p.module_key];
                 return (
