@@ -4,21 +4,33 @@ import { useState, useEffect, useRef } from "react";
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Fetch directo a Supabase REST sin cliente — garantiza uso de anon key
-async function anonFetch(path, method="GET", body=null) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method,
+async function anonGet(table, query) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    method: "GET",
+    headers: {
+      "apikey":        SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+    },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function anonInsert(table, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
     headers: {
       "apikey":        SUPABASE_KEY,
       "Authorization": `Bearer ${SUPABASE_KEY}`,
       "Content-Type":  "application/json",
-      "Prefer":        method==="POST" ? "return=representation" : "",
+      "Prefer":        "return=representation",
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: JSON.stringify(body),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(text);
-  return text ? JSON.parse(text) : null;
+  const data = JSON.parse(text);
+  return Array.isArray(data) ? data[0] : data;
 }
 
 const T = {
@@ -240,18 +252,18 @@ export default function FormPage({ token }) {
 
   useEffect(()=>{
     if(!token){ setStep(-1); setError("Link inválido"); return; }
-    anonFetch(`form_templates?token=eq.${token}&status=eq.active&select=*`)
+    anonGet("form_templates", `token=eq.${token}&status=eq.active&select=*`)
       .then(data=>{
-        const form = Array.isArray(data) ? data[0] : data;
+        const form = Array.isArray(data) ? data[0] : null;
         if(!form){ setStep(-1); setError("Este formulario no existe o ha expirado."); return null; }
         if(form.expires_at&&new Date(form.expires_at)<new Date()){
           setStep(-1); setError("Este formulario ha cerrado."); return null; }
         setForm(form);
-        return anonFetch(`form_questions?form_id=eq.${form.id}&order=order_index`);
+        return anonGet("form_questions", `form_id=eq.${form.id}&order=order_index`);
       })
       .then(data=>{
         if(!data) return;
-        setQuestions(data||[]);
+        setQuestions(Array.isArray(data) ? data : []);
         setStep(1);
       })
       .catch(e=>{ setStep(-1); setError("Error cargando formulario: "+e.message); });
@@ -260,18 +272,15 @@ export default function FormPage({ token }) {
   async function handleSubmit() {
     setSaving(true);
     try {
-      // Insert response
-      const respData = await anonFetch("form_responses", "POST", {
+      const resp = await anonInsert("form_responses", {
         form_id:         form.id,
         respondent_name: name.trim()||null,
         respondent_role: role.trim()||null,
         submitted_at:    new Date().toISOString(),
         is_complete:     true,
       });
-      const resp = Array.isArray(respData) ? respData[0] : respData;
       if (!resp?.id) throw new Error("No se obtuvo ID de respuesta");
 
-      // Insert answers
       const rows = questions.map(q=>{
         const val = answers[q.id];
         const row = { response_id:resp.id, question_id:q.id };
@@ -281,9 +290,7 @@ export default function FormPage({ token }) {
         return row;
       }).filter(r=>r.value_integer!=null||r.value_text||r.value_json!=null);
 
-      if(rows.length){
-        await anonFetch("form_answers", "POST", rows);
-      }
+      if(rows.length) await anonInsert("form_answers", rows);
       setStep(3);
     } catch(e){
       alert("Error al enviar: "+e.message);
